@@ -1,0 +1,40 @@
+# Ortam ve gizli bilgiler
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Bağımlılıklar
+node_modules/
+vendor/
+.venv/
+venv/
+__pycache__/
+
+# Derleme çıktıları
+dist/
+build/
+.next/
+out/
+coverage/
+
+# Loglar
+*.log
+logs/
+
+# Veritabanı yerel dosyaları
+*.sqlite
+*.sqlite3
+database/dumps/
+
+# Docker yerel veriler
+docker/data/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
