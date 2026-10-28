@@ -4,23 +4,26 @@ import {
   type TenantPrismaClient,
 } from '../database/prisma.service.js';
 import type { PrismaTx } from '../database/prisma.types.js';
+import {
+  ROLE_CATALOG,
+  type RoleKey,
+  rolePermissions,
+} from '../access/roles.catalog.js';
 import { TenantContext } from '../tenancy/tenant-context.js';
 
-/** Data access for users, roles, user_roles and refresh_tokens. All calls are tenant-scoped by the Prisma extension. */
+/**
+ * Data access for users, roles, user_roles and refresh_tokens. Tenant-scoped by the
+ * Prisma extension; User queries (global model) only work in system context.
+ */
 @Injectable()
 export class AuthRepository {
   constructor(@InjectPrisma() readonly prisma: TenantPrismaClient) {}
 
-  /** System context only: login resolves the tenant from the email. */
+  /** System context only: users are global (one identity across tenants). */
   findUserForLogin(email: string) {
     return this.prisma.user.findFirst({
       where: { email, deletedAt: null },
-      select: {
-        id: true,
-        tenantId: true,
-        passwordHash: true,
-        isActive: true,
-      },
+      select: { id: true, passwordHash: true, lastTenantId: true },
     });
   }
 
@@ -38,20 +41,32 @@ export class AuthRepository {
     });
   }
 
+  /** System context only. The deprecated users.tenant_id stays NULL. */
   createUser(
     db: PrismaTx,
-    data: { name: string; email: string; passwordHash: string },
+    data: {
+      name: string;
+      email: string;
+      passwordHash: string;
+      lastTenantId: string;
+    },
   ) {
-    return db.user.create({
-      data: { ...data, tenantId: TenantContext.requireTenantId() },
-      select: { id: true },
-    });
+    return db.user.create({ data, select: { id: true } });
   }
 
-  createRole(db: PrismaTx, data: { name: string; permissions: string[] }) {
-    return db.role.create({
-      data: { ...data, tenantId: TenantContext.requireTenantId() },
-      select: { id: true },
+  /** Creates every catalog role for the current tenant in one query. */
+  createSystemRoles(db: PrismaTx) {
+    const tenantId = TenantContext.requireTenantId();
+    return db.role.createManyAndReturn({
+      data: (Object.keys(ROLE_CATALOG) as RoleKey[]).map((key) => ({
+        tenantId,
+        key,
+        name: ROLE_CATALOG[key].name,
+        scope: ROLE_CATALOG[key].scope,
+        permissions: [...ROLE_CATALOG[key].permissions],
+        isSystem: true,
+      })),
+      select: { id: true, key: true },
     });
   }
 
@@ -61,25 +76,28 @@ export class AuthRepository {
     });
   }
 
-  findActiveUser(userId: string) {
-    return this.prisma.user.findFirst({
-      where: { id: userId, isActive: true, deletedAt: null },
-      select: { id: true, tenantId: true, name: true, email: true },
-    });
-  }
-
+  /** Union of the member's tenant role and company roles in the current tenant. */
   async findPermissions(userId: string): Promise<string[]> {
-    const rows = await this.prisma.userRole.findMany({
-      where: { userId },
-      select: { role: { select: { permissions: true } } },
-    });
-    return [...new Set(rows.flatMap((r) => r.role.permissions))];
+    const select = { role: { select: { key: true, permissions: true } } };
+    const [tenantRoles, companyRoles] = await Promise.all([
+      this.prisma.userRole.findMany({ where: { userId }, select }),
+      this.prisma.userCompanyRole.findMany({ where: { userId }, select }),
+    ]);
+    return [
+      ...new Set(
+        [...tenantRoles, ...companyRoles].flatMap((r) =>
+          rolePermissions(r.role),
+        ),
+      ),
+    ];
   }
 
-  touchLastLogin(userId: string) {
+  /** System context only: users are global. */
+  touchLastLogin(userId: string, tenantId: string) {
     return this.prisma.user.update({
       where: { id: userId },
-      data: { lastLoginAt: new Date() },
+      data: { lastLoginAt: new Date(), lastTenantId: tenantId },
+      select: { id: true },
     });
   }
 

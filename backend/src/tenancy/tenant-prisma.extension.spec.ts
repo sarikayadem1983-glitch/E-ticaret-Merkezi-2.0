@@ -40,7 +40,7 @@ describe('applyTenantScope', () => {
     it('adds tenantId to where', () => {
       expect(
         asA(() =>
-          applyTenantScope('User', 'findMany', { where: { email: 'x' } }),
+          applyTenantScope('Company', 'findMany', { where: { email: 'x' } }),
         ),
       ).toEqual({ where: { email: 'x', tenantId: A } });
     });
@@ -54,7 +54,7 @@ describe('applyTenantScope', () => {
     it('scopes findUnique by id to the tenant', () => {
       expect(
         asA(() =>
-          applyTenantScope('User', 'findUnique', { where: { id: 'u1' } }),
+          applyTenantScope('Company', 'findUnique', { where: { id: 'u1' } }),
         ),
       ).toEqual({ where: { id: 'u1', tenantId: A } });
     });
@@ -62,7 +62,7 @@ describe('applyTenantScope', () => {
     it('rejects an explicit foreign tenantId', () => {
       expect(() =>
         asA(() =>
-          applyTenantScope('User', 'findMany', { where: { tenantId: B } }),
+          applyTenantScope('Company', 'findMany', { where: { tenantId: B } }),
         ),
       ).toThrow(TenantViolationError);
     });
@@ -70,7 +70,7 @@ describe('applyTenantScope', () => {
     it('rejects a tenantId filter object (e.g. { in: [...] })', () => {
       expect(() =>
         asA(() =>
-          applyTenantScope('User', 'findMany', {
+          applyTenantScope('Company', 'findMany', {
             where: { tenantId: { in: [A, B] } },
           }),
         ),
@@ -80,7 +80,7 @@ describe('applyTenantScope', () => {
     it('rejects a foreign tenantId hidden in OR', () => {
       expect(() =>
         asA(() =>
-          applyTenantScope('User', 'findMany', {
+          applyTenantScope('Company', 'findMany', {
             where: { OR: [{ tenantId: B }] },
           }),
         ),
@@ -146,7 +146,7 @@ describe('applyTenantScope', () => {
     it('rejects a foreign tenantId in a nested write', () => {
       expect(() =>
         asA(() =>
-          applyTenantScope('User', 'update', {
+          applyTenantScope('Company', 'update', {
             where: { id: 'u1' },
             data: {
               userRoles: { create: { roleId: 'r1', tenantId: B } },
@@ -159,7 +159,7 @@ describe('applyTenantScope', () => {
     it('rejects moving a row to another tenant', () => {
       expect(() =>
         asA(() =>
-          applyTenantScope('User', 'updateMany', { data: { tenantId: B } }),
+          applyTenantScope('Company', 'updateMany', { data: { tenantId: B } }),
         ),
       ).toThrow(TenantViolationError);
     });
@@ -181,7 +181,7 @@ describe('applyTenantScope', () => {
     });
 
     it('scopes deleteMany with no where', () => {
-      expect(asA(() => applyTenantScope('User', 'deleteMany', {}))).toEqual({
+      expect(asA(() => applyTenantScope('Company', 'deleteMany', {}))).toEqual({
         where: { tenantId: A },
       });
     });
@@ -200,8 +200,37 @@ describe('applyTenantScope', () => {
 
     it('fails closed on unknown operations', () => {
       expect(() =>
-        asA(() => applyTenantScope('User', 'someFutureOp', {})),
+        asA(() => applyTenantScope('Company', 'someFutureOp', {})),
       ).toThrow(TenantViolationError);
+    });
+  });
+
+  describe('global models (User)', () => {
+    it.each([
+      'findMany',
+      'findFirst',
+      'findUnique',
+      'create',
+      'update',
+      'count',
+    ])('refuses User.%s inside a tenant store', (op) => {
+      expect(() => asA(() => applyTenantScope('User', op, {}))).toThrow(
+        TenantViolationError,
+      );
+    });
+
+    it('refuses User queries inside a tenant store', () => {
+      expect(() => asA(() => applyTenantScope('User', 'findMany', {}))).toThrow(
+        TenantViolationError,
+      );
+    });
+
+    it('leaves User unscoped in system context', () => {
+      expect(
+        TenantContext.runAsSystem(() =>
+          applyTenantScope('User', 'findFirst', { where: { email: 'x' } }),
+        ),
+      ).toEqual({ where: { email: 'x' } });
     });
   });
 

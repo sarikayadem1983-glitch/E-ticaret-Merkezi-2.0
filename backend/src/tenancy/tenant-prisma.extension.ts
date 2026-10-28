@@ -8,6 +8,12 @@ import {
 /** Model keyed by its own id instead of a tenantId column. */
 const TENANT_ROOT_MODEL = 'Tenant';
 
+/**
+ * Global models have no tenant column (one identity across tenants). They are only
+ * reachable in system context; inside a tenant, read them through TenantMembership.
+ */
+export const GLOBAL_MODELS = new Set(['User']);
+
 const WHERE_OPERATIONS = new Set([
   'findUnique',
   'findUniqueOrThrow',
@@ -125,6 +131,13 @@ export function applyTenantScope(
 
   const tenantId = TenantContext.tenantId();
   if (!tenantId) throw new TenantContextMissingError(label);
+
+  if (model && GLOBAL_MODELS.has(model)) {
+    throw new TenantViolationError(
+      label,
+      'global model tenant bağlamında kullanılamaz; üyelik üzerinden okuyun',
+    );
+  }
 
   if (!model) {
     throw new TenantViolationError(label, 'ham SQL tenant bağlamında yasak');

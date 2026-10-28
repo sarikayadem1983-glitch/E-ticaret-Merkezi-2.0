@@ -63,6 +63,14 @@ Ayarlar açılışta `backend/src/config/security.config.ts` ile okunur ve doğr
 
 Mevcut katmanlar: argon2id şifre hash'i, bilinmeyen email'de sahte hash doğrulaması (yanıt süresi kullanıcı varlığını ele vermez), refresh token rotation ve tekrar kullanımda tüm oturumların kapatılması, başarısız girişlerin Audit Log'a yazılması.
 
+### Access token sürümü (`ver`) ve eski token'lar
+
+- Her yeni access token (login, kayıt, refresh) `ver` claim'i taşır: üyeliğin `auth_version`'ı (ilk değer 1).
+- Bu değişiklikten önce üretilmiş token'larda `ver` yoktur; doğrulamada **0** kabul edilir (çökme yok). Tam sayı olmayan `ver` içeren token reddedilir.
+- Şu an guard `ver`'i üyelikle karşılaştırmaz. Üyelik kontrolü eklendiğinde `ver` 0 < `auth_version` olduğundan eski token'lar `TOKEN_STALE` sayılır ve BFF bir kez refresh yapar; yeni token güncel `ver` ile gelir. Eski token'lar en geç 15 dk içinde zaten süresi dolar.
+- Refresh, üyelik aktif değilse veya tenant pasifse reddedilir.
+- Login'de aktif üyeliği olmayan kullanıcı, yanlış şifreyle aynı genel hatayı alır (`Email veya şifre hatalı`); hangi tenant'ta hesabı olduğu açığa çıkmaz. Hedef tenant yoksa olay audit'e yazılmaz (bilinmeyen e-posta gibi).
+
 ### Hız sınırlama (rate limiting)
 
 Sayaçlar Redis'te tutulur (`rl:` önekli anahtarlar). Her kontrol tek bir atomik Lua script'idir ve Redis saatini kullanır, bu yüzden birden fazla uygulama örneğinde de doğru çalışır. Kod: `backend/src/rate-limit/`, kurallar: `backend/src/auth/auth-rate-limit.service.ts`.

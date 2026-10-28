@@ -4,19 +4,38 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { hash, verify } from '@node-rs/argon2';
+import { ROLE_CATALOG } from '../access/roles.catalog.js';
 import { AuditService } from '../audit/audit.service.js';
+import {
+  type ActiveMembership,
+  MembershipsRepository,
+} from '../memberships/memberships.repository.js';
 import { TenantContext } from '../tenancy/tenant-context.js';
 import { TenantsService } from '../tenants/tenants.service.js';
 import type { LoginDto, RegisterDto } from './auth.dto.js';
 import { AuthRepository } from './auth.repository.js';
 import { TokenService, type TokenPair } from './token.service.js';
 
-const OWNER_ROLE = { name: 'owner', permissions: ['*'] };
 const MODULE = 'auth';
 
 /** Verified against when the email is unknown, so response time does not reveal which emails exist. */
 const DUMMY_HASH =
   '$argon2id$v=19$m=19456,t=2,p=1$k64vcPJe/wujm0zOZjSf7Q$ByIDorJvL/RYwKH5NhGhrmAuiob8Xb8wdk7OLWtBypo';
+
+interface Session {
+  tenantId: string;
+  userId: string;
+  /** The membership's auth_version, issued as the token's ver claim. */
+  ver: number;
+}
+
+/** last_tenant_id when it is still an active store, else the first by tenant name. */
+function pickTenant(
+  active: ActiveMembership[],
+  lastTenantId: string | null,
+): ActiveMembership | undefined {
+  return active.find((m) => m.tenantId === lastTenantId) ?? active[0];
+}
 
 function invalidCredentials() {
   return new UnauthorizedException({
@@ -39,28 +58,37 @@ export class AuthService {
     private readonly tenants: TenantsService,
     private readonly tokens: TokenService,
     private readonly audit: AuditService,
+    private readonly memberships: MembershipsRepository,
   ) {}
 
   async register(dto: RegisterDto): Promise<TokenPair> {
+    // CPU-heavy and non-database work stays outside the transaction.
     const passwordHash = await hash(dto.password);
+    const refresh = this.tokens.newRefreshToken();
     const prisma = this.repository.prisma;
 
-    // The tenant does not exist yet, so the transaction starts in system context
-    // and switches to the new tenant's context for everything it owns.
-    const { tenantId, userId, refresh } = await TenantContext.runAsSystem(() =>
+    // The tenant and the global user are created in system context; everything
+    // the tenant owns is written in the new tenant's context. Eight statements
+    // (system roles in one INSERT); measured well under Prisma's default 5 s
+    // transaction timeout, so no explicit timeout is set.
+    const session = await TenantContext.runAsSystem(() =>
       prisma.$transaction(async (tx) => {
         const tenant = await this.tenants.create(tx, {
           name: dto.tenantName,
           slug: dto.tenantSlug,
         });
-        return TenantContext.run(tenant.id, async () => {
-          const user = await this.repository.createUser(tx, {
-            name: dto.name,
-            email: dto.email,
-            passwordHash,
-          });
-          const role = await this.repository.createRole(tx, OWNER_ROLE);
-          await this.repository.assignRole(tx, user.id, role.id);
+        const user = await this.repository.createUser(tx, {
+          name: dto.name,
+          email: dto.email,
+          passwordHash,
+          lastTenantId: tenant.id,
+        });
+        return TenantContext.run(tenant.id, async (): Promise<Session> => {
+          const membership = await this.memberships.create(tx, user.id);
+          const roles = await this.repository.createSystemRoles(tx);
+          const owner = roles.find((r) => r.key === 'owner');
+          if (!owner) throw new Error('owner rolü oluşturulamadı');
+          await this.repository.assignRole(tx, user.id, owner.id);
           await this.audit.record(
             {
               action: 'CREATE',
@@ -78,30 +106,28 @@ export class AuthService {
               module: MODULE,
               entityType: 'User',
               entityId: user.id,
-              after: {
-                name: dto.name,
-                email: dto.email,
-                roles: [OWNER_ROLE.name],
-              },
+              after: { name: dto.name, email: dto.email, roles: ['owner'] },
               actorUserId: user.id,
             },
             tx,
           );
-          const refresh = this.tokens.newRefreshToken();
           await this.repository.createRefreshToken(tx, {
             userId: user.id,
             tokenHash: refresh.hash,
             expiresAt: refresh.expiresAt,
           });
-          return { tenantId: tenant.id, userId: user.id, refresh };
+          return {
+            tenantId: tenant.id,
+            userId: user.id,
+            ver: membership.authVersion,
+          };
         });
       }),
     );
 
     return this.issueAccess(
-      tenantId,
-      userId,
-      OWNER_ROLE.permissions,
+      session,
+      [...ROLE_CATALOG.owner.permissions],
       refresh.token,
     );
   }
@@ -110,36 +136,39 @@ export class AuthService {
     const user = await TenantContext.runAsSystem(() =>
       this.repository.findUserForLogin(dto.email),
     );
+    const active = user
+      ? await this.memberships.findActiveForUser(user.id)
+      : [];
     const passwordOk = await verify(
       user?.passwordHash ?? DUMMY_HASH,
       dto.password,
     );
-    // Unknown email: no tenant to attribute the event to, so it is not audited.
+    // Unknown email or no active store: there is no tenant to attribute the
+    // event to, so it is not audited; the error is the same as a wrong password.
     if (!user) throw invalidCredentials();
+    const target = pickTenant(active, user.lastTenantId);
+    if (!target) throw invalidCredentials();
 
-    return TenantContext.run(user.tenantId, async () => {
-      const prisma = this.repository.prisma;
-      const reason = !passwordOk
-        ? 'invalid_password'
-        : !user.isActive
-          ? 'user_inactive'
-          : !(await this.tenants.isActive(prisma, user.tenantId))
-            ? 'tenant_inactive'
-            : null;
-
-      if (reason) {
+    return TenantContext.run(target.tenantId, async () => {
+      if (!passwordOk) {
         await this.audit.record({
           action: 'LOGIN_FAILED',
           module: MODULE,
           entityType: 'User',
           entityId: user.id,
-          after: { reason },
+          after: { reason: 'invalid_password' },
           actorUserId: null,
         });
         throw invalidCredentials();
       }
 
-      await this.repository.touchLastLogin(user.id);
+      // Read in the tenant's context: the membership row carries auth_version.
+      const membership = await this.memberships.get(target.tenantId, user.id);
+      if (membership?.status !== 'active') throw invalidCredentials();
+
+      await TenantContext.runAsSystem(() =>
+        this.repository.touchLastLogin(user.id, target.tenantId),
+      );
       await this.audit.record({
         action: 'LOGIN',
         module: MODULE,
@@ -147,7 +176,11 @@ export class AuthService {
         entityId: user.id,
         actorUserId: user.id,
       });
-      return this.startSession(user.tenantId, user.id);
+      return this.startSession({
+        tenantId: target.tenantId,
+        userId: user.id,
+        ver: membership.authVersion,
+      });
     });
   }
 
@@ -167,8 +200,14 @@ export class AuthService {
       if (stored.expiresAt <= new Date()) throw invalidRefreshToken();
 
       const prisma = this.repository.prisma;
-      const user = await this.repository.findActiveUser(stored.userId);
-      if (!user || !(await this.tenants.isActive(prisma, stored.tenantId))) {
+      const membership = await this.memberships.get(
+        stored.tenantId,
+        stored.userId,
+      );
+      if (
+        membership?.status !== 'active' ||
+        !(await this.tenants.isActive(prisma, stored.tenantId))
+      ) {
         throw invalidRefreshToken();
       }
 
@@ -190,8 +229,11 @@ export class AuthService {
 
       const perms = await this.repository.findPermissions(stored.userId);
       return this.issueAccess(
-        stored.tenantId,
-        stored.userId,
+        {
+          tenantId: stored.tenantId,
+          userId: stored.userId,
+          ver: membership.authVersion,
+        },
         perms,
         next.token,
       );
@@ -220,40 +262,37 @@ export class AuthService {
     });
   }
 
-  async me(userId: string, permissions: string[]) {
-    const user = await this.repository.findActiveUser(userId);
-    if (!user) throw new NotFoundException('Kullanıcı bulunamadı');
-    const tenant = await this.tenants.profile(
-      this.repository.prisma,
-      user.tenantId,
-    );
-    return { ...user, tenant, permissions };
+  /** Runs in the authenticated request's tenant context; the user is read through the membership. */
+  async me(tenantId: string, userId: string, permissions: string[]) {
+    const membership = await this.memberships.get(tenantId, userId);
+    if (membership?.status !== 'active') {
+      throw new NotFoundException('Kullanıcı bulunamadı');
+    }
+    const tenant = await this.tenants.profile(this.repository.prisma, tenantId);
+    return { ...membership.user, tenantId, tenant, permissions };
   }
 
-  private async startSession(
-    tenantId: string,
-    userId: string,
-  ): Promise<TokenPair> {
+  private async startSession(session: Session): Promise<TokenPair> {
     const refresh = this.tokens.newRefreshToken();
     await this.repository.createRefreshToken(this.repository.prisma, {
-      userId,
+      userId: session.userId,
       tokenHash: refresh.hash,
       expiresAt: refresh.expiresAt,
     });
-    const perms = await this.repository.findPermissions(userId);
-    return this.issueAccess(tenantId, userId, perms, refresh.token);
+    const perms = await this.repository.findPermissions(session.userId);
+    return this.issueAccess(session, perms, refresh.token);
   }
 
   private async issueAccess(
-    tenantId: string,
-    userId: string,
+    session: Session,
     perms: string[],
     refreshToken: string,
   ): Promise<TokenPair> {
     const access = await this.tokens.signAccess({
-      sub: userId,
-      tid: tenantId,
+      sub: session.userId,
+      tid: session.tenantId,
       perms,
+      ver: session.ver,
     });
     return {
       accessToken: access.token,

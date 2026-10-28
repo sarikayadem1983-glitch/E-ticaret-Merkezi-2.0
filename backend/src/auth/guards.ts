@@ -38,7 +38,13 @@ export class JwtAuthGuard implements CanActivate {
 
     try {
       const payload = await this.tokens.verifyAccess(token);
-      req.user = { sub: payload.sub, tid: payload.tid, perms: payload.perms };
+      req.user = {
+        sub: payload.sub,
+        tid: payload.tid,
+        perms: payload.perms,
+        // Not checked against the membership yet (per-request check comes later).
+        ver: payload.ver,
+      };
     } catch {
       throw new UnauthorizedException('Geçersiz veya süresi dolmuş token');
     }

@@ -9,7 +9,12 @@ import {
 } from './../src/database/prisma.service.js';
 import { TenantContext } from './../src/tenancy/tenant-context.js';
 import { TenantViolationError } from './../src/tenancy/tenant.errors.js';
-import { createTestApp, ownerPool, purgeTenants } from './helpers.js';
+import {
+  createTestApp,
+  ownerPool,
+  purgeTenants,
+  seedMember,
+} from './helpers.js';
 
 const PASSWORD = 'Sifre-12345';
 const UA = 'audit-e2e/1.0';
@@ -94,25 +99,23 @@ describe('Audit log (e2e)', () => {
 
     // A user in tenant A whose role lacks audit:read.
     const passwordHash = await hash(PASSWORD);
-    await TenantContext.run(tenantA, async () => {
-      const role = await prisma.role.create({
+    // Users are global: the user and its membership are seeded outside the
+    // tenant extension; the custom (key-less) tenant role is still tenant data.
+    const role = await TenantContext.run(tenantA, () =>
+      prisma.role.create({
         data: {
           tenantId: tenantA,
           name: 'viewer',
+          scope: 'tenant',
           permissions: ['products:read'],
         },
-      });
-      const user = await prisma.user.create({
-        data: {
-          tenantId: tenantA,
-          name: 'İzleyici',
-          email: viewerEmail,
-          passwordHash,
-        },
-      });
-      await prisma.userRole.create({
-        data: { tenantId: tenantA, userId: user.id, roleId: role.id },
-      });
+      }),
+    );
+    await seedMember({
+      email: viewerEmail,
+      name: 'İzleyici',
+      passwordHash,
+      memberships: [{ tenantId: tenantA, roleId: role.id }],
     });
     viewerA = await login(viewerEmail);
   });

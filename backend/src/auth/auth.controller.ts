@@ -52,6 +52,6 @@ export class AuthController {
 
   @Get('me')
   async me(@CurrentUser() user: AuthUser) {
-    return { data: await this.auth.me(user.sub, user.perms) };
+    return { data: await this.auth.me(user.tid, user.sub, user.perms) };
   }
 }
