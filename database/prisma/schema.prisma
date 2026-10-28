@@ -22,6 +22,7 @@ model Tenant {
   roles         Role[]
   userRoles     UserRole[]
   refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]
 
   @@map("tenants")
 }
@@ -98,4 +99,40 @@ model RefreshToken {
   @@index([tenantId])
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGIN_FAILED
+  LOGOUT
+  TOKEN_REUSE_DETECTED
+
+  @@map("audit_action")
+}
+
+/// Immutable. No updated_at; a DB trigger rejects UPDATE and DELETE.
+model AuditLog {
+  id          String      @id @default(uuid()) @db.Uuid
+  tenantId    String      @map("tenant_id") @db.Uuid
+  /// Not a foreign key: history must survive user deletion.
+  actorUserId String?     @map("actor_user_id") @db.Uuid
+  action      AuditAction
+  module      String      @db.VarChar(50)
+  entityType  String      @map("entity_type") @db.VarChar(50)
+  entityId    String?     @map("entity_id") @db.VarChar(100)
+  before      Json?
+  after       Json?
+  ipAddress   String?     @map("ip_address") @db.VarChar(45)
+  userAgent   String?     @map("user_agent") @db.VarChar(512)
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, actorUserId])
+  @@map("audit_logs")
 }

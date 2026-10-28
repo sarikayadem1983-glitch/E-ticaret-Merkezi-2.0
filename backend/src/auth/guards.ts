@@ -6,6 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { RequestContext } from '../common/request-context.js';
 import { TenantContext } from '../tenancy/tenant-context.js';
 import {
   type AuthenticatedRequest,
@@ -43,6 +44,7 @@ export class JwtAuthGuard implements CanActivate {
     }
 
     TenantContext.setTenant(req.user.tid);
+    RequestContext.setUser(req.user.sub);
     return true;
   }
 }

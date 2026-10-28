@@ -119,6 +119,21 @@ Yetki: Bearer token
 Yanıt: `200` `{ "data": { "id": "...", "tenantId": "...", "name": "...", "email": "...", "permissions": ["*"] } }`
 Hatalar: `401`
 
+### GET /api/v1/audit-logs
+Açıklama: Tenant'ın işlem geçmişi, yeniden eskiye.
+Yetki: Bearer token + `audit:read`
+İstek (sorgu): `page` (varsayılan 1), `per_page` (varsayılan 20, en çok 100), `action`, `module`, `entity_type`, `entity_id`, `actor_user_id`, `from`, `to` (ISO 8601)
+Yanıt: `200` `{ "data": [ { "id", "action", "module", "entityType", "entityId", "actorUserId", "before", "after", "ipAddress", "userAgent", "createdAt" } ], "meta": { "page", "per_page", "total" } }`
+Hatalar: `401`, `403`, `422`
+
+### GET /api/v1/audit-logs/:id
+Açıklama: Tek kayıt.
+Yetki: Bearer token + `audit:read`
+Yanıt: `200` `{ "data": { ... } }`
+Hatalar: `401`, `403`, `404` (yok veya başka tenant'a ait — ayrım yapılmaz), `422` (geçersiz UUID)
+
+Audit log kayıtlarını değiştiren veya silen endpoint yoktur.
+
 ### Genel hata kodları
 | Kod | HTTP | Anlam |
 |---|---|---|

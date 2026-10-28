@@ -31,6 +31,8 @@ Ticaret Merkezi 2.0, ayrı backend (API) ve frontend (yönetim paneli) uygulamal
 1. **Modüler monolit ile başlangıç.** Her modül bir NestJS modülüdür. Modüller arası iletişim yalnızca dışa açılan servisler ve domain event'leri üzerinden olur. Bu sınırlar ileride modülün ayrı mikroservise taşınmasını sağlar.
 2. **Multi-tenant SaaS.** Her kiracı (tenant) bir mağaza/şirkettir. Tenant'a ait her tabloda `tenant_id` bulunur. Tenant kimliği JWT'den okunur ve tüm sorgulara zorunlu filtre olarak uygulanır (Prisma middleware/extension).
 3. **AI Engine bağımsız modül.** Diğer modüllerin verisine doğrudan erişmez; event ve okuma API'leri üzerinden beslenir. Ağır işler kuyrukta (Redis) arka planda çalışır. İlk ayrılacak servis adayıdır.
+4. **Company (Firma) tenant altında işletmedir.** Tenant müşteri hesabıdır (abonelik, kullanıcılar, faturalama). Company ise o hesabın altında faaliyet gösteren tüzel veya gerçek kişi işletmedir. Ayrıntılar: [Company Modeli](#company-firma-modeli). *Durum: karar verildi, geliştirme ayrı aşamada.*
+5. **Audit Log değiştirilemez ve merkezidir.** Tüm modüller işlem geçmişini tek `audit` modülü üzerinden yazar. Ayrıntılar: [Audit Log](#audit-log).
 
 ## Tenant İzolasyonu (zorunlu)
 
@@ -43,6 +45,28 @@ Tenant filtresi geliştiriciye bırakılmaz; Prisma seviyesinde zorunludur ve **
 - Veritabanı seviyesinde ikinci güvence: tenant'a ait tablolar arası yabancı anahtarlar `(tenant_id, x_id)` → `(tenant_id, id)` biçiminde composite'tir; farklı tenant'ın kaydına ilişki kurulamaz.
 - Tenant'tan önce çalışması gereken işlemler (giriş, kayıt, refresh token çözümü, health check) yalnızca `TenantContext.runAsSystem()` içinde çalışır. Bu fonksiyonu kullanabilecek dosyalar bir testte izin listesiyle sabitlenmiştir; yeni kullanım test kırar ve code review gerektirir.
 - HTTP dışı işler (kuyruk worker'ları) `TenantContext.run(tenantId, fn)` ile çalışır.
+
+## Company (Firma) Modeli
+
+> Karar verildi; geliştirme henüz başlamadı.
+
+- Bir Tenant birden fazla Company oluşturabilir. Company tenant'a ait bir kayıttır (`tenant_id` zorunlu), tenant izolasyonu aynen uygulanır.
+- Her Company'de: ticari unvan, vergi numarası (VKN/TCKN), vergi dairesi, adres ve e-Fatura bilgileri (mükellefiyet, posta kutusu etiketi vb.) bulunur.
+- Vergi numarası tenant içinde tekildir: `(tenant_id, tax_number)`.
+- Her Company birden fazla pazaryeri mağazasına bağlanabilir (`channels` kayıtları `company_id` taşır).
+- Kullanıcılar şirket bazında yetkilendirilebilir: tenant seviyesindeki rollere ek olarak kullanıcı–company–rol ataması yapılır. Company kapsamlı bir endpoint hem izni hem de kullanıcının o company'ye erişimini kontrol eder.
+- Company; e-Fatura, sipariş, stok ve muhasebe modüllerinde referans olarak kullanılacaktır. Bu modüller Company tablosuna doğrudan erişmez, `companies` modülünün servisini kullanır.
+
+## Audit Log
+
+- Tenant bazlı, değiştirilemez işlem geçmişi. Kayıt alanları: işlem türü, modül, varlık türü, kayıt kimliği, işlemi yapan kullanıcı, önceki/sonraki değerler, IP adresi, user agent, zaman.
+- İşlem türleri: `CREATE`, `UPDATE`, `DELETE`, `LOGIN`, `LOGIN_FAILED`, `LOGOUT`, `TOKEN_REUSE_DETECTED`.
+- Modüller kaydı `AuditService.record()` ile yazar. Veri değişikliğiyle aynı transaction'a verilirse ikisi birlikte commit/rollback olur.
+- İşlemi yapan kullanıcı, IP ve user agent istek bağlamından (`RequestContext`) otomatik alınır.
+- **Hassas veri koruması:** kaydedilmeden önce değerler temizlenir. Adı şifre, token, secret, hash, authorization, cookie, API anahtarı, kimlik bilgisi, kart, IBAN içeren alanlar `[REDACTED]` olur. `UPDATE` kayıtlarında yalnızca değişen alanlar saklanır. Derinlik ve boyut sınırlıdır.
+- **Değiştirilemezlik:** Prisma eklentisi `audit_logs` üzerinde update/delete/upsert işlemlerini system bağlamında bile reddeder. Veritabanında ayrıca bir trigger `UPDATE` ve `DELETE`'i engeller. API'de yalnızca okuma endpoint'leri vardır.
+- **Erişim:** `audit:read` izni gerekir; tenant izolasyonu nedeniyle kullanıcı yalnızca kendi tenant'ının kayıtlarını görür.
+- Kimliği bilinmeyen email ile başarısız girişler tenant'a bağlanamadığı için audit log'a yazılmaz.
 
 ## Kimlik Doğrulama ve Yetkilendirme
 
@@ -57,7 +81,9 @@ Tenant filtresi geliştiriciye bırakılmaz; Prisma seviyesinde zorunludur ve **
 
 | Modül | Sorumluluk |
 |---|---|
-| `tenants` | Kiracı (mağaza/şirket), abonelik, tenant ayarları |
+| `tenants` | Kiracı (müşteri hesabı), abonelik, tenant ayarları |
+| `companies` | Tenant altındaki işletmeler: unvan, vergi, adres, e-Fatura bilgileri (planlandı) |
+| `audit` | Değiştirilemez işlem geçmişi |
 | `auth` | Kullanıcı, rol, yetki, oturum |
 | `catalog` | Ürün, kategori, marka, varyant |
 | `inventory` | Stok, depo, stok hareketleri |

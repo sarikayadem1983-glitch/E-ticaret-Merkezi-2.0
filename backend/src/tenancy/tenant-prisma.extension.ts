@@ -25,6 +25,21 @@ const WHERE_OPERATIONS = new Set([
   'upsert',
 ]);
 
+/** Append-only models: only create and read operations are ever allowed, even in system context. */
+const APPEND_ONLY_MODELS = new Set(['AuditLog']);
+const APPEND_ONLY_ALLOWED = new Set([
+  'create',
+  'createMany',
+  'findUnique',
+  'findUniqueOrThrow',
+  'findFirst',
+  'findFirstOrThrow',
+  'findMany',
+  'count',
+  'aggregate',
+  'groupBy',
+]);
+
 const CREATE_OPERATIONS = new Set([
   'create',
   'createMany',
@@ -97,6 +112,14 @@ export function applyTenantScope(
   args: unknown,
 ): unknown {
   const label = model ? `${model}.${operation}` : operation;
+
+  if (
+    model &&
+    APPEND_ONLY_MODELS.has(model) &&
+    !APPEND_ONLY_ALLOWED.has(operation)
+  ) {
+    throw new TenantViolationError(label, 'bu model yalnızca eklemeye açık');
+  }
 
   if (TenantContext.isSystem()) return args;
 
