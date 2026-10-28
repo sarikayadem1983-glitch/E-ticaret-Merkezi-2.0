@@ -92,3 +92,13 @@ Sayaçlar Redis'te tutulur (`rl:` önekli anahtarlar). Her kontrol tek bir atomi
 - **Hızlı hata:** Redis istemcisi komut kuyruğu tutmaz ve 1 sn zaman aşımı kullanır. Böylece istekler beklemeden hata alır. İstemci arka planda yeniden bağlanmayı dener.
 
 Production'da Redis yüksek erişilebilirlik (replika + otomatik failover) ile çalıştırılmalı ve izlenmelidir.
+
+## 4. Canlıya çıkış öncesi kontrol listesi
+
+Production'a çıkmadan önce her madde tamamlanmış ve doğrulanmış olmalıdır.
+
+- [ ] **Redis yedekliliği:** Rate limiting Redis'e bağlıdır ve Redis kesintisinde giriş kapanır (fail-closed, bkz. §3). Replika + otomatik failover (ör. Redis Sentinel veya yönetilen Redis) kurulmalı, erişilebilirlik izlenmeli ve alarm tanımlanmalı.
+- [ ] **CAPTCHA:** Kayıt ve tekrarlanan başarısız girişlerden sonra login için CAPTCHA (ör. Cloudflare Turnstile, hCaptcha) eklenmeli.
+- [ ] **Sızmış şifre kontrolü:** Kayıt ve şifre değişikliğinde şifre, sızmış şifre listelerine karşı kontrol edilmeli (ör. HIBP Pwned Passwords k-anonymity API). Şifrenin kendisi dışarı gönderilmez.
+- [ ] **`TRUST_PROXY`:** Production'daki load balancer / reverse proxy adresleriyle ayarlanmalı. Yanlış ayarda tüm istemciler proxy IP'sini paylaşır ve IP bazlı sınırlar herkesi birlikte engeller. Çıkıştan sonra `req.ip`'nin gerçek istemci IP'si olduğu doğrulanmalı.
+- [ ] **Rate limit değerleri:** Mevcut varsayılanlar (§3) korunur. Canlı trafik izlendikten sonra (ör. ortak NAT arkasındaki ofisler) gözden geçirilmeli.
