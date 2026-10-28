@@ -80,4 +80,14 @@ BEGIN
   IF to_regclass('public.audit_logs') IS NOT NULL THEN
     REVOKE UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON public.audit_logs FROM tm_app;
   END IF;
+  -- Memberships and invitations are deactivated / revoked, never deleted
+  -- (also enforced by migration tenant_memberships).
+  IF to_regclass('public.tenant_memberships') IS NOT NULL THEN
+    REVOKE ALL ON public.tenant_memberships FROM tm_app;
+    GRANT SELECT, INSERT, UPDATE ON public.tenant_memberships TO tm_app;
+  END IF;
+  IF to_regclass('public.invitations') IS NOT NULL THEN
+    REVOKE ALL ON public.invitations FROM tm_app;
+    GRANT SELECT, INSERT, UPDATE ON public.invitations TO tm_app;
+  END IF;
 END $$;

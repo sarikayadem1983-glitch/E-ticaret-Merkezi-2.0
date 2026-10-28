@@ -43,6 +43,16 @@
 - `user_company_roles` — tenant_id, user_id, company_id, role_id, created_at — PK `(user_id, company_id, role_id)`
   - Composite FK'ler: `(tenant_id, user_id)`, `(tenant_id, company_id)`, `(tenant_id, role_id)`; farklı tenant'ın kaydına bağlanamaz.
 
+### memberships (Aşama 1 yazıldı — migration `tenant_memberships`; geliştirme veritabanına henüz uygulanmadı)
+- Tasarım: [kullanıcı yönetimi spec'i](superpowers/specs/2026-10-28-user-management-design.md).
+- `users` global kimlik olur: `last_tenant_id`, `email_verified_at` eklenir; e-posta küçük harfe normalize. `tenant_id` nullable, FK'si kaldırıldı; `tenant_id`/`is_active` Aşama 2'de silinir, kod okumaz.
+- `tenant_memberships` — tenant_id, user_id, status (`active`|`inactive`), auth_version, joined_at, deactivated_at — PK `(tenant_id, user_id)`. Silinmez (tm_app'te DELETE yok).
+- `roles` + `key`, `scope` (`tenant`|`company`), `is_system`; kısmi tekil `(tenant_id, key) WHERE key IS NOT NULL`, tekil `(tenant_id, id, scope)`. Her tenant'ta 5 sistem rolü.
+- `user_roles`/`user_company_roles`: `role_scope` generated kolon + FK `(tenant_id, role_id, role_scope) → roles(tenant_id, id, scope)`; FK `(tenant_id, user_id) → tenant_memberships`. `refresh_tokens` da üyeliğe bağlı. `user_company_roles` tekil `(tenant_id, user_id, company_id)`.
+- `invitations` — token yalnızca SHA-256 olarak; kısmi tekil `(tenant_id, email) WHERE status='pending'`. Silinmez (tm_app'te DELETE yok).
+- Prisma şemasında gösterilemeyenler (yalnızca SQL'de): generated `role_scope` kolonları ve 3 kolonlu kapsam FK'leri, kısmi tekil indeksler, `invitations_email_lowercase` CHECK.
+- Doğrulama/geri dönüş: `database/migrations-verify/20261029090000/` (`snapshot-before.sql`, `verify-after.sql`, `rollback.sql`). Test: `backend/test/migration-phase1.e2e-spec.ts` (atılabilir `tm_migration_test_*` veritabanında).
+
 ### catalog
 - `categories` — id, parent_id, name, slug
 - `brands` — id, name
