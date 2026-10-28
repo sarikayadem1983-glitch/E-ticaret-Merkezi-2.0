@@ -28,6 +28,17 @@
 - `refresh_tokens` — id, tenant_id, user_id, token_hash (unique, SHA-256), expires_at, revoked_at, replaced_by_id
   - Rotation: kullanılan token `revoked_at` alır, yeni token `replaced_by_id` ile bağlanır. İptal edilmiş token tekrar kullanılırsa kullanıcının tüm token'ları iptal edilir.
 
+### audit (kesinleşti — migration `audit_logs`)
+- `audit_logs` — id, tenant_id, actor_user_id, action (`audit_action` enum), module, entity_type, entity_id, before (`jsonb`), after (`jsonb`), ip_address, user_agent, created_at
+  - **İstisna:** `updated_at` yoktur; kayıt değiştirilemez. `BEFORE UPDATE OR DELETE` trigger'ı işlemi reddeder.
+  - `actor_user_id` yabancı anahtar değildir: kullanıcı silinse de geçmiş korunur.
+  - İndeksler: `(tenant_id, created_at)`, `(tenant_id, entity_type, entity_id)`, `(tenant_id, actor_user_id)`.
+  - Saklama süresi / arşivleme ileride bir bakım işiyle yapılacaktır (trigger'ı yalnızca `app.allow_audit_purge = 'on'` oturum ayarı aşar).
+
+### companies (taslak — geliştirilmedi)
+- `companies` — id, tenant_id, legal_name, tax_number, tax_office, address fields, e_invoice_enabled, e_invoice_alias, deleted_at — `(tenant_id, tax_number)` tekil
+- `user_company_roles` — tenant_id, user_id, company_id, role_id
+
 ### catalog
 - `categories` — id, parent_id, name, slug
 - `brands` — id, name
@@ -40,7 +51,7 @@
 - `stock_movements` — id, variant_id, warehouse_id, change, reason, reference
 
 ### channels
-- `channels` — id, type, name, credentials_ref, is_active
+- `channels` — id, company_id, type, name, credentials_ref, is_active
 - `channel_listings` — id, channel_id, variant_id, external_id, price, sync_status
 
 ### customers

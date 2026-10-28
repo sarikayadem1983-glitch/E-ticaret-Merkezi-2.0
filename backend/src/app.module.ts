@@ -1,6 +1,8 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { AuditModule } from './audit/audit.module.js';
 import { AuthModule } from './auth/auth.module.js';
+import { RequestContextMiddleware } from './common/request-context.middleware.js';
 import { DatabaseModule } from './database/database.module.js';
 import { HealthModule } from './health/health.module.js';
 import { TenantContextMiddleware } from './tenancy/tenant-context.middleware.js';
@@ -9,12 +11,15 @@ import { TenantContextMiddleware } from './tenancy/tenant-context.middleware.js'
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['../.env', '.env'] }),
     DatabaseModule,
+    AuditModule,
     AuthModule,
     HealthModule,
   ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(TenantContextMiddleware).forRoutes('*path');
+    consumer
+      .apply(RequestContextMiddleware, TenantContextMiddleware)
+      .forRoutes('*path');
   }
 }

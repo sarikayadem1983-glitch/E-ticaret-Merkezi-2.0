@@ -4,7 +4,7 @@
 
 ## Durum
 
-Sprint 0 — proje iskeleti ve dokümantasyon. Henüz uygulama kodu yok.
+Backend temeli (`v0.1.0-backend-foundation`): NestJS, Prisma, zorunlu tenant izolasyonu, auth. Frontend henüz yok.
 
 ## Teknoloji Yığını
 
@@ -39,4 +39,25 @@ Mimari: modüler monolit, multi-tenant SaaS, ileride mikroservise bölünebilir 
 
 ## Kurulum
 
-Teknoloji yığını kesinleştiğinde eklenecek.
+Gereksinimler: Node.js 24, npm 11, Docker Desktop.
+
+```bash
+cp .env.example .env          # JWT_ACCESS_SECRET'ı doldurun (en az 32 karakter)
+docker compose --env-file .env -f docker/docker-compose.yml up -d
+
+cd backend
+npm ci
+npm run prisma:generate       # npm 11 kullanıyorsanız zorunlu, aşağıya bakın
+npm run prisma:deploy         # migration'ları uygular
+npm run start:dev             # http://localhost:4000/api/v1/health
+```
+
+> **npm 11 notu:** npm 11 paketlerin kurulum scriptlerini varsayılan olarak çalıştırmaz. Bu yüzden `postinstall` içindeki `prisma generate` atlanır ve Prisma client (`backend/src/generated/`) oluşmaz; uygulama ve testler `Cannot find module '../generated/prisma/client.js'` hatası verir. `npm ci` / `npm install` sonrası ve `database/prisma/schema.prisma` her değiştiğinde `npm run prisma:generate` çalıştırın.
+
+Testler (Docker'daki PostgreSQL çalışıyor olmalı):
+
+```bash
+npm test             # unit
+npm run test:e2e     # e2e, gerçek veritabanı kullanır
+npm run lint
+```

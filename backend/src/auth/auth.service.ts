@@ -4,6 +4,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { hash, verify } from '@node-rs/argon2';
+import { AuditService } from '../audit/audit.service.js';
 import { TenantContext } from '../tenancy/tenant-context.js';
 import { TenantsService } from '../tenants/tenants.service.js';
 import type { LoginDto, RegisterDto } from './auth.dto.js';
@@ -11,6 +12,7 @@ import { AuthRepository } from './auth.repository.js';
 import { TokenService, type TokenPair } from './token.service.js';
 
 const OWNER_ROLE = { name: 'owner', permissions: ['*'] };
+const MODULE = 'auth';
 
 /** Verified against when the email is unknown, so response time does not reveal which emails exist. */
 const DUMMY_HASH =
@@ -36,6 +38,7 @@ export class AuthService {
     private readonly repository: AuthRepository,
     private readonly tenants: TenantsService,
     private readonly tokens: TokenService,
+    private readonly audit: AuditService,
   ) {}
 
   async register(dto: RegisterDto): Promise<TokenPair> {
@@ -58,6 +61,32 @@ export class AuthService {
           });
           const role = await this.repository.createRole(tx, OWNER_ROLE);
           await this.repository.assignRole(tx, user.id, role.id);
+          await this.audit.record(
+            {
+              action: 'CREATE',
+              module: 'tenants',
+              entityType: 'Tenant',
+              entityId: tenant.id,
+              after: { name: dto.tenantName, slug: dto.tenantSlug },
+              actorUserId: user.id,
+            },
+            tx,
+          );
+          await this.audit.record(
+            {
+              action: 'CREATE',
+              module: MODULE,
+              entityType: 'User',
+              entityId: user.id,
+              after: {
+                name: dto.name,
+                email: dto.email,
+                roles: [OWNER_ROLE.name],
+              },
+              actorUserId: user.id,
+            },
+            tx,
+          );
           const refresh = this.tokens.newRefreshToken();
           await this.repository.createRefreshToken(tx, {
             userId: user.id,
@@ -85,14 +114,39 @@ export class AuthService {
       user?.passwordHash ?? DUMMY_HASH,
       dto.password,
     );
-    if (!user || !passwordOk || !user.isActive) throw invalidCredentials();
+    // Unknown email: no tenant to attribute the event to, so it is not audited.
+    if (!user) throw invalidCredentials();
 
     return TenantContext.run(user.tenantId, async () => {
       const prisma = this.repository.prisma;
-      if (!(await this.tenants.isActive(prisma, user.tenantId))) {
+      const reason = !passwordOk
+        ? 'invalid_password'
+        : !user.isActive
+          ? 'user_inactive'
+          : !(await this.tenants.isActive(prisma, user.tenantId))
+            ? 'tenant_inactive'
+            : null;
+
+      if (reason) {
+        await this.audit.record({
+          action: 'LOGIN_FAILED',
+          module: MODULE,
+          entityType: 'User',
+          entityId: user.id,
+          after: { reason },
+          actorUserId: null,
+        });
         throw invalidCredentials();
       }
+
       await this.repository.touchLastLogin(user.id);
+      await this.audit.record({
+        action: 'LOGIN',
+        module: MODULE,
+        entityType: 'User',
+        entityId: user.id,
+        actorUserId: user.id,
+      });
       return this.startSession(user.tenantId, user.id);
     });
   }
@@ -107,6 +161,7 @@ export class AuthService {
       if (stored.revokedAt) {
         // Reuse of a rotated token: assume it leaked and end every session.
         await this.repository.revokeAllForUser(stored.userId);
+        await this.recordTokenReuse(stored.userId);
         throw invalidRefreshToken();
       }
       if (stored.expiresAt <= new Date()) throw invalidRefreshToken();
@@ -129,6 +184,7 @@ export class AuthService {
       if (!rotated) {
         // Lost a race with a concurrent refresh of the same token: treat as reuse.
         await this.repository.revokeAllForUser(stored.userId);
+        await this.recordTokenReuse(stored.userId);
         throw invalidRefreshToken();
       }
 
@@ -145,6 +201,23 @@ export class AuthService {
   /** Runs in the authenticated request's tenant context. */
   async logout(userId: string, refreshToken: string): Promise<void> {
     await this.repository.revokeByHash(userId, TokenService.hash(refreshToken));
+    await this.audit.record({
+      action: 'LOGOUT',
+      module: MODULE,
+      entityType: 'User',
+      entityId: userId,
+    });
+  }
+
+  private recordTokenReuse(userId: string) {
+    return this.audit.record({
+      action: 'TOKEN_REUSE_DETECTED',
+      module: MODULE,
+      entityType: 'User',
+      entityId: userId,
+      after: { revokedAllSessions: true },
+      actorUserId: null,
+    });
   }
 
   async me(userId: string, permissions: string[]) {

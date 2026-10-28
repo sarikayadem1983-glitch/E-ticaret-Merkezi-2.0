@@ -223,6 +223,31 @@ describe('applyTenantScope', () => {
     });
   });
 
+  describe('append-only models (AuditLog)', () => {
+    it.each(['update', 'updateMany', 'delete', 'deleteMany', 'upsert'])(
+      'refuses AuditLog.%s in tenant and system context',
+      (op) => {
+        expect(() => asA(() => applyTenantScope('AuditLog', op, {}))).toThrow(
+          TenantViolationError,
+        );
+        expect(() =>
+          TenantContext.runAsSystem(() => applyTenantScope('AuditLog', op, {})),
+        ).toThrow(TenantViolationError);
+      },
+    );
+
+    it('allows create and reads, scoped to the tenant', () => {
+      expect(
+        asA(() =>
+          applyTenantScope('AuditLog', 'create', { data: { module: 'm' } }),
+        ),
+      ).toEqual({ data: { module: 'm', tenantId: A } });
+      expect(asA(() => applyTenantScope('AuditLog', 'findMany', {}))).toEqual({
+        where: { tenantId: A },
+      });
+    });
+  });
+
   describe('lazy thenables (PrismaPromise)', () => {
     it('run() executes a thenable inside the tenant store', async () => {
       const lazy = {

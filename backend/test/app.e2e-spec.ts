@@ -11,6 +11,7 @@ import {
 import { setupApp } from './../src/setup-app.js';
 import { TenantContext } from './../src/tenancy/tenant-context.js';
 import { TenantContextMissingError } from './../src/tenancy/tenant.errors.js';
+import { purgeTenants } from './helpers.js';
 
 const PASSWORD = 'Sifre-12345';
 
@@ -55,17 +56,7 @@ describe('API (e2e)', () => {
   });
 
   afterAll(async () => {
-    await TenantContext.runAsSystem(async () => {
-      const ids = (
-        await prisma.tenant.findMany({
-          where: { slug: { in: [tenants.a.slug, tenants.b.slug] } },
-          select: { id: true },
-        })
-      ).map((t) => t.id);
-      await prisma.user.deleteMany({ where: { tenantId: { in: ids } } });
-      await prisma.role.deleteMany({ where: { tenantId: { in: ids } } });
-      await prisma.tenant.deleteMany({ where: { id: { in: ids } } });
-    });
+    await purgeTenants(prisma, [tenants.a.slug, tenants.b.slug]);
     await app.close();
   });
 
