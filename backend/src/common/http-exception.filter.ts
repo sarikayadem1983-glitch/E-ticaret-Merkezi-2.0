@@ -78,6 +78,17 @@ export function bodyParserErrorHandler(
   });
 }
 
+/** `retryAfter` (seconds) from an HttpException body, e.g. RateLimitedException. */
+function retryAfterOf(exception: unknown): number | undefined {
+  if (!(exception instanceof HttpException)) return undefined;
+  const body = exception.getResponse();
+  const value =
+    typeof body === 'object'
+      ? (body as { retryAfter?: unknown }).retryAfter
+      : undefined;
+  return typeof value === 'number' ? value : undefined;
+}
+
 /**
  * Maps every error to the standard `{ error: { code, message, details } }` shape.
  * In production, 5xx responses never carry internal messages or codes.
@@ -91,6 +102,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
     const res = host.switchToHttp().getResponse<Response>();
     const [status, error] = this.toError(exception);
+    const retryAfter = retryAfterOf(exception);
+    if (retryAfter !== undefined) res.setHeader('Retry-After', retryAfter);
     const body =
       this.production && status >= 500
         ? {

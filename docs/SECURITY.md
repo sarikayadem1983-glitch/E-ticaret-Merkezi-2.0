@@ -61,4 +61,34 @@ Ayarlar açılışta `backend/src/config/security.config.ts` ile okunur ve doğr
 
 ## 3. Kimlik doğrulama koruması
 
-> Bu aşamada geliştiriliyor.
+Mevcut katmanlar: argon2id şifre hash'i, bilinmeyen email'de sahte hash doğrulaması (yanıt süresi kullanıcı varlığını ele vermez), refresh token rotation ve tekrar kullanımda tüm oturumların kapatılması, başarısız girişlerin Audit Log'a yazılması.
+
+### Hız sınırlama (rate limiting)
+
+Sayaçlar Redis'te tutulur (`rl:` önekli anahtarlar). Her kontrol tek bir atomik Lua script'idir ve Redis saatini kullanır, bu yüzden birden fazla uygulama örneğinde de doğru çalışır. Kod: `backend/src/rate-limit/`, kurallar: `backend/src/auth/auth-rate-limit.service.ts`.
+
+| Uç nokta | Kural | Varsayılan |
+|---|---|---|
+| `POST /auth/login` | IP başına tüm denemeler (credential stuffing) | 15 dk'da 30 |
+| `POST /auth/login` | Hesap + IP başına kademeli bekleme | 5 serbest deneme, sonra 30 sn'den başlayıp her denemede ikiye katlanan bekleme (en fazla 15 dk). Son denemeden 1 saat sonra sıfırlanır. |
+| `POST /auth/login` | Hesap başına (tüm IP'ler) kademeli bekleme | 20 serbest deneme, sonra 1 dk'dan başlayıp en fazla 15 dk. Güvenilen IP'ler muaf. |
+| `POST /auth/register` | IP başına | saatte 5 |
+| `POST /auth/refresh` | IP başına | dakikada 30 |
+
+- **Kalıcı kilitleme yok.** Tüm engeller geçicidir ve süreleri sınırlıdır.
+- **Hesap kilitleme saldırısına karşı:** Hesap + IP sınırında saldırgan yalnızca kendi IP'sini yavaşlatır. Hesap genelindeki sınır, sahibin son 30 gün içinde başarıyla giriş yaptığı IP'lere uygulanmaz. Başarılı giriş, o IP'nin sayacını ve hesap genelindeki sayacı sıfırlar.
+- **Deneme önce sayılır:** Şifre kontrolünden önce sayaç artırılır, başarılı girişte geri alınır. Paralel istekler sınırı aşamaz. Engellenen istek sayacı ve bekleme süresini uzatmaz.
+- **Kullanıcı varlığı açığa çıkmaz:** Anahtarlar yalnızca gönderilen email'e ve IP'ye bağlıdır, hesabın var olup olmamasına bağlı değildir. Kayıtlı ve kayıtsız email aynı 401 ve 429 yanıtlarını alır. Redis'te email değil SHA-256 özeti tutulur.
+- **İstemci IP'si:** `req.ip` kullanılır. `X-Forwarded-For` yalnızca `TRUST_PROXY` ile tanımlı proxy'lerden kabul edilir (bkz. bölüm 2). IPv6 adresleri /64 bloğu olarak gruplanır, böylece adres değiştirerek sınır aşılamaz.
+- **Yanıt:** `429 TOO_MANY_REQUESTS` ve saniye cinsinden `Retry-After` başlığı. Gövde standart hata formatındadır.
+
+### Redis erişilemezse (fail-closed)
+
+`login`, `register` ve `refresh`, `503 SERVICE_UNAVAILABLE` ve `Retry-After: 5` döner. İstek veritabanına ve argon2'ye ulaşmaz.
+
+- **Neden kapalı:** Açık bırakılırsa Redis kesintisi sınırsız şifre denemesine izin verir. Ayrıca CPU yoğun argon2 doğrulaması bir DoS yolu olur.
+- **Bedeli:** Kesinti süresince yeni giriş yapılamaz. Mevcut access token'lar geçerlilik süresi (15 dk) boyunca çalışmaya devam eder.
+- **Diğer uç noktalar:** Rate limiting kullanmadıkları için etkilenmez.
+- **Hızlı hata:** Redis istemcisi komut kuyruğu tutmaz ve 1 sn zaman aşımı kullanır. Böylece istekler beklemeden hata alır. İstemci arka planda yeniden bağlanmayı dener.
+
+Production'da Redis yüksek erişilebilirlik (replika + otomatik failover) ile çalıştırılmalı ve izlenmelidir.

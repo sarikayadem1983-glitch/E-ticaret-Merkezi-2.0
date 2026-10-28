@@ -4,33 +4,43 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Ip,
   Post,
 } from '@nestjs/common';
+import { AuthRateLimitService } from './auth-rate-limit.service.js';
 import { LoginDto, RefreshTokenDto, RegisterDto } from './auth.dto.js';
 import { AuthService } from './auth.service.js';
 import { type AuthUser, CurrentUser, Public } from './decorators.js';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly limits: AuthRateLimitService,
+  ) {}
 
   @Public()
   @Post('register')
-  async register(@Body() dto: RegisterDto) {
+  async register(@Body() dto: RegisterDto, @Ip() ip: string) {
+    await this.limits.beforeRegister(ip);
     return { data: await this.auth.register(dto) };
   }
 
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  async login(@Body() dto: LoginDto) {
-    return { data: await this.auth.login(dto) };
+  async login(@Body() dto: LoginDto, @Ip() ip: string) {
+    await this.limits.beforeLogin(ip, dto.email);
+    const data = await this.auth.login(dto);
+    await this.limits.loginSucceeded(ip, dto.email);
+    return { data };
   }
 
   @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  async refresh(@Body() dto: RefreshTokenDto) {
+  async refresh(@Body() dto: RefreshTokenDto, @Ip() ip: string) {
+    await this.limits.beforeRefresh(ip);
     return { data: await this.auth.refresh(dto.refreshToken) };
   }
 

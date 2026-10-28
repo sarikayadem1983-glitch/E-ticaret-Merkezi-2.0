@@ -4,6 +4,11 @@ import { Test } from '@nestjs/testing';
 import { config } from 'dotenv';
 import pg from 'pg';
 import { AppModule } from './../src/app.module.js';
+import {
+  AUTH_RATE_LIMITS,
+  type AuthRateLimits,
+  DEFAULT_AUTH_RATE_LIMITS,
+} from './../src/rate-limit/rate-limit.config.js';
 import { loadSecurityConfig } from './../src/config/security.config.js';
 import { setupApp } from './../src/setup-app.js';
 
@@ -61,18 +66,38 @@ export async function purgeTenants(slugs: string[]): Promise<void> {
   }
 }
 
+/** Effectively unlimited, so suites that log in many times are not throttled. */
+export const RELAXED_RATE_LIMITS: AuthRateLimits = {
+  ...DEFAULT_AUTH_RATE_LIMITS,
+  loginPerIp: { limit: 1_000_000, windowMs: 60_000 },
+  loginPerAccountIp: { free: 1_000_000, baseMs: 1, maxMs: 1, windowMs: 60_000 },
+  loginPerAccount: { free: 1_000_000, baseMs: 1, maxMs: 1, windowMs: 60_000 },
+  registerPerIp: { limit: 1_000_000, windowMs: 60_000 },
+  refreshPerIp: { limit: 1_000_000, windowMs: 60_000 },
+};
+
 /**
  * Boots the real app with the production pipeline (setupApp). Security settings
  * come from `env` merged over a safe local baseline, so tests are deterministic.
  */
 export async function createTestApp(
   env: Record<string, string | undefined> = {},
-  extra: { controllers?: Type[] } = {},
+  extra: {
+    controllers?: Type[];
+    rateLimits?: AuthRateLimits;
+    providers?: { provide: unknown; useValue: unknown }[];
+  } = {},
 ): Promise<NestExpressApplication> {
-  const moduleRef = await Test.createTestingModule({
+  let builder = Test.createTestingModule({
     imports: [AppModule],
     controllers: extra.controllers ?? [],
-  }).compile();
+  })
+    .overrideProvider(AUTH_RATE_LIMITS)
+    .useValue(extra.rateLimits ?? RELAXED_RATE_LIMITS);
+  for (const p of extra.providers ?? []) {
+    builder = builder.overrideProvider(p.provide).useValue(p.useValue);
+  }
+  const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication<NestExpressApplication>({
     bodyParser: false,
   });
