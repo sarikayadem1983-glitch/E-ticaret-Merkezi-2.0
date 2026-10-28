@@ -4,10 +4,10 @@
 
 ## Multi-tenant
 
-- `tenants` tablosu: id, name, slug (unique), plan, is_active.
+- `tenants` tablosu: id, name, slug (unique), plan, is_active, deleted_at.
 - `tenants` dışındaki tüm iş tablolarında `tenant_id` zorunludur ve indekslidir.
 - Tekil alanlar tenant içinde tekildir: örn. `(tenant_id, sku)`.
-- `refresh_tokens` — id, user_id, token_hash, expires_at, revoked_at.
+- Tenant'a ait tablolarda `(tenant_id, id)` tekildir. Tenant'a ait tablolar arası yabancı anahtarlar composite'tir: `(tenant_id, user_id)` → `users(tenant_id, id)`. Böylece farklı tenant'ın kaydına bağlantı veritabanında da imkânsızdır (migration `tenant_composite_fks`).
 
 ## Kurallar
 
@@ -20,10 +20,13 @@
 
 ## Taslak Tablolar
 
-### auth
-- `users` — id, name, email (unique), password_hash, is_active
-- `roles` — id, name
-- `user_roles` — user_id, role_id
+### auth (kesinleşti — migration `init_tenants_auth`)
+- `users` — id, tenant_id, name, email (global unique), password_hash, is_active, last_login_at, deleted_at
+  - Bir kullanıcı tek bir tenant'a aittir. Email global tekil olduğu için giriş yalnızca email + şifre ile yapılır; tenant kullanıcıdan çözülür.
+- `roles` — id, tenant_id, name, permissions (`text[]`, örn. `products:read`) — `(tenant_id, name)` tekil
+- `user_roles` — tenant_id, user_id, role_id — birincil anahtar `(user_id, role_id)`
+- `refresh_tokens` — id, tenant_id, user_id, token_hash (unique, SHA-256), expires_at, revoked_at, replaced_by_id
+  - Rotation: kullanılan token `revoked_at` alır, yeni token `replaced_by_id` ile bağlanır. İptal edilmiş token tekrar kullanılırsa kullanıcının tüm token'ları iptal edilir.
 
 ### catalog
 - `categories` — id, parent_id, name, slug
@@ -52,4 +55,5 @@
 ## Notlar
 
 - Pazaryeri kimlik bilgileri veritabanında düz metin tutulmaz; şifreli saklanır veya gizli bilgi yöneticisinde referanslanır.
-- Migration ve seed dosyaları `database/` klasöründe tutulur.
+- Prisma şeması `database/prisma/schema.prisma`, migration'lar `database/prisma/migrations/` altındadır.
+- Prisma migration'ları yalnızca ileri yönlüdür. Geri alma için her migration klasöründe `down.sql` tutulur.
