@@ -47,12 +47,12 @@ Uzun vadeli hedef: **bir kişi tek e-posta ve tek şifreyle birden fazla mağaza
 
 **`users` (global kimlik)**
 - Kalır: `id`, `name`, `email` (global tekil, küçük harfe normalize), `password_hash`, `last_login_at`, `created_at`, `updated_at`, `deleted_at`.
-- Eklenir: `last_tenant_id` (nullable; login'de varsayılan mağaza).
+- Eklenir: `last_tenant_id` (nullable; login'de varsayılan mağaza), `email_verified_at` (nullable; bkz. Davet güvenliği). Mevcut kullanıcılarda `NULL` (bugün e-posta doğrulaması yok).
 - Kaldırılır (Aşama 2): `tenant_id`, `is_active`. `is_active` anlamı üyeliğe taşınır.
 - Global hesap kilidi gerekirse ileride `users.disabled_at` eklenir (bu aşamada yok).
 
 **`tenant_memberships` (yeni)**
-- `tenant_id`, `user_id`, `status` (`active` | `inactive`), `joined_at`, `deactivated_at`, `created_at`, `updated_at`.
+- `tenant_id`, `user_id`, `status` (`active` | `inactive`), `auth_version` (int, varsayılan 1; bkz. Oturum geçersizleştirme), `joined_at`, `deactivated_at`, `created_at`, `updated_at`.
 - PK `(tenant_id, user_id)`; `user_id` indeksli. FK `user_id → users.id`, `tenant_id → tenants.id`.
 
 **`user_roles`, `user_company_roles`**
@@ -62,7 +62,16 @@ Uzun vadeli hedef: **bir kişi tek e-posta ve tek şifreyle birden fazla mağaza
 - `tenant_id` zaten var; anlamı netleşir: refresh token **bir üyeliğe** bağlıdır. FK `(tenant_id, user_id) → tenant_memberships`. Mağaza değiştirmek yeni refresh token üretir.
 
 **`roles`**
-- Eklenir: `key` (`owner`, `admin`, `operations`, `accounting`, `viewer`), `is_system` (bool). Sistem rolleri her tenant için oluşturulur; izinleri koddaki matristen gelir ve kullanıcı değiştiremez.
+- Eklenir: `key` (nullable; `owner`, `admin`, `operations`, `accounting`, `viewer`), `scope` (`tenant` | `company`), `is_system` (bool). Kısmi tekil indeks `(tenant_id, key) WHERE key IS NOT NULL`; ek tekil `(tenant_id, id, scope)` (aşağıdaki FK'ler için).
+
+### Kod kataloğu ile veritabanı rollerinin eşleşmesi
+
+- **Tek kaynak:** `roles.catalog.ts` her sistem rolü için `key`, `scope`, Türkçe ad ve izin listesini tanımlar: `owner`/`admin` → `tenant`, `operations`/`accounting`/`viewer` → `company`.
+- **Veritabanı satırı kimliği taşır, izinleri değil:** her tenant'ta her sistem rolü için tam bir `roles` satırı vardır (`key` ile bulunur). `user_roles.role_id` ve `user_company_roles.role_id` bu satırların `id`'sine işaret eder; mevcut FK'ler ve tablolar aynen kalır.
+- **İzin çözümü:** `key` dolu satırlar için izinler her zaman katalogdan okunur; `roles.permissions` kolonu bu satırlar için bilgi amaçlı katalog kopyasıyla doldurulur ama okunmaz. `key` boş (eski/özel) satır bugün yoktur; migration bunu doğrular ve varsa satırı `is_system=false` olarak, izinleri kendi kolonundan okunacak şekilde dokunmadan bırakır.
+- **Satırların varlığı:** register ve migration her tenant için 5 sistem rolünü oluşturur. Uygulama açılışında bir kontrol, eksik sistem rolü olan tenant bulursa hata loglar (sessizce oluşturmaz); düzeltme migration ile yapılır.
+- **Kapsam veritabanında zorlanır:** `user_roles` ve `user_company_roles` tablolarına sabit değerli `role_scope` kolonu (`'tenant'` / `'company'`, `GENERATED ALWAYS AS ... STORED`) eklenir; FK `(tenant_id, role_id, role_scope) → roles(tenant_id, id, scope)`. Böylece firma rolü mağaza seviyesinde, Owner/Admin firma seviyesinde atanamaz.
+- **Firma başına tek rol:** `user_company_roles` üzerinde tekil `(tenant_id, user_id, company_id)`. Migration öncesi aynı firmada birden fazla rolü olan kayıt varsa migration durur.
 
 **`invitations` (yeni, tenant'a ait)**
 - `id`, `tenant_id`, `email` (normalize), `tenant_role_id` (nullable; Admin daveti), `company_roles` (jsonb `[{ companyId, roleId }]`; firma rolleri daveti), `token_hash` (SHA-256, tekil), `status` (`pending` | `accepted` | `revoked` | `expired`), `expires_at`, `invited_by_user_id`, `accepted_by_user_id`, `accepted_at`, `revoked_at`, `last_sent_at`, `send_attempts`, `last_send_error` (kısa kod, ham hata değil), `created_at`, `updated_at`.
@@ -80,10 +89,24 @@ Uzun vadeli hedef: **bir kişi tek e-posta ve tek şifreyle birden fazla mağaza
 6. `users.tenant_id` ve `users.is_active` bu aşamada **kalır** ama `tenant_id` nullable yapılır ve `users(tenant_id)` FK'si kaldırılır (mevcut değerler silinmez; davetle oluşan yeni kullanıcılarda `NULL`). Kod artık okumaz. *(Builder kararı: geri dönüşte değerler yerinde durur.)*
 7. Postgres `AuditAction` enum'una yeni değerler eklenir. Uygulama DB rolünün yetkileri (`app_role_privileges` migration'ı ve `database/roles/setup-roles.sql`) yeni tablolar için güncellenir.
 
-**Aşama 2 — temizlik (ayrı migration, ayrı onay)**
-- `users.tenant_id`, `users.is_active` ve ilgili indeks/FK'ler kaldırılır. Aşama 1 kodu canlıda doğrulandıktan sonra çalışır.
+**Aşama 2 — temizlik (ayrı migration, kullanıcının açık onayı)**
+- `users.tenant_id`, `users.is_active` ve ilgili indeks/FK'ler kaldırılır.
+- Ön koşullar: Aşama 1 kodu tüm testlerden (backend unit/e2e, Playwright) geçmiş ve çalışır durumda doğrulanmış; Aşama 1 doğrulama sorguları temiz; kullanıcı ayrıca onay vermiş. Bu iş bu planın kapsamında **çalıştırılmaz**, yalnızca hazırlanır.
 
-Her iki migration da önce mevcut geliştirme veritabanının yedeği (`pg_dump`) alınarak çalıştırılır; satır sayıları migration öncesi/sonrası karşılaştırılır (kullanıcı, rol, rol ataması, firma ataması, refresh token, audit log).
+### Migration güvenliği
+
+1. **Yedek:** `pg_dump -Fc` ile yedek alınır. Yedek doğrulanır: `pg_restore --list` okunur ve yedek ayrı bir geçici veritabanına (`tm_restore_check`) geri yüklenip tablo satır sayıları kaynakla karşılaştırılır.
+2. **Önce izole deneme:** migration ilk olarak yedekten oluşturulan izole kopya veritabanında (`tm_migration_rehearsal`) çalıştırılır; doğrulama sorguları orada temiz çıkmadan geliştirme veritabanında çalıştırılmaz. Testler ayrıca boş bir e2e veritabanında migration'ı sıfırdan uygular.
+3. **Ön kontroller (migration içinde, ihlalde `RAISE EXCEPTION` ile tüm migration geri alınır):** büyük/küçük harf farkıyla çakışan e-posta yok; aynı firmada birden fazla rolü olan kullanıcı yok; `key`'i belirlenemeyen rol satırları listelenir.
+4. **Doğrulama (satır sayısından fazlası):** migration öncesi `(user_id, tenant_id, is_active)`, `(user_id, tenant_id, role_id)` ve `(user_id, tenant_id, company_id, role_id)` eşleşmelerinin anlık görüntüsü alınır; sonrası birebir karşılaştırılır:
+   - her eski `users(id, tenant_id, is_active)` için aynı durumlu tek bir `tenant_memberships` satırı var, fazlası yok;
+   - `user_roles` ve `user_company_roles` satırları aynı kaldı ve hepsinin üyeliği var;
+   - tüm FK'ler `VALIDATE CONSTRAINT` ile doğrulandı, yetim kayıt yok;
+   - her tenant'ta 5 sistem rolü var, her owner `key='owner'` rolüne bağlı;
+   - şifre hash'leri ve audit log satırları değişmedi (hash karşılaştırması).
+   Sorgular `database/migrations-verify/` altında saklanır ve tekrar çalıştırılabilir.
+5. **Geri dönüş planı:** Aşama 1 yalnızca ekleme yapar ve eski kolonları korur. Geri dönüş için elle yazılmış `rollback.sql` (yeni FK'leri ve tabloları kaldırır, eski FK'leri geri ekler, `users.tenant_id`'yi tekrar `NOT NULL` yapar; davetle oluşmuş `tenant_id`'siz kullanıcı varsa önce durur) hazırlanır ve izole kopyada denenir. Son çare: doğrulanmış yedekten geri yükleme.
+6. **Production:** bu planın hiçbir adımı production veritabanında çalıştırılmaz.
 
 ## Tenant izolasyonu
 
@@ -104,11 +127,17 @@ Her iki migration da önce mevcut geliştirme veritabanının yedeği (`pg_dump`
 
 **Mağaza değiştirme**
 - Backend: `POST /auth/switch-tenant { tenantId }` (oturum açık kullanıcı). Hedef üyelik aktif değilse `404`. Mevcut refresh token iptal edilir, hedef tenant için yeni çift üretilir, `last_tenant_id` güncellenir. Her iki tenant'a audit: `TENANT_SWITCH`.
-- BFF: `POST /api/session/tenant`. Yeni token'larla **yeni session id** oluşturur, eskisini siler (fixation koruması), seçili firma sıfırlanır, istemci tam sayfa yenileme yapar (bellekte başka mağaza verisi kalmaz).
+- BFF: `POST /api/session/tenant`. Yeni token'larla **yeni session id** oluşturur, eskisini siler (fixation koruması), seçili firma sıfırlanır, istemci tam sayfa yenileme yapar (bellekte başka mağaza verisi kalmaz). Yeni access token'ın `tid`, `perms` ve `ver` değerleri hedef üyelikten sıfırdan hesaplanır; eski tenant'tan hiçbir yetki taşınmaz.
 - `GET /auth/memberships`: kullanıcının aktif mağazaları (id, ad, slug). Üst bardaki mağaza seçicide gösterilir; tek mağaza varsa seçici gizlenir.
 
-**Üyelik pasife alındığında**
-- O üyeliğin tüm refresh token'ları iptal edilir. Kalan access token en fazla mevcut ömrü kadar (15 dk) geçerlidir; BFF bir sonraki refresh'te oturumu düşürür. Diğer mağazalardaki oturumlar etkilenmez.
+**Oturum geçersizleştirme (`auth_version`)**
+- Access token'a `ver` (üyeliğin `auth_version`'ı) eklenir. `JwtAuthGuard` her istekte üyeliğin `status` ve `auth_version`'ını veritabanından okur (tek PK sorgusu).
+  - Üyelik aktif değilse → `401 SESSION_REVOKED`.
+  - `ver` eskiyse → `401 TOKEN_STALE`.
+- **Pasife alma:** üyelik `inactive`, `auth_version + 1`, o üyeliğin tüm refresh token'ları iptal. Sonuç: kişinin o mağazadaki **tüm oturumları bir sonraki istekte** düşer (15 dk beklemez). Rol ve firma atamaları korunur. Diğer mağazalardaki oturumları etkilenmez. Audit `MEMBERSHIP_DEACTIVATED` (kim, kimi, önceki durum).
+- **Yeniden aktifleştirme:** yalnızca `users:manage` yetkisi olan yönetici (son-owner ve Admin sınırları geçerli). Üyelik `active`, `auth_version + 1`; eski token'lar zaten iptal olduğu için kullanıcı **yeniden giriş yapar**. Audit `MEMBERSHIP_ACTIVATED`.
+- **Rol/firma ataması değişince:** `auth_version + 1` (refresh token'lar iptal edilmez). BFF `TOKEN_STALE` alınca bir kez refresh yapıp isteği tekrarlar; yeni token güncel izinlerle gelir. `SESSION_REVOKED` veya başarısız refresh → BFF oturumu siler.
+- Builder: BFF bugün her 401'de oturumu siliyor; bu iki kod ayrımıyla güncellenir.
 
 **Kayıt (register)** değişmez görünür: global kullanıcı + tenant + owner üyeliği + sistem rolleri tek transaction'da. E-posta zaten kayıtlıysa mevcut davranış korunur (aynı genel hata).
 - Builder: register transaction'ı bugün yük altında 5 sn Prisma sınırını aşabiliyor; sistem rolleri eklenince iş artar. Rol oluşturma `createMany` ile tek sorguya indirilir ve transaction'a açık `timeout` verilir.
@@ -131,9 +160,12 @@ Her iki migration da önce mevcut geliştirme veritabanının yedeği (`pg_dump`
 1. `POST /invitations/lookup` (BFF üzerinden, token gövdede): geçerliyse mağaza adı, davet edenin adı, rol, maskeli e-posta ve `accountExists` döner. Geçersiz/iptal/süresi dolmuş/kullanılmış → tek tip `404 INVITATION_INVALID`. Hız sınırlı (IP başına).
    - `accountExists` yalnızca geçerli token sahibine döner (token e-postaya gittiği için sahibi e-postanın sahibidir); token olmadan sorgulanamaz.
 2. **Hesap yoksa:** ad + şifre (mevcut şifre kuralları) → global kullanıcı oluşturulur, e-posta davetteki e-postadır (değiştirilemez).
-3. **Hesap varsa:** kişi şifresiyle doğrulanır (`/invitations/accept { token, password }`). BFF'de oturum açıksa BFF access token'ı ekler; backend oturumdaki kullanıcının e-postası davetle aynıysa şifre istemez (`/invitations/accept-as-current { token }`, oturum gerekli). Farklı hesapla açıksa "Bu davet başka bir e-posta için" uyarısı, kabul yok. *(Builder kararı.)*
-4. Tek transaction: davet `pending` ve süresi dolmamış mı yeniden kontrol (`UPDATE ... WHERE status='pending' AND expires_at > now()`; 0 satır → geçersiz) → **davet hâlâ geçerli mi yeniden doğrula**: davet eden aktif üye ve bu rolü hâlâ verebiliyor, firmalar hâlâ aktif (pasif firmalar atlanır; firma rolünde hiç aktif firma kalmazsa `INVITATION_INVALID`) → üyelik oluştur (veya pasif üyeliği aktifleştir; eski rol/firma atamaları **davettekilerle değiştirilir**) → rol ve firma atamaları → davet `accepted`. *(Builder kararı.)* Audit `INVITATION_ACCEPTED`, `MEMBERSHIP_CREATED`, `ROLE_ASSIGNED`.
-5. Kabul sonrası o tenant'a oturum açılır (BFF yeni session id; açık oturum varsa yeni mağazaya geçer).
+3. **Hesap varsa:** kişi şifresiyle doğrulanır (`/invitations/accept { token, password }`). BFF'de oturum açıksa `/invitations/accept-as-current { token }` kullanılır: oturumdaki kullanıcının e-postası davetteki e-postayla (normalize edilmiş hâliyle) **birebir** aynı olmalı. Farklı hesapla açıksa "Bu davet başka bir e-posta için" uyarısı, kabul yok.
+   - **Doğrulanmış e-posta:** davet token'ı yalnızca o e-posta kutusuna gittiği için, geçerli token'ı sunmak e-postanın sahibi olunduğunu kanıtlar; kabulde `users.email_verified_at` doldurulur. Mevcut hesapla kabul için **hem** geçerli token **hem** hesabın kimlik doğrulaması (şifre veya oturum) gerekir; ikisi tek başına yetmez.
+   - **E-posta gaspı riski:** bugün kayıtta e-posta doğrulanmadığı için biri başkasının e-postasıyla önceden hesap açmış olabilir. Bu durumda gerçek sahip davette "hesap var" görür ama şifreyi bilmez; kabul edemez (yetki sızıntısı yok, yalnızca engelleme). Saldırgan token'ı göremediği için daveti kabul edemez. Kalıcı çözüm (kayıtta e-posta doğrulama, doğrulanmamış hesabı token ile geri alma) sonraki aşamadır ve Kalan riskler'de listelenir.
+   - **Pasif üyelik:** davet pasif bir üyeliği hedefliyorsa hem davet formu (yöneticiye) hem kabul sayfası (davetliye) açıkça "Bu kişinin bu mağazadaki eski rol ve firma erişimleri bu davettekilerle değiştirilecek" uyarısını gösterir.
+4. **Tek atomik transaction** (herhangi bir adım başarısızsa hiçbiri yazılmaz): davet `pending` ve süresi dolmamış mı yeniden kontrol (`UPDATE ... WHERE status='pending' AND expires_at > now()`; 0 satır → geçersiz) → **davet hâlâ geçerli mi yeniden doğrula**: davet eden aktif üye ve bu rolü hâlâ verebiliyor, firmalar hâlâ aktif (pasif firmalar atlanır; firma rolünde hiç aktif firma kalmazsa `INVITATION_INVALID`) → üyelik oluştur (veya pasif üyeliği aktifleştir; eski rol/firma atamaları **davettekilerle değiştirilir**) → rol ve firma atamaları → davet `accepted`. *(Builder kararı.)* Audit `INVITATION_ACCEPTED`, `MEMBERSHIP_CREATED`, `ROLE_ASSIGNED`.
+5. **Kabul sonrası otomatik mağaza geçişi yok.** Başarı ekranı "X mağazasına katıldınız" der ve iki seçenek sunar: "X mağazasına geç" ve "Şimdilik kalsın / Mağaza seç". Oturumu olmayan yeni kullanıcı için "Giriş yap" gösterilir; girişte mağaza seçimi normal login kurallarıyla yapılır. Geçiş seçilirse normal `switch-tenant` akışı çalışır (yeni session id, yetkiler sıfırdan).
 - Davet eden pasife alınır veya yetkisini kaybederse bekleyen davetleri silinmez; 4. adımdaki yeniden doğrulama kabulü engeller. Kullanıcılar ekranında bu davetler "Geçersiz" etiketiyle gösterilir.
 
 Firma erişimi yalnızca 4. adımda verilir; davet beklerken hiçbir atama yoktur.
@@ -161,7 +193,7 @@ Sistem rolleri sabit. İzinlerin tek kaynağı koddaki `roles.catalog.ts`'tir; �
 - **Firma değiştirildiğinde** ayrı bir yetki durumu tutulmaz: her istek hedef firmadaki role göre yeniden değerlendirilir. Rol veya firma ataması değişince etki bir sonraki istekte başlar (JWT'deki birleşik `perms` en geç token yenilemede güncellenir; firma kontrolü zaten anlık).
 - **Bir firmadaki rol başka firmaya erişim sağlamaz:** ataması olmayan firma `404`; başka firmadaki rolün izni bu firmada sayılmaz.
 - **Arayüz sade:** kullanıcıya izin listesi gösterilmez; yalnızca "Admin" ya da "Firma — Rol" satırları. Menü öğeleri ve butonlar, BFF'nin `auth/me` üzerinden verdiği basit bayraklarla (ör. `canManageUsers`, seçili firmada `canWrite`) gösterilir/gizlenir; asıl karar backend'dedir.
-- `audit:read` tenant genelidir; firma rolüyle verilmez (bir firmadaki Muhasebe tüm mağazanın kayıtlarını görmesin). Bu aşamada yalnızca Owner ve Admin. *(Builder kararı.)*
+- `audit:read` tenant genelidir; firma rolüyle verilmez (bir firmadaki Muhasebe tüm mağazanın kayıtlarını görmesin). Yalnızca Owner ve Admin. Admin'in kapsamı kendi tenant'ıdır (tenant eklentisi); audit kayıtlarında token, şifre veya davet bağlantısı bulunmaz.
 
 | İzin | Owner | Admin | Operasyon | Muhasebe | Görüntüleyici |
 |---|:-:|:-:|:-:|:-:|:-:|
@@ -225,3 +257,9 @@ Frontend:
 - Dosya/klasör yerleşimi modül kurallarına göre (`users`, `invitations`, `mail` modülleri veya `users` altında alt klasörler).
 - Hız sınırı anahtarlarının adları (mevcut `rl:` düzeni).
 - E-posta şablonunun görsel ayrıntıları.
+
+## Kalan riskler (bu aşamada kabul edilen)
+
+- Kayıtta e-posta doğrulaması yok: e-posta gaspı davet kabulünü engelleyebilir (yetki vermez). Sonraki aşama: kayıtta doğrulama ve token ile hesap geri alma.
+- E-posta gönderimi istek içinde; SMTP yavaşsa davet isteği yavaşlar (10 sn zaman aşımı). Outbox sonraki aşama.
+- `JwtAuthGuard` her istekte bir üyelik sorgusu yapar; yük artarsa kısa ömürlü Redis önbelleği eklenebilir (önbellek, pasife almada temizlenmeli).
