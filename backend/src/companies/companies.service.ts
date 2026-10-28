@@ -89,7 +89,7 @@ export class CompaniesService {
   }
 
   async update(user: AuthUser, id: string, dto: UpdateCompanyDto) {
-    return this.change(user, id, { ...dto });
+    return this.change(user, id, dto);
   }
 
   async setActive(user: AuthUser, id: string, isActive: boolean) {

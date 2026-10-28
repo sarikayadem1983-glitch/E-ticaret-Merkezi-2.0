@@ -15,7 +15,7 @@ const PASSWORD = 'Correct-Horse-9';
 
 /** A valid VKN for a 9-digit prefix (adds the check digit). */
 function vkn(prefix: string): string {
-  const d = [...'0123456789'].find((c) => isValidVkn(prefix + c));
+  const d = '0123456789'.split('').find((c) => isValidVkn(prefix + c));
   if (!d) throw new Error('no check digit');
   return prefix + d;
 }

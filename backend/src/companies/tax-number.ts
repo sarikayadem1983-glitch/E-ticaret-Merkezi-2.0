@@ -1,4 +1,4 @@
-const digits = (value: string) => [...value].map(Number);
+const digits = (value: string) => value.split('').map(Number);
 
 /** Turkish tax identification number (Vergi Kimlik No): 10 digits, last one is a check digit. */
 export function isValidVkn(value: string): boolean {
