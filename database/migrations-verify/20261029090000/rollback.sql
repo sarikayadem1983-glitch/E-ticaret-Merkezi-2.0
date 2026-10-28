@@ -15,7 +15,13 @@ BEGIN
   SELECT count(*) INTO n FROM tenant_memberships m JOIN users u ON u.id = m.user_id
   WHERE m.tenant_id <> u.tenant_id;
   IF n > 0 THEN
-    RAISE EXCEPTION 'rollback durdu: kullanıcının kendi tenant''ı dışında % üyelik var', n;
+    RAISE EXCEPTION 'rollback durdu: kullanıcının kendi tenant''ı dışında % üyelik var (birden fazla tenant)', n;
+  END IF;
+  -- users.is_active is rebuilt from the single membership, so every user needs exactly one.
+  SELECT count(*) INTO n FROM users u
+  WHERE (SELECT count(*) FROM tenant_memberships m WHERE m.user_id = u.id AND m.tenant_id = u.tenant_id) <> 1;
+  IF n > 0 THEN
+    RAISE EXCEPTION 'rollback durdu: kendi tenant''ında tam bir üyeliği olmayan % kullanıcı var', n;
   END IF;
   SELECT count(*) INTO n FROM roles r
   WHERE r.is_system AND r.key IN ('admin', 'operations', 'accounting', 'viewer') AND r.name <> r.key
@@ -50,6 +56,11 @@ ALTER TABLE "users" ALTER COLUMN "tenant_id" SET NOT NULL;
 ALTER TABLE "users" ADD CONSTRAINT "users_tenant_id_fkey"
   FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "users" DROP COLUMN "last_tenant_id", DROP COLUMN "email_verified_at";
+
+-- Carry post-deploy activations/deactivations back (1:1, guaranteed by the checks above).
+UPDATE "users" u SET "is_active" = (m."status" = 'active')
+FROM "tenant_memberships" m
+WHERE m."user_id" = u."id" AND m."tenant_id" = u."tenant_id" AND u."is_active" IS DISTINCT FROM (m."status" = 'active');
 
 DROP TABLE "tenant_memberships";
 

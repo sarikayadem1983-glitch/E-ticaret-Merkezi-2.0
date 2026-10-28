@@ -351,8 +351,55 @@ describe('phase 1 migration (tenant memberships)', () => {
     expect(rows.filter((r) => !r.ok)).toEqual([]);
   });
 
-  it('rollback.sql restores the previous schema', async () => {
+  it('SQL-only constraints exist after migration', async () => {
+    const generated = await q<{ t: string }>(
+      `select table_name as t from information_schema.columns
+       where column_name='role_scope' and is_generated='ALWAYS' order by 1`,
+    );
+    expect(generated.map((r) => r.t)).toEqual(['user_company_roles', 'user_roles']);
+    const constraints = await q<{ n: string }>(
+      `select conname as n from pg_constraint where conname = any($1) and convalidated order by 1`,
+      [
+        [
+          'invitations_email_lowercase',
+          'user_company_roles_tenant_id_role_id_role_scope_fkey',
+          'user_roles_tenant_id_role_id_role_scope_fkey',
+        ],
+      ],
+    );
+    expect(constraints.map((r) => r.n)).toEqual([
+      'invitations_email_lowercase',
+      'user_company_roles_tenant_id_role_id_role_scope_fkey',
+      'user_roles_tenant_id_role_id_role_scope_fkey',
+    ]);
+    const partial = await q<{ n: string }>(
+      `select i.relname as n from pg_index x join pg_class i on i.oid = x.indexrelid
+       where x.indisunique and x.indpred is not null and i.relname = any($1) order by 1`,
+      [['invitations_tenant_id_email_pending_key', 'roles_tenant_id_key_key']],
+    );
+    expect(partial.map((r) => r.n)).toEqual(['invitations_tenant_id_email_pending_key', 'roles_tenant_id_key_key']);
+  });
+
+  it('rollback stops when a user has memberships in two tenants', async () => {
+    await q(`insert into tenant_memberships (tenant_id,user_id,status,updated_at) values ($1,$2,'active',now())`, [
+      tenantB,
+      ownerA,
+    ]);
+    await expect(run('rollback.sql')).rejects.toThrow(/birden fazla tenant/);
+    await client.query('ROLLBACK'); // rollback.sql opened its own transaction
+    expect(await q(`select to_regclass('tenant_memberships') as t`)).toEqual([{ t: 'tenant_memberships' }]);
+    await q('delete from tenant_memberships where tenant_id=$1 and user_id=$2', [tenantB, ownerA]);
+  });
+
+  it('rollback carries a post-deploy deactivation back to users.is_active', async () => {
+    await q(`update tenant_memberships set status='inactive', deactivated_at=now() where user_id=$1`, [ownerB]);
     await run('rollback.sql');
+    expect(await q('select is_active from users where id=$1', [ownerB])).toEqual([{ is_active: false }]);
+    // Restore the snapshot state so the re-apply check below compares like with like.
+    await q('update users set is_active=true where id=$1', [ownerB]);
+  });
+
+  it('rollback.sql restores the previous schema', async () => {
     expect(await columnNullable('users', 'tenant_id')).toBe(false);
     expect(await q(`select to_regclass('tenant_memberships') as t, to_regclass('invitations') as i`)).toEqual([
       { t: null, i: null },

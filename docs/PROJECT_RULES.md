@@ -24,6 +24,7 @@
 
 - Şema değişikliği yalnızca migration ile yapılır. Elle değişiklik yasak.
 - Migration geri alınabilir olmalı.
+- Migration'lar yalnızca `prisma migrate deploy` ile uygulanır; `prisma migrate dev` / `db push` kullanılmaz (Prisma'nın gösteremediği yalnızca-SQL nesneler var, bkz. docs/DATABASE.md). Bu nesneler için migration elle yazılır.
 - Para tutarları ondalık (decimal) tipinde, para birimiyle birlikte saklanır. Float kullanılmaz.
 
 ## API

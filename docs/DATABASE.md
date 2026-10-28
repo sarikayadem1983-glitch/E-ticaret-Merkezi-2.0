@@ -51,6 +51,7 @@
 - `user_roles`/`user_company_roles`: `role_scope` generated kolon + FK `(tenant_id, role_id, role_scope) → roles(tenant_id, id, scope)`; FK `(tenant_id, user_id) → tenant_memberships`. `refresh_tokens` da üyeliğe bağlı. `user_company_roles` tekil `(tenant_id, user_id, company_id)`.
 - `invitations` — token yalnızca SHA-256 olarak; kısmi tekil `(tenant_id, email) WHERE status='pending'`. Silinmez (tm_app'te DELETE yok).
 - Prisma şemasında gösterilemeyenler (yalnızca SQL'de): generated `role_scope` kolonları ve 3 kolonlu kapsam FK'leri, kısmi tekil indeksler, `invitations_email_lowercase` CHECK.
+  - **Bu yüzden şema yalnızca `prisma migrate deploy` ile uygulanır.** `prisma migrate dev` / `db push` bu nesneleri drift sayıp silmeye çalışır: kullanılmaz. Bu nesneleri içeren migration'lar elle yazılır; varlıkları `migration-phase1.e2e-spec.ts` içindeki "SQL-only constraints exist after migration" testiyle denetlenir.
 - Doğrulama/geri dönüş: `database/migrations-verify/20261029090000/` (`snapshot-before.sql`, `verify-after.sql`, `rollback.sql`). Test: `backend/test/migration-phase1.e2e-spec.ts` (atılabilir `tm_migration_test_*` veritabanında).
 
 ### catalog
