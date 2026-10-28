@@ -48,13 +48,15 @@ Tenant filtresi geliştiriciye bırakılmaz; Prisma seviyesinde zorunludur ve **
 
 ## Company (Firma) Modeli
 
-> Karar verildi; geliştirme henüz başlamadı.
+> Backend uygulandı (`companies` modülü). Kullanıcıya firma atama ekranları sonraki aşamada.
 
 - Bir Tenant birden fazla Company oluşturabilir. Company tenant'a ait bir kayıttır (`tenant_id` zorunlu), tenant izolasyonu aynen uygulanır.
 - Her Company'de: ticari unvan, vergi numarası (VKN/TCKN), vergi dairesi, adres ve e-Fatura bilgileri (mükellefiyet, posta kutusu etiketi vb.) bulunur.
 - Vergi numarası tenant içinde tekildir: `(tenant_id, tax_number)`.
 - Her Company birden fazla pazaryeri mağazasına bağlanabilir (`channels` kayıtları `company_id` taşır).
 - Kullanıcılar şirket bazında yetkilendirilebilir: tenant seviyesindeki rollere ek olarak kullanıcı–company–rol ataması yapılır. Company kapsamlı bir endpoint hem izni hem de kullanıcının o company'ye erişimini kontrol eder.
+  - İzinler: `companies:read`, `companies:write`. `companies:all` (veya `*`) tenant'ın tüm firmalarına erişim verir; yoksa kullanıcı yalnızca `user_company_roles` ile atandığı firmaları görür.
+  - Erişimi olmayan veya başka tenant'a ait firma `404` döner (varlığı açığa çıkmaz). Firma oluşturmak `companies:all` ister: yeni firmanın henüz ataması yoktur.
 - Company; e-Fatura, sipariş, stok ve muhasebe modüllerinde referans olarak kullanılacaktır. Bu modüller Company tablosuna doğrudan erişmez, `companies` modülünün servisini kullanır.
 
 ## Audit Log
@@ -77,12 +79,20 @@ Tenant filtresi geliştiriciye bırakılmaz; Prisma seviyesinde zorunludur ve **
 - Tüm endpoint'ler varsayılan olarak kimlik doğrulama ister; açık olanlar `@Public()` ile işaretlenir.
 - **RBAC:** roller ve izinler tenant bazındadır. İzinler `kaynak:eylem` biçiminde metindir (örn. `products:read`); `*` tüm izinleri verir. Kullanıcının izinleri access token'a yazılır, `@RequirePermissions()` ve `PermissionsGuard` ile kontrol edilir.
 
+## Frontend ve BFF
+
+- `frontend/`: Next.js (App Router) + React + TypeScript, Tailwind CSS, shadcn/ui, TanStack Query (sunucu verisi), Zustand (yalnızca arayüz durumu), React Hook Form + Zod.
+- **Tarayıcı backend'e doğrudan erişmez.** Next.js sunucusu BFF (Backend for Frontend) olarak çalışır: oturumu tutar, isteği doğrular ve izin verilen backend endpoint'ine iletir. Backend JWT, RBAC ve tenant kontrollerini her istekte yine kendisi yapar.
+- Token'lar yalnızca BFF'in Redis oturum deposunda (şifreli) durur; tarayıcıda yalnızca rastgele oturum kimliği cookie'si vardır. Ayrıntılar: [SECURITY.md §5](SECURITY.md#5-frontend-bff-oturum-güvenliği).
+- `frontend/server.mjs` giriş noktasıdır (geliştirme ve production): gerçek istemci IP'sini ve protokolü güvenilir proxy listesine göre belirler, production'da HTTPS zorunlu kılar.
+- Kurumsal renkler: lacivert `#142C50` (ana renk), turuncu `#F47B20` (vurgu), beyaz. Turuncu üzerindeki metin laciverttir: beyaz metin turuncu zeminde WCAG AA kontrastını sağlamaz.
+
 ## Modüller
 
 | Modül | Sorumluluk |
 |---|---|
 | `tenants` | Kiracı (müşteri hesabı), abonelik, tenant ayarları |
-| `companies` | Tenant altındaki işletmeler: unvan, vergi, adres, e-Fatura bilgileri (planlandı) |
+| `companies` | Tenant altındaki işletmeler: unvan, vergi, adres, e-Fatura bilgileri |
 | `audit` | Değiştirilemez işlem geçmişi |
 | `auth` | Kullanıcı, rol, yetki, oturum |
 | `catalog` | Ürün, kategori, marka, varyant |

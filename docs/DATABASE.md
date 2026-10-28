@@ -35,9 +35,13 @@
   - İndeksler: `(tenant_id, created_at)`, `(tenant_id, entity_type, entity_id)`, `(tenant_id, actor_user_id)`.
   - Saklama süresi / arşivleme ileride bir bakım işiyle yapılacaktır (trigger'ı yalnızca `app.allow_audit_purge = 'on'` oturum ayarı aşar).
 
-### companies (taslak — geliştirilmedi)
-- `companies` — id, tenant_id, legal_name, tax_number, tax_office, address fields, e_invoice_enabled, e_invoice_alias, deleted_at — `(tenant_id, tax_number)` tekil
-- `user_company_roles` — tenant_id, user_id, company_id, role_id
+### companies (kesinleşti — migration `companies`)
+- `companies` — id, tenant_id, legal_name, tax_number, tax_office, address_line, district, city, postal_code, country (varsayılan `TR`), phone, email, e_invoice_enabled, e_invoice_alias, is_active, created_at, updated_at
+  - `(tenant_id, tax_number)` tekil. `tax_number` CHECK: 10 (VKN) veya 11 (TCKN) rakam; kontrol haneleri uygulamada doğrulanır.
+  - Silme yok: firma `is_active = false` ile pasife alınır (ileride fatura/sipariş kayıtları firmaya bağlı kalır). Taslaktaki `deleted_at` bu yüzden kullanılmadı.
+  - İndeks: `(tenant_id, is_active, legal_name)` (liste ve filtre).
+- `user_company_roles` — tenant_id, user_id, company_id, role_id, created_at — PK `(user_id, company_id, role_id)`
+  - Composite FK'ler: `(tenant_id, user_id)`, `(tenant_id, company_id)`, `(tenant_id, role_id)`; farklı tenant'ın kaydına bağlanamaz.
 
 ### catalog
 - `categories` — id, parent_id, name, slug
