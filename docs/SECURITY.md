@@ -69,7 +69,10 @@ Mevcut katmanlar: argon2id şifre hash'i, bilinmeyen email'de sahte hash doğrul
 - Bu değişiklikten önce üretilmiş token'larda `ver` yoktur; doğrulamada **0** kabul edilir (çökme yok). Tam sayı olmayan `ver` içeren token reddedilir.
 - Şu an guard `ver`'i üyelikle karşılaştırmaz. Üyelik kontrolü eklendiğinde `ver` 0 < `auth_version` olduğundan eski token'lar `TOKEN_STALE` sayılır ve BFF bir kez refresh yapar; yeni token güncel `ver` ile gelir. Eski token'lar en geç 15 dk içinde zaten süresi dolar.
 - Refresh, üyelik aktif değilse veya tenant pasifse reddedilir.
-- Login'de aktif üyeliği olmayan kullanıcı, yanlış şifreyle aynı genel hatayı alır (`Email veya şifre hatalı`); hangi tenant'ta hesabı olduğu açığa çıkmaz. Hedef tenant yoksa olay audit'e yazılmaz (bilinmeyen e-posta gibi).
+- **Bugün (per-request kontrol gelene kadar) eski veya bayat access token ne yapabilir:** imzası geçerli olduğu sürece en fazla kalan ömrü (15 dk) boyunca, yalnızca kendi `tid` tenant'ında ve kendi `perms` izinleriyle okuma/yazma. Başka tenant'a erişemez (tenant eklentisi `tid`'e bağlar; başka tenant'ın kaydı `404`). Üyelik pasife alınsa veya tenant kapatılsa bile bu süre dolana kadar çalışır; refresh ise reddedilir (`401`), yeni token alınamaz.
+- Login'de aktif üyeliği olmayan kullanıcı, bilinmeyen e-postayla birebir aynı yanıtı alır (`401 Email veya şifre hatalı`). Bilinmeyen e-postada da üyelik sorgusu çalışır, böylece sorgu sırası aynıdır.
+- **Başarısız giriş audit'i:** e-posta bir kullanıcıya aitse `LOGIN_FAILED` ilgili tenant'a yazılır: kullanılabilir mağaza varsa o tenant'a, yoksa `last_tenant_id`'nin üyeliğine, o da yoksa durumu en son değişen üyeliğe (tek satır). `after` yalnızca neden kodudur: `invalid_password`, `membership_inactive`, `tenant_inactive`. Şifre, e-posta, hash veya token yazılmaz. Kullanılabilir mağaza yoksa kayıt arka planda yazılır (yanıt süresi hesabın varlığını ele vermez). Bilinmeyen e-posta audit'e yazılmaz.
+- Audit yazımı başarısız olursa giriş yanıtı değişmez (yine genel `401`, `500` yok); hata kimlik bilgisi içermeden loglanır.
 
 ### Hız sınırlama (rate limiting)
 
@@ -97,6 +100,7 @@ Sayaçlar Redis'te tutulur (`rl:` önekli anahtarlar). Her kontrol tek bir atomi
 - **Neden kapalı:** Açık bırakılırsa Redis kesintisi sınırsız şifre denemesine izin verir. Ayrıca CPU yoğun argon2 doğrulaması bir DoS yolu olur.
 - **Bedeli:** Kesinti süresince yeni giriş yapılamaz. Mevcut access token'lar geçerlilik süresi (15 dk) boyunca çalışmaya devam eder.
 - **Diğer uç noktalar:** Rate limiting kullanmadıkları için etkilenmez.
+- **Açılışta hazır olma:** uygulama açılışta Redis'in ilk bağlantısını (en fazla 2 sn) bekler; böylece ilk istekler bağlantı kurulmadan gönderilip `503` almaz. Redis açılışta yoksa uygulama yine açılır, hata loglanır ve kimlik doğrulama uçları Redis gelene kadar `503` döner.
 - **Hızlı hata:** Redis istemcisi komut kuyruğu tutmaz ve 1 sn zaman aşımı kullanır. Böylece istekler beklemeden hata alır. İstemci arka planda yeniden bağlanmayı dener.
 
 Production'da Redis yüksek erişilebilirlik (replika + otomatik failover) ile çalıştırılmalı ve izlenmelidir.

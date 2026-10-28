@@ -12,6 +12,13 @@ export interface ActiveMembership {
   tenantSlug: string;
 }
 
+export interface LoginMembership extends ActiveMembership {
+  active: boolean;
+  tenantActive: boolean;
+  /** Last status change, used to pick the most recent membership. */
+  changedAt: Date;
+}
+
 /**
  * Data access for tenant_memberships. Tenant-scoped by the Prisma extension,
  * except findActiveForUser, which lists a user's stores across tenants.
@@ -40,6 +47,42 @@ export class MembershipsRepository {
       tenantId: tenant.id,
       tenantName: tenant.name,
       tenantSlug: tenant.slug,
+    }));
+  }
+
+  /**
+   * System context: every membership of the user with its tenant's state, in one
+   * query. Login derives the usable stores from it and, when none is usable,
+   * the tenant to record the failed attempt in.
+   */
+  async findAllForUser(userId: string): Promise<LoginMembership[]> {
+    const rows = await TenantContext.runAsSystem(() =>
+      this.prisma.tenantMembership.findMany({
+        where: { userId },
+        select: {
+          status: true,
+          updatedAt: true,
+          deactivatedAt: true,
+          tenant: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              isActive: true,
+              deletedAt: true,
+            },
+          },
+        },
+        orderBy: [{ tenant: { name: 'asc' } }, { tenantId: 'asc' }],
+      }),
+    );
+    return rows.map((r) => ({
+      tenantId: r.tenant.id,
+      tenantName: r.tenant.name,
+      tenantSlug: r.tenant.slug,
+      active: r.status === 'active',
+      tenantActive: r.tenant.isActive && r.tenant.deletedAt === null,
+      changedAt: r.deactivatedAt ?? r.updatedAt,
     }));
   }
 

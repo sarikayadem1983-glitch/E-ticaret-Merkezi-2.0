@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { INestApplication } from '@nestjs/common';
 import { hash } from '@node-rs/argon2';
+import { AuditService } from './../src/audit/audit.service.js';
+import { isValidVkn } from './../src/companies/tax-number.js';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
 import {
@@ -22,6 +24,17 @@ import {
 } from './helpers.js';
 
 const PASSWORD = 'Sifre-12345';
+
+let vknSeq = 0;
+/** A unique valid VKN (adds the check digit). */
+function validVkn(): string {
+  const prefix =
+    String(Date.now() % 1e6).padStart(6, '0') +
+    String(vknSeq++ % 1000).padStart(3, '0');
+  const d = '0123456789'.split('').find((c) => isValidVkn(prefix + c));
+  if (!d) return validVkn();
+  return prefix + d;
+}
 
 describe('API (e2e)', () => {
   let app: INestApplication<App>;
@@ -458,6 +471,292 @@ describe('API (e2e)', () => {
         await pool.end();
         await purgeTenants([slug]);
       }
+    });
+  });
+
+  describe('failed-login audit and token binding', () => {
+    const fx = { slug: `fx-${run}`, email: `fx-owner-${run}@test.local` };
+    let fxTenant: string;
+    let fxAdmin: string;
+
+    const login = (email: string, password = PASSWORD) =>
+      http().post('/api/v1/auth/login').send({ email, password });
+
+    const sql = async <T = Record<string, unknown>>(
+      text: string,
+      params: unknown[] = [],
+    ): Promise<T[]> => {
+      const pool = ownerPool();
+      try {
+        return (await pool.query(text, params)).rows as T[];
+      } finally {
+        await pool.end();
+      }
+    };
+
+    /** The audit row may be written in the background: poll briefly. */
+    const loginFailedRows = async (tenantId: string, userId: string) => {
+      for (let i = 0; i < 50; i++) {
+        const rows = await sql<{
+          before: unknown;
+          after: unknown;
+          actor_user_id: string | null;
+        }>(
+          `SELECT before, after, actor_user_id FROM audit_logs
+           WHERE tenant_id = $1 AND entity_id = $2 AND action = 'LOGIN_FAILED'`,
+          [tenantId, userId],
+        );
+        if (rows.length > 0) return rows;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      return [];
+    };
+
+    const member = async (
+      label: string,
+      status: 'active' | 'inactive',
+      tenantId = fxTenant,
+      roleId: string | null = fxAdmin,
+    ) => {
+      const email = `${label}-${run}@test.local`;
+      const userId = await seedMember({
+        email,
+        name: label,
+        passwordHash: await hash(PASSWORD),
+        memberships: [{ tenantId, roleId: roleId ?? undefined, status }],
+      });
+      return { email, userId };
+    };
+
+    beforeAll(async () => {
+      const res = await http()
+        .post('/api/v1/auth/register')
+        .send({
+          tenantName: `Fikstür ${run}`,
+          tenantSlug: fx.slug,
+          name: 'Fikstür Sahip',
+          email: fx.email,
+          password: PASSWORD,
+        })
+        .expect(201);
+      fxTenant = claims(res.body.data.accessToken).tid;
+      fxAdmin = await systemRoleId(fxTenant, 'admin');
+    });
+
+    afterAll(() => purgeTenants([fx.slug]));
+
+    it('failed login of a deactivated member is audited in that tenant', async () => {
+      const { email, userId } = await member('deact', 'inactive');
+      await login(email).expect(401);
+      const rows = await loginFailedRows(fxTenant, userId);
+      expect(rows).toEqual([
+        {
+          before: null,
+          after: { reason: 'membership_inactive' },
+          actor_user_id: null,
+        },
+      ]);
+    });
+
+    it('wrong password for a user with only inactive memberships is audited', async () => {
+      const { email, userId } = await member('deact-wrong', 'inactive');
+      await login(email, 'yanlis-sifre-1').expect(401);
+      const rows = await loginFailedRows(fxTenant, userId);
+      expect(rows.map((r) => r.after)).toEqual([
+        { reason: 'invalid_password' },
+      ]);
+    });
+
+    it('login into an inactive tenant is audited as tenant_inactive', async () => {
+      const slug = `fx-off-${run}`;
+      const t = await sql<{ id: string }>(
+        `INSERT INTO tenants (id, name, slug, is_active, updated_at)
+         VALUES (gen_random_uuid(), 'Kapalı', $1, false, now()) RETURNING id`,
+        [slug],
+      );
+      try {
+        const { email, userId } = await member('off', 'active', t[0].id, null);
+        await login(email).expect(401);
+        const rows = await loginFailedRows(t[0].id, userId);
+        expect(rows.map((r) => r.after)).toEqual([
+          { reason: 'tenant_inactive' },
+        ]);
+      } finally {
+        await purgeTenants([slug]);
+      }
+    });
+
+    it('response is identical to unknown email', async () => {
+      const { email } = await member('same', 'inactive');
+      const unknown = await login(`nobody-${run}@test.local`);
+      const known = await login(email);
+      const wrong = await login(email, 'yanlis-sifre-2');
+      for (const res of [known, wrong]) {
+        expect(res.status).toBe(unknown.status);
+        expect(res.body).toEqual(unknown.body);
+        expect(res.headers['content-type']).toBe(
+          unknown.headers['content-type'],
+        );
+      }
+      expect(unknown.status).toBe(401);
+      expect(unknown.body).toEqual({
+        error: expect.objectContaining({
+          code: 'INVALID_CREDENTIALS',
+          message: 'Email veya şifre hatalı',
+        }),
+      });
+    });
+
+    it('LOGIN_FAILED rows contain only a reason code, never credentials or secrets', async () => {
+      const { email, userId } = await member('secret', 'inactive');
+      const submitted = 'Gizli-Sifre-778';
+      await login(email, submitted).expect(401);
+      await login(email).expect(401);
+      const rows = await loginFailedRows(fxTenant, userId);
+      expect(rows.length).toBeGreaterThanOrEqual(1);
+      const passwordHash = (
+        await sql<{ password_hash: string }>(
+          'SELECT password_hash FROM users WHERE id = $1',
+          [userId],
+        )
+      )[0].password_hash;
+      for (const row of rows) {
+        expect(row.before).toBeNull();
+        expect(Object.keys(row.after as object)).toEqual(['reason']);
+        const text = JSON.stringify(row);
+        for (const secret of [submitted, PASSWORD, email, passwordHash]) {
+          expect(text).not.toContain(secret);
+        }
+        expect(['invalid_password', 'membership_inactive']).toContain(
+          (row.after as { reason: string }).reason,
+        );
+        expect(text).not.toMatch(/argon2|token|hash/i);
+      }
+    });
+
+    it('an audit write failure during login does not change the response', async () => {
+      const { email } = await member('auditfail', 'inactive');
+      const active = await member('auditfail-active', 'active');
+      const failing = await createTestApp(
+        {},
+        {
+          providers: [
+            {
+              provide: AuditService,
+              useValue: {
+                record: () => Promise.reject(new Error('audit down')),
+              },
+            },
+          ],
+        },
+      );
+      try {
+        const server = () => request(failing.getHttpServer());
+        for (const res of [
+          // Background path (no usable membership) and awaited path (wrong password).
+          await server()
+            .post('/api/v1/auth/login')
+            .send({ email, password: PASSWORD }),
+          await server()
+            .post('/api/v1/auth/login')
+            .send({ email: active.email, password: 'yanlis-sifre-3' }),
+        ]) {
+          expect(res.status).toBe(401);
+          expect(res.body.error).toMatchObject({
+            code: 'INVALID_CREDENTIALS',
+            message: 'Email veya şifre hatalı',
+          });
+          expect(JSON.stringify(res.body)).not.toContain('audit down');
+        }
+      } finally {
+        await failing.close();
+      }
+    });
+
+    it('refresh with a token of a now-inactive membership returns 401 and no tokens', async () => {
+      const { email, userId } = await member('refresh-deact', 'active');
+      const session = (await login(email).expect(200)).body.data;
+      await sql(
+        `UPDATE tenant_memberships SET status = 'inactive', deactivated_at = now()
+         WHERE tenant_id = $1 AND user_id = $2`,
+        [fxTenant, userId],
+      );
+      const res = await http()
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: session.refreshToken })
+        .expect(401);
+      expect(res.body.data).toBeUndefined();
+      expect(res.body.error.code).toBe('INVALID_REFRESH_TOKEN');
+    });
+
+    it('refresh in a tenant that is now inactive returns 401', async () => {
+      const slug = `fx-closing-${run}`;
+      const t = await sql<{ id: string }>(
+        `INSERT INTO tenants (id, name, slug, updated_at)
+         VALUES (gen_random_uuid(), 'Kapanacak', $1, now()) RETURNING id`,
+        [slug],
+      );
+      try {
+        const adminRole = await sql<{ id: string }>(
+          `INSERT INTO roles (id, tenant_id, name, permissions, key, scope, is_system, updated_at)
+           VALUES (gen_random_uuid(), $1, 'Admin', '{}', 'admin', 'tenant', true, now()) RETURNING id`,
+          [t[0].id],
+        );
+        const email = `closing-${run}@test.local`;
+        await seedMember({
+          email,
+          name: 'Kapanış',
+          passwordHash: await hash(PASSWORD),
+          memberships: [{ tenantId: t[0].id, roleId: adminRole[0].id }],
+        });
+        const session = (await login(email).expect(200)).body.data;
+        await sql('UPDATE tenants SET is_active = false WHERE id = $1', [
+          t[0].id,
+        ]);
+        const res = await http()
+          .post('/api/v1/auth/refresh')
+          .send({ refreshToken: session.refreshToken })
+          .expect(401);
+        expect(res.body.data).toBeUndefined();
+      } finally {
+        await purgeTenants([slug]);
+      }
+    });
+
+    it("an access token for tenant A cannot act on tenant B's resources", async () => {
+      const company = await http()
+        .post('/api/v1/companies')
+        .set('Authorization', `Bearer ${tokens.b.accessToken}`)
+        .send({
+          legalName: `B Şirketi ${run}`,
+          taxNumber: validVkn(),
+          taxOffice: 'Kadıköy',
+          addressLine: 'Moda Cad. No: 1',
+          district: 'Kadıköy',
+          city: 'İstanbul',
+          postalCode: '34710',
+        })
+        .expect(201);
+      const id = company.body.data.id as string;
+      const asA = { Authorization: `Bearer ${tokens.a.accessToken}` };
+
+      await http().get(`/api/v1/companies/${id}`).set(asA).expect(404);
+      await http()
+        .patch(`/api/v1/companies/${id}`)
+        .set(asA)
+        .send({ city: 'Ankara' })
+        .expect(404);
+      const list = await http()
+        .get('/api/v1/companies?per_page=100')
+        .set(asA)
+        .expect(200);
+      expect(list.body.data.map((c: { id: string }) => c.id)).not.toContain(id);
+      // Still intact for its own tenant.
+      const own = await http()
+        .get(`/api/v1/companies/${id}`)
+        .set('Authorization', `Bearer ${tokens.b.accessToken}`)
+        .expect(200);
+      expect(own.body.data.city).toBe('İstanbul');
     });
   });
 });

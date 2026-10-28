@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -8,6 +9,7 @@ import { ROLE_CATALOG } from '../access/roles.catalog.js';
 import { AuditService } from '../audit/audit.service.js';
 import {
   type ActiveMembership,
+  type LoginMembership,
   MembershipsRepository,
 } from '../memberships/memberships.repository.js';
 import { TenantContext } from '../tenancy/tenant-context.js';
@@ -37,6 +39,25 @@ function pickTenant(
   return active.find((m) => m.tenantId === lastTenantId) ?? active[0];
 }
 
+/**
+ * Tenant to record a failed login in when no store is usable: last_tenant_id's
+ * membership if it exists, else the most recently changed one.
+ */
+function relevantMembership(
+  all: LoginMembership[],
+  lastTenantId: string | null,
+): LoginMembership | undefined {
+  return (
+    all.find((m) => m.tenantId === lastTenantId) ??
+    [...all].sort((a, b) => b.changedAt.getTime() - a.changedAt.getTime())[0]
+  );
+}
+
+// Safety bound only: 8 statements, measured worst case 0.72 s (task-4 report).
+const REGISTER_TX_OPTIONS = { timeout: 10_000 };
+
+const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+
 function invalidCredentials() {
   return new UnauthorizedException({
     code: 'INVALID_CREDENTIALS',
@@ -53,6 +74,8 @@ function invalidRefreshToken() {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly repository: AuthRepository,
     private readonly tenants: TenantsService,
@@ -68,9 +91,7 @@ export class AuthService {
     const prisma = this.repository.prisma;
 
     // The tenant and the global user are created in system context; everything
-    // the tenant owns is written in the new tenant's context. Eight statements
-    // (system roles in one INSERT); measured well under Prisma's default 5 s
-    // transaction timeout, so no explicit timeout is set.
+    // the tenant owns is written in the new tenant's context.
     const session = await TenantContext.runAsSystem(() =>
       prisma.$transaction(async (tx) => {
         const tenant = await this.tenants.create(tx, {
@@ -122,7 +143,7 @@ export class AuthService {
             ver: membership.authVersion,
           };
         });
-      }),
+      }, REGISTER_TX_OPTIONS),
     );
 
     return this.issueAccess(
@@ -136,35 +157,50 @@ export class AuthService {
     const user = await TenantContext.runAsSystem(() =>
       this.repository.findUserForLogin(dto.email),
     );
-    const active = user
-      ? await this.memberships.findActiveForUser(user.id)
-      : [];
+    // Always one membership query, also for an unknown email, so both paths
+    // run the same queries before the (constant-cost) password check.
+    const memberships = await this.memberships.findAllForUser(
+      user?.id ?? NIL_UUID,
+    );
     const passwordOk = await verify(
       user?.passwordHash ?? DUMMY_HASH,
       dto.password,
     );
-    // Unknown email or no active store: there is no tenant to attribute the
-    // event to, so it is not audited; the error is the same as a wrong password.
+    // Unknown email: no tenant to attribute the event to, so it is not audited.
     if (!user) throw invalidCredentials();
+
+    const active = memberships.filter((m) => m.active && m.tenantActive);
     const target = pickTenant(active, user.lastTenantId);
-    if (!target) throw invalidCredentials();
+    if (!target) {
+      // Same response as an unknown email. The audit row is written in the
+      // background so the response time does not reveal that the account exists.
+      const relevant = relevantMembership(memberships, user.lastTenantId);
+      if (relevant) {
+        const reason = !passwordOk
+          ? 'invalid_password'
+          : !relevant.active
+            ? 'membership_inactive'
+            : 'tenant_inactive';
+        void TenantContext.run(relevant.tenantId, () =>
+          this.recordLoginFailed(user.id, reason),
+        );
+      }
+      throw invalidCredentials();
+    }
 
     return TenantContext.run(target.tenantId, async () => {
       if (!passwordOk) {
-        await this.audit.record({
-          action: 'LOGIN_FAILED',
-          module: MODULE,
-          entityType: 'User',
-          entityId: user.id,
-          after: { reason: 'invalid_password' },
-          actorUserId: null,
-        });
+        await this.recordLoginFailed(user.id, 'invalid_password');
         throw invalidCredentials();
       }
 
       // Read in the tenant's context: the membership row carries auth_version.
       const membership = await this.memberships.get(target.tenantId, user.id);
-      if (membership?.status !== 'active') throw invalidCredentials();
+      if (membership?.status !== 'active') {
+        // Deactivated between the lookup and now.
+        await this.recordLoginFailed(user.id, 'membership_inactive');
+        throw invalidCredentials();
+      }
 
       await TenantContext.runAsSystem(() =>
         this.repository.touchLastLogin(user.id, target.tenantId),
@@ -249,6 +285,31 @@ export class AuthService {
       entityType: 'User',
       entityId: userId,
     });
+  }
+
+  /**
+   * Never throws: a failed audit write must not change what the client sees
+   * (still the generic invalid-credentials error, never a 500). The failure is
+   * logged without the submitted credentials.
+   */
+  private async recordLoginFailed(
+    userId: string,
+    reason: 'invalid_password' | 'membership_inactive' | 'tenant_inactive',
+  ): Promise<void> {
+    try {
+      await this.audit.record({
+        action: 'LOGIN_FAILED',
+        module: MODULE,
+        entityType: 'User',
+        entityId: userId,
+        after: { reason },
+        actorUserId: null,
+      });
+    } catch (error) {
+      this.logger.error(
+        `LOGIN_FAILED audit kaydı yazılamadı (${reason}): ${(error as Error).message}`,
+      );
+    }
   }
 
   private recordTokenReuse(userId: string) {
