@@ -27,6 +27,7 @@ logs/
 *.sqlite
 *.sqlite3
 database/dumps/
+*.dump
 
 # Docker yerel veriler
 docker/data/
