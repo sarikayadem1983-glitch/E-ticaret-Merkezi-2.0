@@ -42,6 +42,7 @@ model User {
   userRoles     UserRole[]
   refreshTokens RefreshToken[]
 
+  @@unique([tenantId, id])
   @@index([tenantId])
   @@map("users")
 }
@@ -58,6 +59,7 @@ model Role {
   userRoles UserRole[]
 
   @@unique([tenantId, name])
+  @@unique([tenantId, id])
   @@index([tenantId])
   @@map("roles")
 }
@@ -70,8 +72,8 @@ model UserRole {
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Cascade)
+  role   Role   @relation(fields: [tenantId, roleId], references: [tenantId, id], onDelete: Cascade)
 
   @@id([userId, roleId])
   @@index([tenantId])
@@ -91,7 +93,7 @@ model RefreshToken {
   updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([userId])

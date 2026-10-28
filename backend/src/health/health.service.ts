@@ -1,13 +1,17 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../database/prisma.service.js';
+import {
+  InjectPrisma,
+  type TenantPrismaClient,
+} from '../database/prisma.service.js';
+import { TenantContext } from '../tenancy/tenant-context.js';
 
 @Injectable()
 export class HealthService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@InjectPrisma() private readonly prisma: TenantPrismaClient) {}
 
   async isDatabaseUp(): Promise<boolean> {
     try {
-      await this.prisma.$queryRaw`SELECT 1`;
+      await TenantContext.runAsSystem(() => this.prisma.$queryRaw`SELECT 1`);
       return true;
     } catch {
       return false;

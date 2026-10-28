@@ -7,6 +7,7 @@
 - `tenants` tablosu: id, name, slug (unique), plan, is_active, deleted_at.
 - `tenants` dışındaki tüm iş tablolarında `tenant_id` zorunludur ve indekslidir.
 - Tekil alanlar tenant içinde tekildir: örn. `(tenant_id, sku)`.
+- Tenant'a ait tablolarda `(tenant_id, id)` tekildir. Tenant'a ait tablolar arası yabancı anahtarlar composite'tir: `(tenant_id, user_id)` → `users(tenant_id, id)`. Böylece farklı tenant'ın kaydına bağlantı veritabanında da imkânsızdır (migration `tenant_composite_fks`).
 
 ## Kurallar
 
