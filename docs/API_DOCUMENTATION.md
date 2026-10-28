@@ -1,6 +1,6 @@
 # API Dokümantasyonu
 
-> Henüz endpoint yok. Bu doküman API standartlarını tanımlar; endpoint'ler geliştirildikçe eklenir.
+> Bu doküman API standartlarını tanımlar; endpoint'ler geliştirildikçe eklenir.
 
 ## Temel
 
@@ -75,3 +75,12 @@ Yetki:
 Yanıt:
 Hatalar:
 ```
+
+## Endpoint'ler
+
+### GET /api/v1/health
+Açıklama: Uygulamanın ve veritabanı bağlantısının durumunu döner.
+Yetki: Yok (herkese açık)
+İstek: —
+Yanıt: `200` `{ "data": { "status": "ok", "database": "up" } }`
+Hatalar: `503` veritabanına ulaşılamıyor
