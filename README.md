@@ -36,14 +36,16 @@ Mimari: modüler monolit, multi-tenant SaaS, ileride mikroservise bölünebilir 
 - [Mimari](docs/ARCHITECTURE.md)
 - [Veritabanı](docs/DATABASE.md)
 - [API Dokümantasyonu](docs/API_DOCUMENTATION.md)
+- [Güvenlik](docs/SECURITY.md)
 
 ## Kurulum
 
 Gereksinimler: Node.js 24, npm 11, Docker Desktop.
 
 ```bash
-cp .env.example .env          # JWT_ACCESS_SECRET'ı doldurun (en az 32 karakter)
+cp .env.example .env          # JWT_ACCESS_SECRET, TM_APP_DB_PASSWORD, TM_MIGRATOR_DB_PASSWORD ve iki DATABASE URL'ini doldurun
 docker compose --env-file .env -f docker/docker-compose.yml up -d
+# Mevcut (eski) bir volume kullanıyorsanız rolleri bir kez kurun: sh docker/postgres/setup-roles.sh
 
 cd backend
 npm ci

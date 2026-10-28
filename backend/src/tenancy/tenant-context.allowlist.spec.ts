@@ -5,7 +5,11 @@ import { join, relative } from 'node:path';
  * runAsSystem disables tenant filtering. Every caller is listed here on purpose:
  * adding one must fail this test and go through code review.
  */
-const ALLOWED = new Set(['auth/auth.service.ts', 'health/health.service.ts']);
+const ALLOWED = new Set([
+  'auth/auth.service.ts',
+  'database/database-role.check.ts',
+  'health/health.service.ts',
+]);
 
 const SRC = join(import.meta.dirname, '..');
 

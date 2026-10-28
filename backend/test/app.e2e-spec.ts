@@ -56,7 +56,7 @@ describe('API (e2e)', () => {
   });
 
   afterAll(async () => {
-    await purgeTenants(prisma, [tenants.a.slug, tenants.b.slug]);
+    await purgeTenants([tenants.a.slug, tenants.b.slug]);
     await app.close();
   });
 

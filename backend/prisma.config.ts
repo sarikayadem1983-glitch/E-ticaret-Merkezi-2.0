@@ -6,5 +6,6 @@ config({ path: '../.env' });
 export default defineConfig({
   schema: '../database/prisma/schema.prisma',
   migrations: { path: '../database/prisma/migrations' },
-  datasource: { url: env('DATABASE_URL') },
+  // CLI only (migrate/diff). The running app uses DATABASE_URL with the least-privileged role.
+  datasource: { url: env('MIGRATION_DATABASE_URL') },
 });

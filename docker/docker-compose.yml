@@ -9,10 +9,15 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-ticaret_merkezi}
+      # Used only by init/10-roles.sh on a fresh volume.
+      TM_APP_DB_PASSWORD: ${TM_APP_DB_PASSWORD:?TM_APP_DB_PASSWORD is required}
+      TM_MIGRATOR_DB_PASSWORD: ${TM_MIGRATOR_DB_PASSWORD:?TM_MIGRATOR_DB_PASSWORD is required}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+      - ../database/roles:/sql/roles:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-ticaret_merkezi}"]
       interval: 10s
