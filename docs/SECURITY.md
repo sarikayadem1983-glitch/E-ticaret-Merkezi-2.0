@@ -106,6 +106,7 @@ Production'a çıkmadan önce her madde tamamlanmış ve doğrulanmış olmalıd
 - [ ] **`SESSION_SECRET`:** Secret manager'dan verilir, en az 32 karakter. Değiştirildiğinde tüm oturumlar düşer (kullanıcılar yeniden giriş yapar).
 - [ ] **Backend'e ağ erişimi:** Backend yalnızca BFF sunucularından erişilebilir olmalı (internal network / güvenlik grubu); internete açık olmamalı.
 - [ ] **Rate limit değerleri:** Mevcut varsayılanlar (§3) korunur. Canlı trafik izlendikten sonra (ör. ortak NAT arkasındaki ofisler) gözden geçirilmeli.
+- [ ] **Nonce tabanlı CSP:** `script-src 'unsafe-inline'` yerine `proxy.ts`'te istek başına nonce üretilmeli (§5 Güvenlik başlıkları).
 
 ## 5. Frontend (BFF) oturum güvenliği
 
@@ -157,3 +158,13 @@ Production'da (`NODE_ENV=production`) HTTP istekleri reddedilir: `GET/HEAD` → 
 ### Sayfa koruması
 
 `frontend/src/proxy.ts` (Next.js 16'da middleware'in yeni adı) oturum cookie'si olmayan kullanıcıyı korumalı sayfalardan `/login`'e yönlendirir. Bu yalnızca kullanıcı deneyimi içindir: asıl kontrol her veri isteğinde BFF ve backend'dedir. Girişten sonraki `?next=` yönlendirmesi yalnızca uygulama içi yolları kabul eder (açık yönlendirme yok).
+
+### Güvenlik başlıkları
+
+`frontend/next.config.ts` tüm sayfa ve BFF yanıtlarına ekler:
+
+- `Content-Security-Policy`: `default-src 'self'`, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, `frame-ancestors 'none'`, `connect-src 'self'`; production'da `upgrade-insecure-requests`. Dış kaynak (CDN, font, analitik) yok.
+- `X-Frame-Options: DENY` (eski tarayıcılar için; `frame-ancestors` ile aynı karar).
+- `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` (kamera, mikrofon, konum, ödeme kapalı), `Cross-Origin-Opener-Policy: same-origin`. `X-Powered-By` gönderilmez.
+
+Bilinen sınır: Next.js satır içi başlatma script'leri kullandığı için `script-src` şu an `'unsafe-inline'` içerir (geliştirmede ek olarak `'unsafe-eval'` ve HMR için `ws:`). Canlıya çıkmadan önce `proxy.ts`'te istek başına nonce üreten CSP'ye geçilmeli (§4 kontrol listesi).

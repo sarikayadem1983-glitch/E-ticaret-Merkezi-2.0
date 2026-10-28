@@ -62,3 +62,18 @@ export function randomVkn(): string {
   }
   return prefix + String((10 - (sum % 10)) % 10);
 }
+
+/**
+ * Opens a dropdown and returns its item. A click that lands before React has
+ * hydrated the trigger is lost, so retry until the menu is actually open.
+ */
+export async function openMenu(page: Page, trigger: string, item: string | RegExp) {
+  const menuItem = page.getByRole('menuitem', { name: item });
+  await expect(async () => {
+    if (!(await menuItem.isVisible())) {
+      await page.getByRole('button', { name: trigger }).click();
+    }
+    await expect(menuItem).toBeVisible({ timeout: 1_000 });
+  }).toPass();
+  return menuItem;
+}

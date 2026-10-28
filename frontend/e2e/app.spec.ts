@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { PASSWORD, login, newAccount, randomVkn, register } from './helpers';
+import { PASSWORD, login, newAccount, openMenu, randomVkn, register } from './helpers';
 
 test.describe('authentication and session', () => {
   test('redirects signed-out users to the login page', async ({ page }) => {
@@ -59,8 +59,7 @@ test.describe('authentication and session', () => {
     await register(page, account);
     const first = (await context.cookies())[0].value;
 
-    await page.getByRole('button', { name: 'Kullanıcı menüsü' }).click();
-    await page.getByRole('menuitem', { name: 'Çıkış yap' }).click();
+    await (await openMenu(page, 'Kullanıcı menüsü', 'Çıkış yap')).click();
     await expect(page).toHaveURL(/\/login$/);
     expect(await context.cookies()).toHaveLength(0);
 
@@ -118,8 +117,7 @@ test.describe('company management', () => {
     await expect(page.getByRole('link', { name: 'Anadolu Ticaret A.Ş.' })).toBeVisible();
 
     // Company selector
-    await page.getByRole('button', { name: 'Firma seç' }).click();
-    await page.getByRole('menuitem', { name: /Anadolu Ticaret A\.Ş\./ }).click();
+    await (await openMenu(page, 'Firma seç', /Anadolu Ticaret A\.Ş\./)).click();
     await expect(page.getByRole('button', { name: 'Firma seç' })).toContainText(
       'Anadolu Ticaret A.Ş.',
     );
@@ -187,5 +185,29 @@ test.describe('company management', () => {
     await expect(page.getByLabel('Şifre')).toHaveAttribute('type', 'password');
     await expect(page.getByLabel('Şifre')).toHaveValue('');
     expect(PASSWORD).toBeTruthy();
+  });
+});
+
+test.describe('security headers and reload', () => {
+  test('session survives a reload and the page raises no CSP violations', async ({
+    page,
+  }) => {
+    const violations: string[] = [];
+    page.on('console', (msg) => {
+      if (/Content Security Policy|Refused to/i.test(msg.text())) violations.push(msg.text());
+    });
+    const response = await page.goto('/login');
+    const headers = response!.headers();
+    expect(headers['content-security-policy']).toContain("frame-ancestors 'none'");
+    expect(headers['x-frame-options']).toBe('DENY');
+    expect(headers['x-content-type-options']).toBe('nosniff');
+    expect(headers['x-powered-by']).toBeUndefined();
+
+    await register(page, newAccount('reload'));
+    await expect(page.getByText('Henüz firma eklenmedi')).toBeVisible();
+    await page.reload();
+    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page.getByText('Henüz firma eklenmedi')).toBeVisible();
+    expect(violations).toEqual([]);
   });
 });
