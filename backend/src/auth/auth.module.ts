@@ -3,7 +3,9 @@ import { ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import type { StringValue } from 'ms';
+import { RateLimitModule } from '../rate-limit/rate-limit.module.js';
 import { TenantsModule } from '../tenants/tenants.module.js';
+import { AuthRateLimitService } from './auth-rate-limit.service.js';
 import { AuthController } from './auth.controller.js';
 import { AuthRepository } from './auth.repository.js';
 import { AuthService } from './auth.service.js';
@@ -13,6 +15,7 @@ import { TokenService } from './token.service.js';
 @Module({
   imports: [
     TenantsModule,
+    RateLimitModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
@@ -34,6 +37,7 @@ import { TokenService } from './token.service.js';
   ],
   controllers: [AuthController],
   providers: [
+    AuthRateLimitService,
     AuthRepository,
     AuthService,
     TokenService,

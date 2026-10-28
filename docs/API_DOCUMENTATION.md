@@ -90,21 +90,21 @@ Açıklama: Yeni tenant (mağaza) ve sahibini oluşturur. Sahibe `owner` rolü (
 Yetki: Yok (herkese açık)
 İstek: `{ "tenantName": "Örnek Mağaza", "tenantSlug": "ornek-magaza", "name": "Ad Soyad", "email": "a@b.com", "password": "en az 8 karakter" }`
 Yanıt: `201` `{ "data": { "accessToken": "...", "refreshToken": "...", "expiresIn": 900 } }`
-Hatalar: `409` email veya slug kullanımda, `422` doğrulama hatası
+Hatalar: `409` email veya slug kullanımda, `422` doğrulama hatası, `429` `TOO_MANY_REQUESTS` (+ `Retry-After`), `503` hız sınırı servisi erişilemiyor (bkz. SECURITY.md §3)
 
 ### POST /api/v1/auth/login
 Açıklama: Email + şifre ile giriş.
 Yetki: Yok (herkese açık)
 İstek: `{ "email": "a@b.com", "password": "..." }`
 Yanıt: `200` register ile aynı
-Hatalar: `401` `INVALID_CREDENTIALS` (kullanıcı yok, şifre yanlış, kullanıcı veya tenant pasif — ayrım yapılmaz), `422`
+Hatalar: `401` `INVALID_CREDENTIALS` (kullanıcı yok, şifre yanlış, kullanıcı veya tenant pasif — ayrım yapılmaz), `422`, `429` `TOO_MANY_REQUESTS` (+ `Retry-After`), `503` hız sınırı servisi erişilemiyor (bkz. SECURITY.md §3)
 
 ### POST /api/v1/auth/refresh
 Açıklama: Refresh token'ı döndürür (rotation). Eski token geçersiz olur.
 Yetki: Yok (refresh token gövdede)
 İstek: `{ "refreshToken": "..." }`
 Yanıt: `200` register ile aynı
-Hatalar: `401` `INVALID_REFRESH_TOKEN` (yok, süresi dolmuş, iptal edilmiş — iptal edilmiş token kullanılırsa kullanıcının tüm oturumları kapatılır), `422`
+Hatalar: `401` `INVALID_REFRESH_TOKEN` (yok, süresi dolmuş, iptal edilmiş — iptal edilmiş token kullanılırsa kullanıcının tüm oturumları kapatılır), `422`, `429` `TOO_MANY_REQUESTS` (+ `Retry-After`), `503` hız sınırı servisi erişilemiyor (bkz. SECURITY.md §3)
 
 ### POST /api/v1/auth/logout
 Açıklama: Verilen refresh token'ı iptal eder.

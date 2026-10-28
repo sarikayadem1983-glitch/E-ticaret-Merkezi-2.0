@@ -1,4 +1,5 @@
 import { Global, Module } from '@nestjs/common';
+import { DatabaseRoleCheck } from './database-role.check.js';
 import { PRISMA, PrismaLifecycle } from './prisma.service.js';
 
 @Global()
@@ -10,6 +11,7 @@ import { PRISMA, PrismaLifecycle } from './prisma.service.js';
       inject: [PrismaLifecycle],
       useFactory: (lifecycle: PrismaLifecycle) => lifecycle.client,
     },
+    DatabaseRoleCheck,
   ],
   exports: [PRISMA],
 })

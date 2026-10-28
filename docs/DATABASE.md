@@ -68,3 +68,7 @@
 - Pazaryeri kimlik bilgileri veritabanında düz metin tutulmaz; şifreli saklanır veya gizli bilgi yöneticisinde referanslanır.
 - Prisma şeması `database/prisma/schema.prisma`, migration'lar `database/prisma/migrations/` altındadır.
 - Prisma migration'ları yalnızca ileri yönlüdür. Geri alma için her migration klasöründe `down.sql` tutulur.
+
+## Roller
+
+Uygulama `tm_app`, migration `tm_migrator` rolüyle çalışır; ayrıntılar [SECURITY.md](SECURITY.md#1-veritabanı-rolleri-en-az-yetki). Yeni append-only tablo eklenirse migration'da `REVOKE UPDATE, DELETE ON <tablo> FROM tm_app` yazılmalıdır.

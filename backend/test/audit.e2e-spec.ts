@@ -1,18 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { INestApplication } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
 import { hash } from '@node-rs/argon2';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
-import { AppModule } from './../src/app.module.js';
 import {
   PRISMA,
   type TenantPrismaClient,
 } from './../src/database/prisma.service.js';
-import { setupApp } from './../src/setup-app.js';
 import { TenantContext } from './../src/tenancy/tenant-context.js';
 import { TenantViolationError } from './../src/tenancy/tenant.errors.js';
-import { purgeTenants } from './helpers.js';
+import { createTestApp, ownerPool, purgeTenants } from './helpers.js';
 
 const PASSWORD = 'Sifre-12345';
 const UA = 'audit-e2e/1.0';
@@ -85,12 +82,7 @@ describe('Audit log (e2e)', () => {
     ).body as { data: AuditRow[]; meta: Record<string, number> };
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-    app = moduleRef.createNestApplication();
-    setupApp(app);
-    await app.init();
+    app = await createTestApp();
     prisma = app.get(PRISMA);
 
     ownerA = await register(a);
@@ -126,7 +118,7 @@ describe('Audit log (e2e)', () => {
   });
 
   afterAll(async () => {
-    await purgeTenants(prisma, [a.slug, b.slug]);
+    await purgeTenants([a.slug, b.slug]);
     await app.close();
   });
 
@@ -324,19 +316,36 @@ describe('Audit log (e2e)', () => {
       ).rejects.toBeInstanceOf(TenantViolationError);
     });
 
-    it('the database trigger rejects UPDATE and DELETE', async () => {
+    it('the app role has no UPDATE/DELETE privilege on audit_logs', async () => {
       await expect(
         TenantContext.runAsSystem(
           () =>
             prisma.$executeRaw`UPDATE audit_logs SET module = 'x' WHERE tenant_id = ${tenantA}::uuid`,
         ),
-      ).rejects.toThrow(/append-only/);
+      ).rejects.toThrow(/permission denied/);
       await expect(
         TenantContext.runAsSystem(
           () =>
             prisma.$executeRaw`DELETE FROM audit_logs WHERE tenant_id = ${tenantA}::uuid`,
         ),
-      ).rejects.toThrow(/append-only/);
+      ).rejects.toThrow(/permission denied/);
+    });
+
+    it('the trigger rejects UPDATE/DELETE even for the table owner', async () => {
+      const pool = ownerPool();
+      try {
+        await expect(
+          pool.query(
+            "UPDATE audit_logs SET module = 'x' WHERE tenant_id = $1",
+            [tenantA],
+          ),
+        ).rejects.toThrow(/append-only/);
+        await expect(
+          pool.query('DELETE FROM audit_logs WHERE tenant_id = $1', [tenantA]),
+        ).rejects.toThrow(/append-only/);
+      } finally {
+        await pool.end();
+      }
     });
   });
 });
