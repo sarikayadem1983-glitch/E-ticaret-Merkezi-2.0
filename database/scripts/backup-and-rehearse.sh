@@ -25,6 +25,7 @@ DB_CHECK=tm_restore_check
 DB_REHEARSAL=tm_migration_rehearsal
 DB_ROLLBACK=tm_rollback_rehearsal
 DB_ROLLBACK_STOP=tm_rollback_stop_rehearsal
+DB_ROLLBACK_NULL=tm_rollback_null_rehearsal
 
 die() { echo "HATA: $*" >&2; exit 2; }
 
@@ -54,7 +55,7 @@ assert_target() {
   case "$db" in tm_*) ;; *) die "hedef adı tm_ ile başlamalı: $db" ;; esac
   [ "$db" != "$SOURCE_DB" ] || die "hedef kaynak veritabanı olamaz: $db"
 }
-for d in $DB_CHECK $DB_REHEARSAL $DB_ROLLBACK $DB_ROLLBACK_STOP; do assert_target "$d"; done
+for d in $DB_CHECK $DB_REHEARSAL $DB_ROLLBACK $DB_ROLLBACK_STOP $DB_ROLLBACK_NULL; do assert_target "$d"; done
 
 url_for() { assert_target "$1"; printf 'postgresql://%s:%s@%s:%s/%s' "$MIG_USER" "$MIG_PASS" "$MIG_HOST" "$MIG_PORT" "$1"; }
 
@@ -74,7 +75,7 @@ create_db() { assert_target "$1"; echo ">> HEDEF DB: $1 (CREATE${2:+ TEMPLATE $2
 restore_into() { assert_target "$1"; echo ">> HEDEF DB: $1 (pg_restore)"
   docker exec -i "$CONTAINER" pg_restore -U "$PG_SUPER" -d "$1" --exit-on-error < "$DUMP"; }
 
-cleanup() { set +e; for d in $DB_CHECK $DB_REHEARSAL $DB_ROLLBACK $DB_ROLLBACK_STOP; do drop_db "$d" >/dev/null 2>&1; done; }
+cleanup() { set +e; for d in $DB_CHECK $DB_REHEARSAL $DB_ROLLBACK $DB_ROLLBACK_STOP $DB_ROLLBACK_NULL; do drop_db "$d" >/dev/null 2>&1; done; }
 trap cleanup EXIT
 
 # Verifies through the exact URL handed to prisma that it reaches the rehearsal db.
@@ -263,6 +264,20 @@ STOP_AFTER="$(psql_admin $DB_ROLLBACK_STOP -c "SELECT count(*) FROM tenant_membe
 STOP_MSG="$(echo "$STOP_ERR" | grep -o 'rollback durdu: [^0-9]*' | head -n1 | sed 's/ *$//')"
 check rollback_stops_on_multi_tenant "$([ "$STOP_RC" -ne 0 ] && echo "$STOP_ERR" | grep -q 'birden fazla tenant' && [ "$STOP_BEFORE" = "$STOP_AFTER" ] && echo t || echo f)" "psql çıkış=$STOP_RC mesaj='${STOP_MSG:-yok}' üyelik önce=$STOP_BEFORE sonra=$STOP_AFTER (hiçbir şey değişmedi)"
 drop_db $DB_ROLLBACK_STOP
+
+section "9. Geri dönüş durma koşulu ($DB_ROLLBACK_NULL, tenant_id'siz kullanıcı eklenmiş kopya)"
+create_db $DB_ROLLBACK_NULL $DB_REHEARSAL
+echo ">> HEDEF DB: $DB_ROLLBACK_NULL (tenant_id NULL global kullanıcı, davetle oluşmuş gibi)"
+psql_admin $DB_ROLLBACK_NULL -c "
+  INSERT INTO users (id, tenant_id, name, email, password_hash, updated_at)
+  VALUES ('00000000-0000-4000-8000-00000000cafe', NULL, 'rehearsal-invited', 'rehearsal-invited@example.invalid', 'x', now());"
+NULL_FP1="$(psql_admin $DB_ROLLBACK_NULL -c "$FINGERPRINT_SQL")"
+set +e; NULL_ERR="$(psql_mig $DB_ROLLBACK_NULL < "$VERIFY_DIR/rollback.sql" 2>&1 >/dev/null)"; NULL_RC=$?; set -e
+NULL_FP2="$(psql_admin $DB_ROLLBACK_NULL -c "$FINGERPRINT_SQL")"
+NULL_VERIFY="$(psql_mig $DB_ROLLBACK_NULL -F '|' < "$VERIFY_DIR/verify-after.sql" | awk -F'|' '$2 != "t"' | wc -l)"
+NULL_MSG="$(echo "$NULL_ERR" | grep -o 'rollback durdu: tenant_id olmayan' | head -n1)"
+check rollback_stops_on_null_tenant_user "$([ "$NULL_RC" -ne 0 ] && [ -n "$NULL_MSG" ] && [ "$NULL_FP1" = "$NULL_FP2" ] && [ "$NULL_VERIFY" = 0 ] && echo t || echo f)" "psql çıkış=$NULL_RC mesaj='${NULL_MSG:-yok}' parmak izi değişmedi=$([ "$NULL_FP1" = "$NULL_FP2" ] && echo evet || echo HAYIR) verify-after başarısız_satır=$NULL_VERIFY"
+drop_db $DB_ROLLBACK_NULL
 drop_db $DB_REHEARSAL
 
 section "Sonuç"
