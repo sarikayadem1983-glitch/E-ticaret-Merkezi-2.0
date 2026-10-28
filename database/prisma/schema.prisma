@@ -18,11 +18,13 @@ model Tenant {
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz
 
-  users         User[]
-  roles         Role[]
-  userRoles     UserRole[]
-  refreshTokens RefreshToken[]
-  auditLogs     AuditLog[]
+  users            User[]
+  roles            Role[]
+  userRoles        UserRole[]
+  refreshTokens    RefreshToken[]
+  auditLogs        AuditLog[]
+  companies        Company[]
+  userCompanyRoles UserCompanyRole[]
 
   @@map("tenants")
 }
@@ -39,9 +41,10 @@ model User {
   updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
 
-  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant        Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   userRoles     UserRole[]
   refreshTokens RefreshToken[]
+  companyRoles  UserCompanyRole[]
 
   @@unique([tenantId, id])
   @@index([tenantId])
@@ -56,8 +59,9 @@ model Role {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  userRoles UserRole[]
+  tenant       Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  userRoles    UserRole[]
+  companyRoles UserCompanyRole[]
 
   @@unique([tenantId, name])
   @@unique([tenantId, id])
@@ -99,6 +103,55 @@ model RefreshToken {
   @@index([tenantId])
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+/// A business (legal entity or sole trader) operated under a tenant. Never deleted, only deactivated.
+model Company {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  legalName       String   @map("legal_name") @db.VarChar(250)
+  /// VKN (10 digits) or TCKN (11 digits); unique within the tenant.
+  taxNumber       String   @map("tax_number") @db.VarChar(11)
+  taxOffice       String   @map("tax_office") @db.VarChar(100)
+  addressLine     String   @map("address_line") @db.VarChar(500)
+  district        String   @db.VarChar(100)
+  city            String   @db.VarChar(100)
+  postalCode      String?  @map("postal_code") @db.VarChar(10)
+  country         String   @default("TR") @db.Char(2)
+  phone           String?  @db.VarChar(30)
+  email           String?  @db.VarChar(254)
+  eInvoiceEnabled Boolean  @default(false) @map("e_invoice_enabled")
+  eInvoiceAlias   String?  @map("e_invoice_alias") @db.VarChar(250)
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  userRoles UserCompanyRole[]
+
+  @@unique([tenantId, taxNumber])
+  @@unique([tenantId, id])
+  @@index([tenantId, isActive, legalName])
+  @@map("companies")
+}
+
+/// Grants a user a role on one company, in addition to tenant-level roles.
+model UserCompanyRole {
+  tenantId  String   @map("tenant_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  companyId String   @map("company_id") @db.Uuid
+  roleId    String   @map("role_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user    User    @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Cascade)
+  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Cascade)
+  role    Role    @relation(fields: [tenantId, roleId], references: [tenantId, id], onDelete: Cascade)
+
+  @@id([userId, companyId, roleId])
+  @@index([tenantId])
+  @@index([companyId])
+  @@map("user_company_roles")
 }
 
 enum AuditAction {

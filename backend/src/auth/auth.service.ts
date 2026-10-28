@@ -223,7 +223,11 @@ export class AuthService {
   async me(userId: string, permissions: string[]) {
     const user = await this.repository.findActiveUser(userId);
     if (!user) throw new NotFoundException('Kullanıcı bulunamadı');
-    return { ...user, permissions };
+    const tenant = await this.tenants.profile(
+      this.repository.prisma,
+      user.tenantId,
+    );
+    return { ...user, tenant, permissions };
   }
 
   private async startSession(

@@ -2,6 +2,7 @@ import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AuditModule } from './audit/audit.module.js';
 import { AuthModule } from './auth/auth.module.js';
+import { CompaniesModule } from './companies/companies.module.js';
 import { RequestContextMiddleware } from './common/request-context.middleware.js';
 import { DatabaseModule } from './database/database.module.js';
 import { HealthModule } from './health/health.module.js';
@@ -13,6 +14,7 @@ import { TenantContextMiddleware } from './tenancy/tenant-context.middleware.js'
     DatabaseModule,
     AuditModule,
     AuthModule,
+    CompaniesModule,
     HealthModule,
   ],
 })

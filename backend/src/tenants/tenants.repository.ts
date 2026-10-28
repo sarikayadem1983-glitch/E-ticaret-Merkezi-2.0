@@ -13,4 +13,11 @@ export class TenantsRepository {
       select: { id: true },
     });
   }
+
+  findProfile(tx: PrismaTx, id: string) {
+    return tx.tenant.findFirst({
+      where: { id, deletedAt: null },
+      select: { id: true, name: true, slug: true },
+    });
+  }
 }
