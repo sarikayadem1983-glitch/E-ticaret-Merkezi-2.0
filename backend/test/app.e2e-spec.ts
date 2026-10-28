@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { INestApplication } from '@nestjs/common';
 import { hash } from '@node-rs/argon2';
+import { ROLE_CATALOG } from './../src/access/roles.catalog.js';
 import { AuditService } from './../src/audit/audit.service.js';
 import { isValidVkn } from './../src/companies/tax-number.js';
 import request from 'supertest';
@@ -757,6 +758,292 @@ describe('API (e2e)', () => {
         .set('Authorization', `Bearer ${tokens.b.accessToken}`)
         .expect(200);
       expect(own.body.data.city).toBe('İstanbul');
+    });
+  });
+
+  describe('tenant switch', () => {
+    const sw = { c: `sw-c-${run}`, d: `sw-d-${run}`, e: `sw-e-${run}` };
+    let tenantA: string;
+    let tenantB: string;
+    let tenantC: string; // inactive membership
+    let tenantD: string; // inactive tenant, active membership
+    let tenantE: string; // no membership at all
+    let userId: string;
+    let companyA: string;
+    const email = `switcher-${run}@test.local`;
+
+    const sql = async <T = Record<string, unknown>>(
+      text: string,
+      params: unknown[] = [],
+    ): Promise<T[]> => {
+      const pool = ownerPool();
+      try {
+        return (await pool.query(text, params)).rows as T[];
+      } finally {
+        await pool.end();
+      }
+    };
+
+    const newTenant = async (slug: string) => {
+      const t = await sql<{ id: string }>(
+        `INSERT INTO tenants (id, name, slug, updated_at)
+         VALUES (gen_random_uuid(), $1, $1, now()) RETURNING id`,
+        [slug],
+      );
+      const role = await sql<{ id: string }>(
+        `INSERT INTO roles (id, tenant_id, name, permissions, key, scope, is_system, updated_at)
+         VALUES (gen_random_uuid(), $1, 'Admin', '{}', 'admin', 'tenant', true, now()) RETURNING id`,
+        [t[0].id],
+      );
+      return { id: t[0].id, roleId: role[0].id };
+    };
+
+    /** A fresh login of the switcher, always landing in tenant A. */
+    const loginA = async () => {
+      await sql('UPDATE users SET last_tenant_id = $1 WHERE id = $2', [
+        tenantA,
+        userId,
+      ]);
+      const res = await http()
+        .post('/api/v1/auth/login')
+        .send({ email, password: PASSWORD })
+        .expect(200);
+      expect(claims(res.body.data.accessToken).tid).toBe(tenantA);
+      return res.body.data as { accessToken: string; refreshToken: string };
+    };
+
+    const switchTo = (
+      session: { accessToken: string; refreshToken: string },
+      tenantId: string,
+      refreshToken = session.refreshToken,
+    ) =>
+      http()
+        .post('/api/v1/auth/switch-tenant')
+        .set('Authorization', `Bearer ${session.accessToken}`)
+        .send({ tenantId, refreshToken });
+
+    beforeAll(async () => {
+      tenantA = claims(tokens.a.accessToken).tid;
+      tenantB = claims(tokens.b.accessToken).tid;
+      const c = await newTenant(sw.c);
+      const d = await newTenant(sw.d);
+      tenantC = c.id;
+      tenantD = d.id;
+      const e = await http()
+        .post('/api/v1/auth/register')
+        .send({
+          tenantName: `Yabancı ${run}`,
+          tenantSlug: sw.e,
+          name: 'Yabancı',
+          email: `${sw.e}@test.local`,
+          password: PASSWORD,
+        })
+        .expect(201);
+      tenantE = claims(e.body.data.accessToken).tid;
+      userId = await seedMember({
+        email,
+        name: 'Gezgin',
+        passwordHash: await hash(PASSWORD),
+        lastTenantId: tenantA,
+        memberships: [
+          { tenantId: tenantA, roleId: await systemRoleId(tenantA, 'owner') },
+          { tenantId: tenantB, roleId: await systemRoleId(tenantB, 'admin') },
+          { tenantId: tenantC, roleId: c.roleId, status: 'inactive' },
+          { tenantId: tenantD, roleId: d.roleId },
+        ],
+      });
+      await sql('UPDATE tenants SET is_active = false WHERE id = $1', [
+        tenantD,
+      ]);
+      const company = await http()
+        .post('/api/v1/companies')
+        .set('Authorization', `Bearer ${tokens.a.accessToken}`)
+        .send({
+          legalName: `A Şirketi ${run}`,
+          taxNumber: validVkn(),
+          taxOffice: 'Kadıköy',
+          addressLine: 'Moda Cad. No: 1',
+          district: 'Kadıköy',
+          city: 'İstanbul',
+          postalCode: '34710',
+        })
+        .expect(201);
+      companyA = company.body.data.id;
+    });
+
+    afterAll(() => purgeTenants([sw.c, sw.d, sw.e]));
+
+    it('lists only active memberships in active tenants, marking the current one', async () => {
+      const session = await loginA();
+      const res = await http()
+        .get('/api/v1/auth/memberships')
+        .set('Authorization', `Bearer ${session.accessToken}`)
+        .expect(200);
+      expect(res.body.data).toHaveLength(2);
+      expect(res.body.data).toEqual(
+        expect.arrayContaining([
+          {
+            tenantId: tenantA,
+            name: 'Mağaza a',
+            slug: tenants.a.slug,
+            current: true,
+          },
+          {
+            tenantId: tenantB,
+            name: 'Mağaza b',
+            slug: tenants.b.slug,
+            current: false,
+          },
+        ]),
+      );
+    });
+
+    it('switch-tenant issues tokens for the target membership only', async () => {
+      const session = await loginA();
+      expect(claims(session.accessToken).perms).toEqual(['*']);
+      const res = await switchTo(session, tenantB).expect(200);
+      const next = res.body.data;
+      expect(next.refreshToken).not.toBe(session.refreshToken);
+      const c = claims(next.accessToken);
+      expect(c).toMatchObject({ sub: userId, tid: tenantB, ver: 1 });
+      // Admin in B only: A's owner '*' must not carry over.
+      expect([...c.perms].sort()).toEqual(
+        [...ROLE_CATALOG.admin.permissions].sort(),
+      );
+      const asB = { Authorization: `Bearer ${next.accessToken}` };
+      const me = await http().get('/api/v1/auth/me').set(asB).expect(200);
+      expect(me.body.data).toMatchObject({ id: userId, tenantId: tenantB });
+      // A's company is invisible with the new token.
+      await http().get(`/api/v1/companies/${companyA}`).set(asB).expect(404);
+      await http()
+        .patch(`/api/v1/companies/${companyA}`)
+        .set(asB)
+        .send({ city: 'Ankara' })
+        .expect(404);
+      const list = await http()
+        .get('/api/v1/companies?per_page=100')
+        .set(asB)
+        .expect(200);
+      expect(list.body.data.map((x: { id: string }) => x.id)).not.toContain(
+        companyA,
+      );
+      const memberships = await http()
+        .get('/api/v1/auth/memberships')
+        .set(asB)
+        .expect(200);
+      expect(
+        memberships.body.data.find((m: { current: boolean }) => m.current)
+          .tenantId,
+      ).toBe(tenantB);
+      // The new refresh token is bound to B.
+      const refreshed = await http()
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: next.refreshToken })
+        .expect(200);
+      expect(claims(refreshed.body.data.accessToken).tid).toBe(tenantB);
+      // The next login defaults to the store switched to.
+      const relogin = await http()
+        .post('/api/v1/auth/login')
+        .send({ email, password: PASSWORD })
+        .expect(200);
+      expect(claims(relogin.body.data.accessToken).tid).toBe(tenantB);
+    });
+
+    it('switch-tenant revokes the old refresh token', async () => {
+      const session = await loginA();
+      await switchTo(session, tenantB).expect(200);
+      // A second switch with the same token fails: it is no longer active.
+      await switchTo(session, tenantB).expect(401);
+      await http()
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: session.refreshToken })
+        .expect(401);
+    });
+
+    it.each([
+      ['a tenant without membership', () => tenantE],
+      ['an inactive membership', () => tenantC],
+      ['an inactive tenant', () => tenantD],
+      ['a non-existent tenant', () => randomUUID()],
+    ])(
+      'switch-tenant to %s is 404, issues nothing and keeps the session',
+      async (_name, target) => {
+        const session = await loginA();
+        const res = await switchTo(session, target()).expect(404);
+        expect(res.body.data).toBeUndefined();
+        expect(JSON.stringify(res.body)).not.toMatch(/eyJ/);
+        // Current session intact: access token works, refresh token still valid.
+        await http()
+          .get('/api/v1/auth/me')
+          .set('Authorization', `Bearer ${session.accessToken}`)
+          .expect(200);
+        const refreshed = await http()
+          .post('/api/v1/auth/refresh')
+          .send({ refreshToken: session.refreshToken })
+          .expect(200);
+        expect(claims(refreshed.body.data.accessToken).tid).toBe(tenantA);
+      },
+    );
+
+    it('refuses a refresh token that does not belong to the caller', async () => {
+      const session = await loginA();
+      const foreign = await http()
+        .post('/api/v1/auth/login')
+        .send({ email: tenants.b.email, password: PASSWORD })
+        .expect(200);
+      await switchTo(session, tenantB, foreign.body.data.refreshToken).expect(
+        401,
+      );
+      // The foreign token was not consumed.
+      await http()
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: foreign.body.data.refreshToken })
+        .expect(200);
+    });
+
+    it('validates the body and requires authentication', async () => {
+      const session = await loginA();
+      await switchTo(session, 'not-a-uuid').expect(422);
+      await http()
+        .post('/api/v1/auth/switch-tenant')
+        .send({ tenantId: tenantB, refreshToken: session.refreshToken })
+        .expect(401);
+      await http().get('/api/v1/auth/memberships').expect(401);
+    });
+
+    it('audits TENANT_SWITCH in both tenants', async () => {
+      const session = await loginA();
+      const res = await switchTo(session, tenantB).expect(200);
+      const rows = await sql<{
+        tenant_id: string;
+        actor_user_id: string;
+        before: unknown;
+        after: unknown;
+      }>(
+        `SELECT tenant_id, actor_user_id, before, after FROM audit_logs
+         WHERE entity_id = $1 AND action = 'TENANT_SWITCH'
+         ORDER BY created_at DESC LIMIT 2`,
+        [userId],
+      );
+      expect(rows.map((r) => r.tenant_id).sort()).toEqual(
+        [tenantA, tenantB].sort(),
+      );
+      for (const row of rows) {
+        expect(row).toMatchObject({
+          actor_user_id: userId,
+          before: null,
+          after: { fromTenantId: tenantA, toTenantId: tenantB },
+        });
+        const text = JSON.stringify(row);
+        for (const secret of [
+          session.accessToken,
+          session.refreshToken,
+          res.body.data.accessToken,
+          res.body.data.refreshToken,
+        ]) {
+          expect(text).not.toContain(secret);
+        }
+      }
     });
   });
 });

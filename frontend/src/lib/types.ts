@@ -39,3 +39,10 @@ export interface SessionInfo {
   };
   selectedCompanyId: string | null;
 }
+
+export interface Membership {
+  tenantId: string;
+  name: string;
+  slug: string;
+  current: boolean;
+}

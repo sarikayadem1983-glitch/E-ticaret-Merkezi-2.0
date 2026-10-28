@@ -101,6 +101,15 @@ export class AuthRepository {
     });
   }
 
+  /** System context only: the store the next login opens by default. */
+  setLastTenant(userId: string, tenantId: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { lastTenantId: tenantId },
+      select: { id: true },
+    });
+  }
+
   createRefreshToken(
     db: PrismaTx,
     data: { userId: string; tokenHash: string; expiresAt: Date },

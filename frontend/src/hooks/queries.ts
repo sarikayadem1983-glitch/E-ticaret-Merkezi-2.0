@@ -8,10 +8,17 @@ import {
 } from '@tanstack/react-query';
 import { bff, request } from '@/lib/api';
 import { hardNavigate } from '@/lib/navigation';
-import type { Company, CompanySummary, Page, SessionInfo } from '@/lib/types';
+import type {
+  Company,
+  CompanySummary,
+  Membership,
+  Page,
+  SessionInfo,
+} from '@/lib/types';
 
 export const keys = {
   session: ['session'] as const,
+  memberships: ['memberships'] as const,
   companies: ['companies'] as const,
   companyList: (params: Record<string, string | number>) =>
     ['companies', 'list', params] as const,
@@ -115,5 +122,26 @@ export function useLogout() {
   return useMutation({
     mutationFn: () => request('/api/auth/logout', { method: 'POST' }),
     onSettled: () => hardNavigate('/login'),
+  });
+}
+
+export function useMemberships() {
+  return useQuery({
+    queryKey: keys.memberships,
+    queryFn: () => bff<{ data: Membership[] }>('auth/memberships'),
+    select: (r) => r.data,
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * Moves the session to another store. A full page load follows, so no cached
+ * data of the previous store stays in memory.
+ */
+export function useSwitchTenant() {
+  return useMutation({
+    mutationFn: (tenantId: string) =>
+      request('/api/session/tenant', { method: 'POST', body: { tenantId } }),
+    onSuccess: () => hardNavigate('/dashboard'),
   });
 }

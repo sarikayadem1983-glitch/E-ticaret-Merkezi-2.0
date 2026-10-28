@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { hash, verify } from '@node-rs/argon2';
 import { ROLE_CATALOG } from '../access/roles.catalog.js';
-import { AuditService } from '../audit/audit.service.js';
+import { type AuditEvent, AuditService } from '../audit/audit.service.js';
 import {
   type ActiveMembership,
   type LoginMembership,
@@ -15,6 +15,7 @@ import {
 import { TenantContext } from '../tenancy/tenant-context.js';
 import { TenantsService } from '../tenants/tenants.service.js';
 import type { LoginDto, RegisterDto } from './auth.dto.js';
+import type { AuthUser } from './decorators.js';
 import { AuthRepository } from './auth.repository.js';
 import { TokenService, type TokenPair } from './token.service.js';
 
@@ -62,6 +63,13 @@ function invalidCredentials() {
   return new UnauthorizedException({
     code: 'INVALID_CREDENTIALS',
     message: 'Email veya şifre hatalı',
+  });
+}
+
+function tenantNotFound() {
+  return new NotFoundException({
+    code: 'TENANT_NOT_FOUND',
+    message: 'Mağaza bulunamadı',
   });
 }
 
@@ -320,6 +328,101 @@ export class AuthService {
       entityId: userId,
       after: { revokedAllSessions: true },
       actorUserId: null,
+    });
+  }
+
+  /** The user's active stores in active tenants, marking the current one. */
+  async listMemberships(userId: string, currentTenantId: string) {
+    const active = await this.memberships.findActiveForUser(userId);
+    return active.map((m) => ({
+      tenantId: m.tenantId,
+      name: m.tenantName,
+      slug: m.tenantSlug,
+      current: m.tenantId === currentTenantId,
+    }));
+  }
+
+  /**
+   * Moves the session to another store. The caller's refresh token must be an
+   * active token of this user in the current tenant; it is revoked and a new
+   * one is issued for the target membership. Claims (tid, perms, ver) come
+   * only from the target membership. Without an active membership in an
+   * active target tenant: 404, nothing is revoked or issued.
+   */
+  async switchTenant(
+    current: AuthUser,
+    targetTenantId: string,
+    refreshToken: string,
+  ): Promise<TokenPair> {
+    const stored = await TenantContext.runAsSystem(() =>
+      this.repository.findRefreshToken(TokenService.hash(refreshToken)),
+    );
+    if (
+      !stored ||
+      stored.userId !== current.sub ||
+      stored.tenantId !== current.tid ||
+      stored.revokedAt ||
+      stored.expiresAt <= new Date()
+    ) {
+      throw invalidRefreshToken();
+    }
+
+    const active = await this.memberships.findActiveForUser(current.sub);
+    if (!active.some((m) => m.tenantId === targetTenantId)) {
+      throw tenantNotFound();
+    }
+
+    return TenantContext.run(targetTenantId, async () => {
+      const membership = await this.memberships.get(
+        targetTenantId,
+        current.sub,
+      );
+      if (membership?.status !== 'active') throw tenantNotFound();
+
+      const event: AuditEvent = {
+        action: 'TENANT_SWITCH',
+        module: MODULE,
+        entityType: 'User',
+        entityId: current.sub,
+        after: { fromTenantId: current.tid, toTenantId: targetTenantId },
+        actorUserId: current.sub,
+      };
+      const next = this.tokens.newRefreshToken();
+      const switched = await this.repository.prisma.$transaction(async (tx) => {
+        const revoked = await TenantContext.run(current.tid, async () => {
+          if (
+            !(await this.repository.revokeRefreshToken(tx, stored.id, null))
+          ) {
+            return false;
+          }
+          await this.audit.record(event, tx);
+          return true;
+        });
+        // Used concurrently by another request: nothing is issued.
+        if (!revoked) return false;
+        await this.repository.createRefreshToken(tx, {
+          userId: current.sub,
+          tokenHash: next.hash,
+          expiresAt: next.expiresAt,
+        });
+        await this.audit.record(event, tx);
+        return true;
+      });
+      if (!switched) throw invalidRefreshToken();
+
+      await TenantContext.runAsSystem(() =>
+        this.repository.setLastTenant(current.sub, targetTenantId),
+      );
+      const perms = await this.repository.findPermissions(current.sub);
+      return this.issueAccess(
+        {
+          tenantId: targetTenantId,
+          userId: current.sub,
+          ver: membership.authVersion,
+        },
+        perms,
+        next.token,
+      );
     });
   }
 

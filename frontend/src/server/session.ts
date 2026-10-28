@@ -101,8 +101,52 @@ export async function startSession(
   const previous = await readSessionId();
   if (previous) await store.destroy(previous);
   const sid = await store.create(
-    sessionFromTokens(tokens, { userId: data.id, tenantId: data.tenantId }, Date.now()),
+    sessionFromTokens(
+      tokens,
+      { userId: data.id, tenantId: data.tenantId },
+      Date.now(),
+    ),
   );
+  await setSessionCookie(sid);
+  return null;
+}
+
+/**
+ * Replaces the current session after a store switch. The old session id is
+ * destroyed (its refresh token is already revoked by the backend) and a new id
+ * is issued, so nothing bound to the old store survives: the selected company
+ * is reset and tid/perms come only from the new tokens. The absolute timeout
+ * keeps counting from the original login.
+ */
+export async function switchSession(
+  tokens: TokenPair,
+  client: ClientContext,
+): Promise<Response | null> {
+  const store = await sessionStore();
+  const previousSid = await readSessionId();
+  const previous = previousSid ? await store.get(previousSid) : null;
+  if (previousSid) await store.destroy(previousSid);
+
+  const me = await backendFetch('auth/me', {
+    accessToken: tokens.accessToken,
+    client,
+  });
+  if (!me.ok) {
+    await clearSessionCookie();
+    return errorResponse(502, 'BAD_GATEWAY', 'Mağaza değiştirilemedi');
+  }
+  const { data } = (await me.json()) as {
+    data: { id: string; tenantId: string };
+  };
+  const now = Date.now();
+  const sid = await store.create({
+    ...sessionFromTokens(
+      tokens,
+      { userId: data.id, tenantId: data.tenantId },
+      now,
+    ),
+    createdAt: previous?.createdAt ?? now,
+  });
   await setSessionCookie(sid);
   return null;
 }

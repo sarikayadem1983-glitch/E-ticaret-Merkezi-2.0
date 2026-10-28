@@ -26,6 +26,7 @@ const ROUTES: readonly BffRoute[] = [
   { method: 'PATCH', path: new RegExp(`^companies/${UUID}$`), body: true },
   { method: 'POST', path: new RegExp(`^companies/${UUID}/(de)?activate$`) },
   { method: 'GET', path: /^auth\/me$/ },
+  { method: 'GET', path: /^auth\/memberships$/ },
 ];
 
 const SEGMENT = /^[a-z0-9-]{1,64}$/;

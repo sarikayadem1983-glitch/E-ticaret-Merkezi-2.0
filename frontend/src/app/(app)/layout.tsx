@@ -3,6 +3,7 @@
 import { Menu } from 'lucide-react';
 import { CompanySelector } from '@/components/shell/company-selector';
 import { SidebarNav } from '@/components/shell/sidebar-nav';
+import { TenantSelector } from '@/components/shell/tenant-selector';
 import { UserMenu } from '@/components/shell/user-menu';
 import { Button } from '@/components/ui/button';
 import {
@@ -45,6 +46,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           >
             <Menu className="size-5" />
           </Button>
+          <TenantSelector />
           <CompanySelector />
           <div className="ml-auto">
             <UserMenu />
