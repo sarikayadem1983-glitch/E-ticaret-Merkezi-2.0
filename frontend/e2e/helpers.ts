@@ -1,5 +1,6 @@
 import { type Page, expect } from '@playwright/test';
 import { Redis } from 'ioredis';
+import { createHash } from 'node:crypto';
 
 export const PASSWORD = 'E2e-Sifre-2026!';
 
@@ -76,4 +77,14 @@ export async function openMenu(page: Page, trigger: string, item: string | RegEx
     await expect(menuItem).toBeVisible({ timeout: 1_000 });
   }).toPass();
   return menuItem;
+}
+
+/** Simulates idle/absolute expiry of one test session by removing only its Redis entry. */
+export async function expireSession(sid: string) {
+  const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379');
+  try {
+    await redis.del(`bff:sess:${createHash('sha256').update(sid).digest('hex')}`);
+  } finally {
+    redis.disconnect();
+  }
 }

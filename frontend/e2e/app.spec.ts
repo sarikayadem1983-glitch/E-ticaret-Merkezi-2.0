@@ -1,5 +1,13 @@
 import { expect, test } from '@playwright/test';
-import { PASSWORD, login, newAccount, openMenu, randomVkn, register } from './helpers';
+import {
+  PASSWORD,
+  expireSession,
+  login,
+  newAccount,
+  openMenu,
+  randomVkn,
+  register,
+} from './helpers';
 
 test.describe('authentication and session', () => {
   test('redirects signed-out users to the login page', async ({ page }) => {
@@ -209,5 +217,54 @@ test.describe('security headers and reload', () => {
     await expect(page).toHaveURL(/\/dashboard$/);
     await expect(page.getByText('Henüz firma eklenmedi')).toBeVisible();
     expect(violations).toEqual([]);
+  });
+});
+
+test.describe('unauthorized access and session expiry', () => {
+  const sameOrigin = { Origin: 'http://localhost:3000', 'x-tm-csrf': '1' };
+
+  test('BFF refuses API calls without a valid session', async ({ page, context }) => {
+    expect((await page.request.get('/api/bff/companies')).status()).toBe(401);
+    expect((await page.request.get('/api/session')).status()).toBe(401);
+
+    // A well-formed but unknown (forged) session id gets nothing either.
+    await context.addCookies([
+      { name: 'tm_sid', value: 'A'.repeat(43), domain: 'localhost', path: '/' },
+    ]);
+    expect((await page.request.get('/api/bff/companies')).status()).toBe(401);
+    expect(
+      (await page.request.post('/api/bff/companies', { headers: sameOrigin, data: {} })).status(),
+    ).toBe(401);
+  });
+
+  test('BFF is not an open proxy', async ({ page }) => {
+    await register(page, newAccount('proxy'));
+    for (const path of [
+      '/api/bff/auth/refresh',
+      '/api/bff/auth/logout',
+      '/api/bff/audit-logs',
+      '/api/bff/health',
+      '/api/bff/companies/..%2Fauth%2Fme',
+      '/api/bff/companies/not-a-uuid',
+    ]) {
+      const res = await page.request.get(path);
+      expect(res.status(), path).toBe(404);
+    }
+    expect(
+      (await page.request.post('/api/bff/auth/refresh', { headers: sameOrigin, data: {} })).status(),
+    ).toBe(404);
+    expect((await page.request.get('/api/bff/companies?evil=1')).status()).toBe(400);
+  });
+
+  test('an expired session signs the user out safely', async ({ page, context }) => {
+    await register(page, newAccount('expiry'));
+    await expect(page.getByText('Henüz firma eklenmedi')).toBeVisible();
+    const sid = (await context.cookies()).find((c) => c.name === 'tm_sid')!.value;
+
+    await expireSession(sid);
+    expect((await page.request.get('/api/bff/companies')).status()).toBe(401);
+    await page.goto('/dashboard');
+    await expect(page).toHaveURL(/\/login/);
+    expect((await context.cookies()).find((c) => c.name === 'tm_sid')).toBeUndefined();
   });
 });
