@@ -116,8 +116,46 @@ Hatalar: `401`, `422`
 ### GET /api/v1/auth/me
 Açıklama: Oturumdaki kullanıcı.
 Yetki: Bearer token
-Yanıt: `200` `{ "data": { "id": "...", "tenantId": "...", "name": "...", "email": "...", "permissions": ["*"] } }`
+Yanıt: `200` `{ "data": { "id": "...", "tenantId": "...", "name": "...", "email": "...", "tenant": { "id": "...", "name": "...", "slug": "..." }, "permissions": ["*"] } }`
 Hatalar: `401`
+
+### GET /api/v1/companies
+Açıklama: Firmalar, unvana göre sıralı. `companies:all` izni olmayan kullanıcı yalnızca atandığı firmaları görür.
+Yetki: Bearer token + `companies:read`
+İstek (sorgu): `page` (varsayılan 1), `per_page` (varsayılan 20, en çok 100), `search` (unvan içinde veya vergi numarası başında), `status` (`active` | `inactive` | `all`, varsayılan `all`)
+Yanıt: `200` `{ "data": [Company], "meta": { "page": 1, "per_page": 20, "total": 3 } }`
+Hatalar: `401`, `403`, `422`
+
+`Company`: `{ "id", "legalName", "taxNumber", "taxOffice", "addressLine", "district", "city", "postalCode", "country", "phone", "email", "eInvoiceEnabled", "eInvoiceAlias", "isActive", "createdAt", "updatedAt" }`
+
+### GET /api/v1/companies/summary
+Açıklama: Erişilebilen firma sayıları (dashboard).
+Yetki: Bearer token + `companies:read`
+Yanıt: `200` `{ "data": { "total": 3, "active": 2, "inactive": 1 } }`
+
+### GET /api/v1/companies/:id
+Yetki: Bearer token + `companies:read`
+Yanıt: `200` `{ "data": Company }`
+Hatalar: `404` firma yok, başka tenant'a ait veya kullanıcının erişimi yok (ayrım yapılmaz)
+
+### POST /api/v1/companies
+Açıklama: Firma oluşturur. Audit Log'a `CREATE` yazılır.
+Yetki: Bearer token + `companies:write` + `companies:all`
+İstek: `{ "legalName", "taxNumber", "taxOffice", "addressLine", "district", "city", "postalCode"?, "phone"?, "email"?, "eInvoiceEnabled"?, "eInvoiceAlias"? }`. `taxNumber`: kontrol hanesi doğru 10 haneli VKN veya 11 haneli TCKN. Boş metin `null` sayılır.
+Yanıt: `201` `{ "data": Company }`
+Hatalar: `409` `CONFLICT` vergi numarası bu tenant'ta kayıtlı, `422`
+
+### PATCH /api/v1/companies/:id
+Açıklama: Firmayı günceller (yalnızca gönderilen alanlar). Vergi numarası değiştirilemez. Audit Log'a değişen alanlarla `UPDATE` yazılır.
+Yetki: Bearer token + `companies:write`
+Yanıt: `200` `{ "data": Company }`
+Hatalar: `404`, `422`
+
+### POST /api/v1/companies/:id/deactivate · POST /api/v1/companies/:id/activate
+Açıklama: Firmayı pasife alır / yeniden aktifleştirir. Firma silinmez. Audit Log'a `UPDATE` (`isActive`) yazılır.
+Yetki: Bearer token + `companies:write`
+Yanıt: `200` `{ "data": Company }`
+Hatalar: `404`
 
 ### GET /api/v1/audit-logs
 Açıklama: Tenant'ın işlem geçmişi, yeniden eskiye.

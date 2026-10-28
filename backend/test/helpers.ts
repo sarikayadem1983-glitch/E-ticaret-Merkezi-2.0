@@ -49,7 +49,7 @@ export async function purgeTenants(slugs: string[]): Promise<void> {
     const ids = rows.map((r) => r.id);
     if (ids.length > 0) {
       await client.query("SET LOCAL app.allow_audit_purge = 'on'");
-      for (const table of ['audit_logs', 'users', 'roles']) {
+      for (const table of ['audit_logs', 'companies', 'users', 'roles']) {
         await client.query(`DELETE FROM ${table} WHERE tenant_id = ANY($1)`, [
           ids,
         ]);

@@ -101,4 +101,70 @@ Production'a çıkmadan önce her madde tamamlanmış ve doğrulanmış olmalıd
 - [ ] **CAPTCHA:** Kayıt ve tekrarlanan başarısız girişlerden sonra login için CAPTCHA (ör. Cloudflare Turnstile, hCaptcha) eklenmeli.
 - [ ] **Sızmış şifre kontrolü:** Kayıt ve şifre değişikliğinde şifre, sızmış şifre listelerine karşı kontrol edilmeli (ör. HIBP Pwned Passwords k-anonymity API). Şifrenin kendisi dışarı gönderilmez.
 - [ ] **`TRUST_PROXY`:** Production'daki load balancer / reverse proxy adresleriyle ayarlanmalı. Yanlış ayarda tüm istemciler proxy IP'sini paylaşır ve IP bazlı sınırlar herkesi birlikte engeller. Çıkıştan sonra `req.ip`'nin gerçek istemci IP'si olduğu doğrulanmalı.
+- [ ] **BFF Redis'i:** Oturumlar Redis'te tutulur; Redis kesintisinde kimse giriş yapamaz ve açık oturumlar çalışmaz. Rate limiting ile aynı yedeklilik gerekir (§5).
+- [ ] **HTTPS ve sertifika:** Next.js önünde TLS sonlandıran load balancer/proxy. `APP_ORIGIN=https://...`, `BFF_TRUST_PROXY` o proxy'nin adresi, backend `TRUST_PROXY` Next.js sunucularının adresi.
+- [ ] **`SESSION_SECRET`:** Secret manager'dan verilir, en az 32 karakter. Değiştirildiğinde tüm oturumlar düşer (kullanıcılar yeniden giriş yapar).
+- [ ] **Backend'e ağ erişimi:** Backend yalnızca BFF sunucularından erişilebilir olmalı (internal network / güvenlik grubu); internete açık olmamalı.
 - [ ] **Rate limit değerleri:** Mevcut varsayılanlar (§3) korunur. Canlı trafik izlendikten sonra (ör. ortak NAT arkasındaki ofisler) gözden geçirilmeli.
+- [ ] **Nonce tabanlı CSP:** `script-src 'unsafe-inline'` yerine `proxy.ts`'te istek başına nonce üretilmeli (§5 Güvenlik başlıkları).
+
+## 5. Frontend (BFF) oturum güvenliği
+
+Tarayıcı backend'e doğrudan erişmez. Tüm API çağrıları Next.js sunucusundaki BFF üzerinden yapılır. Kod: `frontend/src/server/`, `frontend/src/app/api/`, `frontend/server.mjs`.
+
+### Oturum
+
+- **Tarayıcıda yalnızca oturum kimliği:** 256 bit rastgele değer, cookie `__Host-tm_sid` (production) / `tm_sid` (geliştirme). `HttpOnly`, production'da `Secure`, `SameSite=Lax`, `Path=/`. `__Host-` öneki tarayıcıyı `Secure`, `Path=/` ve `Domain` olmamasına zorlar; alt alan adları cookie'yi yazamaz.
+- **Token'lar sunucuda:** Access ve refresh token BFF'in Redis deposunda (`bff:sess:<sha256(oturum kimliği)>`) tutulur. Değer AES-256-GCM ile şifrelenir (anahtar `SESSION_SECRET`'tan HKDF ile türetilir) ve anahtarına bağlanır: Redis dökümü token vermez, değer başka anahtara taşınırsa çözülmez. `localStorage`/`sessionStorage` kullanılmaz; hiçbir yanıt tarayıcıya token döndürmez.
+- **Süreler:** 2 saat işlem yapılmazsa (kayan süre) veya girişten 12 saat sonra (mutlak süre) oturum biter. Mutlak süre, refresh token'ın 7 günlük ömründen bağımsız olarak uygulanır.
+- **Session fixation:** Giriş ve kayıtta her zaman yeni oturum kimliği üretilir; tarayıcının önceden taşıdığı kimlik silinir.
+- **Token rotation:** Access token süresinin dolmasına 30 sn kala BFF backend'den refresh yapar ve yeni token çiftini kaydeder.
+- **Eşzamanlı refresh:** Backend aynı refresh token'ın ikinci kullanımını hırsızlık sayıp kullanıcının tüm oturumlarını kapatır. Bu yüzden bir oturum için aynı anda tek refresh yapılır: Redis kilidi (`SET NX PX`, sahibine özel serbest bırakma) tüm BFF örneklerinde geçerlidir. Diğer istekler sonucu en fazla 5 sn bekler, sonra `503`.
+- **Refresh reddedilirse** (iptal, süre dolumu, tekrar kullanım) oturum silinir, kullanıcı girişe yönlendirilir. Backend erişilemezse oturum korunur, `503` döner.
+- **Çıkış:** Backend'de refresh token iptal edilir, Redis'teki oturum silinir, cookie temizlenir. Backend'e ulaşılamasa da yerel temizlik yapılır.
+- **Redis erişilemezse** giriş, kayıt ve API istekleri `503` döner; giriş/kayıt backend'e hiç gitmez (fail-closed, §3 ile aynı yaklaşım).
+
+### CSRF
+
+`SameSite=Lax` cookie'ye ek olarak, durum değiştiren her istekte (`POST/PUT/PATCH/DELETE`):
+
+1. `Origin` başlığı `APP_ORIGIN` ile birebir aynı olmalı (eksik veya farklıysa `403`).
+2. `Sec-Fetch-Site` gönderilmişse `same-origin` olmalı.
+3. `X-TM-CSRF: 1` başlığı olmalı. Başka sitedeki form bu başlığı ekleyemez; başka origin'den `fetch` CORS preflight ister ve BFF CORS izni vermez.
+
+Gövde yalnızca `application/json` ve en fazla 64 KB kabul edilir.
+
+### Açık proxy koruması
+
+`/api/bff/*` yalnızca izin listesindeki (`frontend/src/server/bff-routes.ts`) metot + yol + sorgu parametrelerini iletir. Listede olmayan endpoint (`audit-logs`, `auth/refresh` vb.), farklı metot, UUID olmayan kimlik, `..`, `/`, `%`, ters bölü içeren yol parçaları ve bilinmeyen sorgu parametreleri reddedilir. Hedef adres her zaman `BACKEND_URL`'dir; yönlendirme izlenmez. Backend'e yalnızca JSON gövde, `Authorization`, `User-Agent` ve BFF'in belirlediği `X-Forwarded-For` gider; tarayıcının cookie ve diğer başlıkları gitmez.
+
+### Gerçek istemci IP'si
+
+Next.js, istemcinin gönderdiği `X-Forwarded-For`'u değiştirmeden geçirir (doğrulandı). Bu yüzden `frontend/server.mjs`, Next.js'ten önce:
+
+- İstemcinin gönderdiği `X-Forwarded-*`, `X-Real-IP`, `Forwarded` başlıklarını siler.
+- IP'yi soket adresinden ve yalnızca `BFF_TRUST_PROXY` listesindeki proxy'lerin `X-Forwarded-For` zincirinden belirler (`proxy-addr`; `true` ve hop sayısı reddedilir).
+- Sonucu yalnızca BFF'in okuduğu iç başlığa yazar. BFF bu IP'yi backend'e `X-Forwarded-For` olarak iletir; backend `TRUST_PROXY` ile yalnızca BFF'ten gelen bu başlığa güvenir.
+
+| Ortam | `BFF_TRUST_PROXY` | Backend `TRUST_PROXY` |
+|---|---|---|
+| Geliştirme (tek makine) | boş | `loopback` |
+| Production | load balancer IP/CIDR | Next.js sunucularının IP/CIDR'ı |
+
+### HTTPS
+
+Production'da (`NODE_ENV=production`) HTTP istekleri reddedilir: `GET/HEAD` → `308` HTTPS'e yönlendirme, diğerleri → `426 HTTPS_REQUIRED`. Protokol yalnızca soketten veya güvenilen proxy'nin `X-Forwarded-Proto`'sundan alınır. HSTS (`max-age=31536000; includeSubDomains`) gönderilir. `APP_ORIGIN` production'da `https` olmak zorundadır.
+
+### Sayfa koruması
+
+`frontend/src/proxy.ts` (Next.js 16'da middleware'in yeni adı) oturum cookie'si olmayan kullanıcıyı korumalı sayfalardan `/login`'e yönlendirir. Bu yalnızca kullanıcı deneyimi içindir: asıl kontrol her veri isteğinde BFF ve backend'dedir. Girişten sonraki `?next=` yönlendirmesi yalnızca uygulama içi yolları kabul eder (açık yönlendirme yok).
+
+### Güvenlik başlıkları
+
+`frontend/next.config.ts` tüm sayfa ve BFF yanıtlarına ekler:
+
+- `Content-Security-Policy`: `default-src 'self'`, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, `frame-ancestors 'none'`, `connect-src 'self'`; production'da `upgrade-insecure-requests`. Dış kaynak (CDN, font, analitik) yok.
+- `X-Frame-Options: DENY` (eski tarayıcılar için; `frame-ancestors` ile aynı karar).
+- `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` (kamera, mikrofon, konum, ödeme kapalı), `Cross-Origin-Opener-Policy: same-origin`. `X-Powered-By` gönderilmez.
+
+Bilinen sınır: Next.js satır içi başlatma script'leri kullandığı için `script-src` şu an `'unsafe-inline'` içerir (geliştirmede ek olarak `'unsafe-eval'` ve HMR için `ws:`). Canlıya çıkmadan önce `proxy.ts`'te istek başına nonce üreten CSP'ye geçilmeli (§4 kontrol listesi).

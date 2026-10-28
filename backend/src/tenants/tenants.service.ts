@@ -16,4 +16,9 @@ export class TenantsService {
   async isActive(tx: PrismaTx, id: string): Promise<boolean> {
     return (await this.repository.findActive(tx, id)) !== null;
   }
+
+  /** Name and slug for display, e.g. the signed-in user's profile. */
+  profile(tx: PrismaTx, id: string) {
+    return this.repository.findProfile(tx, id);
+  }
 }
