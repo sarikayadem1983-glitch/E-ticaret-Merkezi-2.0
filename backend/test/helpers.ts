@@ -1,5 +1,11 @@
+import type { Type } from '@nestjs/common';
+import type { NestExpressApplication } from '@nestjs/platform-express';
+import { Test } from '@nestjs/testing';
 import { config } from 'dotenv';
 import pg from 'pg';
+import { AppModule } from './../src/app.module.js';
+import { loadSecurityConfig } from './../src/config/security.config.js';
+import { setupApp } from './../src/setup-app.js';
 
 config({ path: '../.env', quiet: true });
 
@@ -53,4 +59,31 @@ export async function purgeTenants(slugs: string[]): Promise<void> {
     client.release();
     await pool.end();
   }
+}
+
+/**
+ * Boots the real app with the production pipeline (setupApp). Security settings
+ * come from `env` merged over a safe local baseline, so tests are deterministic.
+ */
+export async function createTestApp(
+  env: Record<string, string | undefined> = {},
+  extra: { controllers?: Type[] } = {},
+): Promise<NestExpressApplication> {
+  const moduleRef = await Test.createTestingModule({
+    imports: [AppModule],
+    controllers: extra.controllers ?? [],
+  }).compile();
+  const app = moduleRef.createNestApplication<NestExpressApplication>({
+    bodyParser: false,
+  });
+  setupApp(
+    app,
+    loadSecurityConfig({
+      NODE_ENV: 'test',
+      CORS_ORIGINS: 'http://localhost:3000',
+      ...env,
+    }),
+  );
+  await app.init();
+  return app;
 }

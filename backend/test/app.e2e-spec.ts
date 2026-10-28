@@ -1,17 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
-import { AppModule } from './../src/app.module.js';
 import {
   PRISMA,
   type TenantPrismaClient,
 } from './../src/database/prisma.service.js';
-import { setupApp } from './../src/setup-app.js';
 import { TenantContext } from './../src/tenancy/tenant-context.js';
 import { TenantContextMissingError } from './../src/tenancy/tenant.errors.js';
-import { purgeTenants } from './helpers.js';
+import { createTestApp, purgeTenants } from './helpers.js';
 
 const PASSWORD = 'Sifre-12345';
 
@@ -31,13 +28,7 @@ describe('API (e2e)', () => {
   const http = () => request(app.getHttpServer());
 
   beforeAll(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-
-    app = moduleFixture.createNestApplication();
-    setupApp(app);
-    await app.init();
+    app = await createTestApp();
     prisma = app.get(PRISMA);
 
     for (const key of ['a', 'b'] as const) {

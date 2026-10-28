@@ -1,18 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { INestApplication } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
 import { hash } from '@node-rs/argon2';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
-import { AppModule } from './../src/app.module.js';
 import {
   PRISMA,
   type TenantPrismaClient,
 } from './../src/database/prisma.service.js';
-import { setupApp } from './../src/setup-app.js';
 import { TenantContext } from './../src/tenancy/tenant-context.js';
 import { TenantViolationError } from './../src/tenancy/tenant.errors.js';
-import { ownerPool, purgeTenants } from './helpers.js';
+import { createTestApp, ownerPool, purgeTenants } from './helpers.js';
 
 const PASSWORD = 'Sifre-12345';
 const UA = 'audit-e2e/1.0';
@@ -85,12 +82,7 @@ describe('Audit log (e2e)', () => {
     ).body as { data: AuditRow[]; meta: Record<string, number> };
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-    app = moduleRef.createNestApplication();
-    setupApp(app);
-    await app.init();
+    app = await createTestApp();
     prisma = app.get(PRISMA);
 
     ownerA = await register(a);
