@@ -52,6 +52,7 @@ export class AuthRepository {
         expiresAt: true,
         revokedAt: true,
         replacedById: true,
+        createdAt: true,
       },
     });
   }
@@ -128,6 +129,22 @@ export class AuthRepository {
     const { count } = await db.refreshToken.updateMany({
       where: { id, revokedAt: null },
       data: { revokedAt: new Date(), replacedById },
+    });
+    return count === 1;
+  }
+
+  /**
+   * Undoes a tenant switch's revocation (INF-18): reactivates the old token
+   * only while its successor is exactly `successorId`. Returns false otherwise.
+   */
+  async restoreSwitchedRefreshToken(
+    db: PrismaTx,
+    id: string,
+    successorId: string,
+  ): Promise<boolean> {
+    const { count } = await db.refreshToken.updateMany({
+      where: { id, replacedById: successorId, revokedAt: { not: null } },
+      data: { revokedAt: null, replacedById: null },
     });
     return count === 1;
   }
