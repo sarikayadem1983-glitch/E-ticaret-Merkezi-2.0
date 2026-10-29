@@ -55,7 +55,7 @@ Son güncelleme: 2026-10-29 (`origin/main` @ `95b5bdb`: PR #6, #8, #9 merge edil
 | ID | Görev | Öncelik | Bağımlılık | Tahmin | Mod | Sürüm | Durum | Kabul kriteri | Test | Güvenlik riski | Kaynak |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | INF-09 | Kuyruk altyapısı (BullMQ/Redis): tenant context taşıyan job, retry/backoff, ölü kuyruk, idempotency anahtarı | P0 | PR #6 merge | 3 | CRITICAL | A | DONE-PR (PR #14) | Job tenant context'i olmadan çalışamaz; başarısız iş ölü kuyrukta görünür | U, E, S | Yüksek (job'da tenant sızıntısı) | Öneri (onay bekliyor) |
-| INF-10 | CI pipeline (GitHub Actions): lint, typecheck, unit, e2e (servis konteynerli PG/Redis), frontend test; PR'da zorunlu kontrol | P0 | — | 2 | STANDARD | A | DONE-PR (PR #11) | PR'da tüm kontroller otomatik koşar; kırmızı PR merge edilemez | CI | Orta (CI'da secret) | Öneri (onay bekliyor) |
+| INF-10 | CI pipeline (GitHub Actions): lint, typecheck, unit, e2e (servis konteynerli PG/Redis), frontend test; PR'da zorunlu kontrol | P0 | — | 2 | STANDARD | A | DONE-NOT-DEPLOYED (PR #11, merge `9c405bd`) | PR'da tüm kontroller otomatik koşar; kırmızı PR merge edilemez | CI | Orta (CI'da secret) | Öneri (onay bekliyor) |
 | INF-11 | Staging ortamı ve deploy pipeline (migration `migrate deploy` adımı, onay kapısı, geri dönüş) | P1 | INF-10 | 4 | CRITICAL | B | PLANNED | Tek komut/iş akışıyla staging deploy; rollback denenmiş | Smoke | Yüksek | Öneri (onay bekliyor) |
 | INF-12 | Nesne depolama (S3 uyumlu; dev'de MinIO): tenant önekli anahtar, imzalı URL | P0 | — | 2 | STANDARD | A | PLANNED | Bir tenant başka tenant'ın nesnesine imzalı URL üretemez | U, E, S | Orta | Öneri (onay bekliyor) |
 | INF-13 | Secret yönetimi ve yapılandırma doğrulaması (prod'da secret manager) | P1 | INF-11 | 2 | CRITICAL | B | PLANNED | Eksik/zayıf secret ile uygulama açılmaz | U | Yüksek | Öneri (onay bekliyor) |
@@ -68,7 +68,7 @@ Son güncelleme: 2026-10-29 (`origin/main` @ `95b5bdb`: PR #6, #8, #9 merge edil
 | INF-15 | CAPTCHA (kayıt + tekrarlı başarısız login) ve sızmış şifre kontrolü (HIBP k-anonymity) | P1 | — | 2 | STANDARD | B | PLANNED | `SECURITY.md` §4 maddeleri kapanır | U, E | Orta | Öneri (onay bekliyor) |
 | INF-16 | Nonce tabanlı CSP (`unsafe-inline` kaldırılır) | P1 | — | 2 | STANDARD | B | PLANNED | `script-src` nonce'lu; sayfalar çalışır | F, P | Orta (XSS) | Öneri (onay bekliyor) |
 | INF-17 | Prod ağ/TLS yapılandırması: `TRUST_PROXY`, `BFF_TRUST_PROXY`, backend yalnız iç ağ, HTTPS | P0 | INF-11 | 2 | CRITICAL | B | PLANNED | `req.ip` gerçek istemci IP'si; backend internetten erişilemez | Smoke, S | Yüksek | Öneri (onay bekliyor) |
-| INF-18 | Mağaza değiştirmede Redis hatası: sahte "token hırsızlığı" audit'i ve tüm cihazlardan çıkışın önlenmesi | P0 | PR #6 merge | 2 | CRITICAL | A | DONE-PR (PR #10) | Switch sırasında Redis hatası → istek 503, refresh zinciri bozulmaz, `REFRESH_REUSE` audit'i yazılmaz | U, E (Redis hata enjeksiyonu) | Yüksek | Öneri (onay bekliyor) |
+| INF-18 | Mağaza değiştirmede Redis hatası: sahte "token hırsızlığı" audit'i ve tüm cihazlardan çıkışın önlenmesi | P0 | PR #6 merge | 2 | CRITICAL | A | DONE-NOT-DEPLOYED (PR #10, merge `113b522`) | Switch sırasında Redis hatası → istek 503, refresh zinciri bozulmaz, `REFRESH_REUSE` audit'i yazılmaz | U, E (Redis hata enjeksiyonu) | Yüksek | Öneri (onay bekliyor) |
 | INF-19 | BFF `forceRefresh` yarışı (`stillNeeded`) nedeniyle oturum kapanması | P1 | PR #6 merge | 2 | CRITICAL | B | PLANNED | Eşzamanlı iki istek tek refresh yapar, oturum açık kalır | F, P | Orta | Öneri (onay bekliyor) |
 | INF-20 | Kayıtta `409` ile hesap varlığının sızması (kullanıcı numaralandırma) | P1 | USR-T9 | 1 | CRITICAL | B | PLANNED | Var olan e-postayla kayıt aynı yanıtı döner, sahibine e-posta gider | E, S | Orta | Öneri (onay bekliyor) |
 
@@ -393,7 +393,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 
 ## Sürümlere göre görev listeleri
 
-### Sürüm A — MVP: Trendyol-only (57 görev: 20 tamamlandı + 37 kalan; kalan tahmin 106,5 iş günü; 18 EPIC)
+### Sürüm A — MVP: Trendyol-only (57 görev: 22 tamamlandı + 35 kalan; kalan tahmin 102,5 iş günü; 18 EPIC)
 
 | ID | Görev | Durum | Tahmin | Mod | Kaynak |
 |---|---|---|---|---|---|
@@ -406,9 +406,9 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | INF-07 | Next.js BFF: Redis oturumu, CSRF, açık proxy koruması, güvenlik başlıkları | DONE-MERGED (PR #4) | — | CRITICAL | Onaylı plan |
 | INF-08 | Yetkisiz erişim / oturum süresi e2e testleri, PR otomasyon kuralları | DONE-MERGED (PR #5) | — | FAST | Onaylı plan |
 | INF-09 | Kuyruk altyapısı (BullMQ/Redis): tenant context taşıyan job, retry/backoff, ölü kuyruk, idempotency anahtarı | DONE-PR (PR #14) | 3 | CRITICAL | Öneri (onay bekliyor) |
-| INF-10 | CI pipeline (GitHub Actions): lint, typecheck, unit, e2e (servis konteynerli PG/Redis), frontend test; PR'da zorunlu kontrol | DONE-PR (PR #11) | 2 | STANDARD | Öneri (onay bekliyor) |
+| INF-10 | CI pipeline (GitHub Actions): lint, typecheck, unit, e2e (servis konteynerli PG/Redis), frontend test; PR'da zorunlu kontrol | DONE-NOT-DEPLOYED (PR #11, merge `9c405bd`) | 2 | STANDARD | Öneri (onay bekliyor) |
 | INF-12 | Nesne depolama (S3 uyumlu; dev'de MinIO): tenant önekli anahtar, imzalı URL | PLANNED | 2 | STANDARD | Öneri (onay bekliyor) |
-| INF-18 | Mağaza değiştirmede Redis hatası: sahte "token hırsızlığı" audit'i ve tüm cihazlardan çıkışın önlenmesi | DONE-PR (PR #10) | 2 | CRITICAL | Öneri (onay bekliyor) |
+| INF-18 | Mağaza değiştirmede Redis hatası: sahte "token hırsızlığı" audit'i ve tüm cihazlardan çıkışın önlenmesi | DONE-NOT-DEPLOYED (PR #10, merge `113b522`) | 2 | CRITICAL | Öneri (onay bekliyor) |
 | USR-01 | Tenant-scoped firma (company) API | DONE-MERGED (PR #3) | — | CRITICAL | Onaylı plan |
 | USR-02 | Firma ekranları (liste, detay, oluştur, düzenle) | DONE-MERGED (PR #4) | — | STANDARD | Onaylı plan |
 | USR-T1 | Aşama 1 migration SQL'i, ön kontroller, doğrulama sorguları (`20261029090000_tenant_memberships`) | DONE-NOT-DEPLOYED (PR #6; merge `f1be19a`) | — | CRITICAL | Onaylı plan |
@@ -557,12 +557,12 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | EPIC | 33 |
 | Görev | 139 (133 + 6 MVP dilimi: USR-T9a, T10a, T11a, T12a, T13a, T15a) |
 | DONE-MERGED | 11 |
-| DONE-PR | 6 (INF-18 #10, INF-10 #11, USR-T9a #12, CAT-01 #13, INF-09 #14, USR-T10a #15) |
-| DONE-NOT-DEPLOYED | 9 (USR-T1…T8, USR-17; PR #6, #8, #9) |
+| DONE-PR | 4 (USR-T9a #12, CAT-01 #13, INF-09 #14, USR-T10a #15) |
+| DONE-NOT-DEPLOYED | 11 (USR-T1…T8, USR-17; PR #6, #8, #9; INF-10 #11, INF-18 #10) |
 | IN-PROGRESS | 0 |
 | BLOCKED | 1 (USR-18) |
 | PLANNED | 112 |
-| Sürüm A | 57 görev (20 tamamlandı + 37 kalan), 18 EPIC, kalan 106,5 iş günü |
+| Sürüm A | 57 görev (22 tamamlandı + 35 kalan), 18 EPIC, kalan 102,5 iş günü |
 | Sürüm B | 61 görev (0 tamamlandı + 61 kalan), 23 EPIC, kalan 188,5 iş günü |
 | Sürüm C | 21 görev (0 tamamlandı + 21 kalan), 9 EPIC, kalan 87 iş günü |
 | Mod: CRITICAL / STANDARD / FAST | 54 / 78 / 7 |

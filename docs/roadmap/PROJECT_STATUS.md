@@ -7,12 +7,12 @@ Son güncelleme: 2026-10-29 (PR #6, #8, #9 merge edildi) · Kaynak: `origin/main
 | Ölçü | Değer |
 |---|---|
 | Toplam EPIC / görev | 33 / 139 (133 + 6 kullanıcı yönetimi MVP dilimi) |
-| Tamamlanan | 20 (%14,4) — 11 `DONE-MERGED` (dev'de), 9 `DONE-NOT-DEPLOYED` (USR-T1…T8, USR-17; `main`'de, dev'e deploy edilmedi) |
+| Tamamlanan | 22 (%15,8) — 11 `DONE-MERGED` (dev'de), 11 `DONE-NOT-DEPLOYED` (USR-T1…T8, USR-17, INF-10, INF-18; `main`'de, dev'e deploy edilmedi) |
 | BLOCKED | 1 — USR-18 (T16 + Aşama 2 migration onayı) |
-| Sürüm A (Trendyol-only MVP) ilerleme | 20 / 57 görev merge edildi + 6 görev PR'da (merge bekliyor); merge sayımıyla kalan 37 görev, 106,5 iş günü (6 PR merge edilirse 31 görev, 92 iş günü; betikle sayıldı); tahmini hedef 2027-02-03 (taahhüt değil) |
+| Sürüm A (Trendyol-only MVP) ilerleme | 22 / 57 görev merge edildi (11 dev'de değil) + 4 görev PR'da; kalan 35 görev, 102,5 iş günü (4 PR merge edilirse 31 görev, 92 iş günü); tahmini hedef 2027-02-03 (taahhüt değil) |
 | Sürüm B / C | 61 / 21 görev |
-| Açık PR | #7 roadmap (draft) · #11 INF-10 → `main` · #10 INF-18, #12 USR-T9a, #13 CAT-01, #14 INF-09 → `chore/inf-10-ci` · #15 USR-T10a → `feature/usr-t9a-mail`. Hepsinde CI ✓; CRITICAL olanlarda bağımsız inceleme temiz. Hiçbiri merge edilmedi; önerilen sıra #11 → #10 → #12 → #15 → #13 → #14. Migration: yalnızca CAT-01 (`20261029120000_catalog_schema`), yalnızca izole DB'de denendi |
-| `origin/main` | `95b5bdb` (PR #9 merge; #6 `f1be19a`, #8 `cc8b72a`) |
+| Açık PR | #7 roadmap (draft) · #12 USR-T9a, #13 CAT-01, #14 INF-09 → `main` · #15 USR-T10a → `feature/usr-t9a-mail`. Hepsinde CI ✓, `MERGEABLE`/`CLEAN`; CRITICAL olanlarda bağımsız inceleme temiz. Önerilen sıra #12 → #15 → #13 → #14. Migration: yalnızca CAT-01 (`20261029120000_catalog_schema`), yalnızca izole DB'de denendi |
+| `origin/main` | `113b522` (PR #10 merge; #11 `9c405bd`). `main` CI ✓: backend unit 211/211, e2e 184/184, frontend 84/84 |
 | Dev ortamı | Son deploy edilen kod `eda38da` (Task 4). `main` dev'e deploy edilmedi (kullanıcı onayı gerekir) |
 | Dev DB şeması | Aşama 1 migration `20261029090000_tenant_memberships` uygulanmış (kullanıcı onayıyla); PR #6/#8/#9 yeni migration getirmez |
 | Son testler (`main` @ `95b5bdb`, izole PG/Redis) | backend unit 211/211, e2e 173/173, build ok; frontend 81/81, lint ok, typecheck ok, `next build` ok; Playwright 13/13 yalnızca `next dev` ile — `next start` (prod modu, http) 11/13: `APP_ORIGIN` https koruması, bkz. R-24 |
@@ -82,14 +82,14 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 | R-01 | Kritik | Aşama 2 migration'ı (`users.is_active`, `users.tenant_id` kaldırma) guard ve login/refresh hâlâ `users.is_active` okurken çalıştırılırsa tüm girişler bozulur veya pasif kullanıcı kontrolü kaybolur (`backend/src/auth/user-state.ts`, `auth.repository.ts`) | Aşama 2 uygulanmadı, `migrations-pending/`'de | USR-18 (önce kod, sonra migration, onay) |
 | R-02 | Kritik | Prod öncesi otomatik yedek, PITR ve geri yükleme tatbikatı yok; şu an yalnızca elle çalışan betik var | Açık | OPS-03 |
 | R-03 | Yüksek | Firma rolü yetki sınırları henüz uygulanmıyor: `user_company_roles` var ama companies modülü firma bazlı izin kontrol etmiyor; davet/kullanıcı yönetimi gelince yetki yükseltme yüzeyi açılır | USR-T7/T8 `main`'de (firma rolü kontrolü var); davet/kullanıcı yönetimi gelince yüzey açılır | USR-T14 |
-| R-04 | Yüksek | (PR #10'da düzeltildi, merge bekliyor) Mağaza değiştirme sırasında Redis çökerse refresh zinciri yeniden kullanım (token hırsızlığı) olarak algılanabilir → sahte audit kaydı ve kullanıcının tüm cihazlardan çıkışı | Açık | INF-18 |
+| R-04 | Yüksek | (Kapandı: PR #10 merge `113b522`, dev'e deploy edilmedi) Mağaza değiştirme sırasında Redis çökerse refresh zinciri yeniden kullanım (token hırsızlığı) olarak algılanabilir → sahte audit kaydı ve kullanıcının tüm cihazlardan çıkışı | Açık | INF-18 |
 | R-05 | Yüksek | Redis tek nokta: rate limiting ve BFF oturumu fail-closed; Redis kesintisinde kimse giriş yapamaz | Dev'de tek Redis | INF-14 |
 | R-06 | Yüksek | Tenant izolasyonu yeni modüllerde ihlal edilebilir (her yeni tablo/sorgu, kuyruk job'ları, ai-engine istekleri) | Prisma eklentisi + izin listesi testi var; job'lar için yok | INF-09, her modülde S testleri, USR-T14 |
 | R-07 | Yüksek | Prod ağ/TLS/proxy yapılandırması yanlışsa IP rate limit herkesi birlikte engeller veya backend internete açılır | Prod yok | INF-17 |
 | R-08 | Orta | BFF `forceRefresh` `stillNeeded` yarışı: eşzamanlı isteklerde oturum kapanabilir (kabul edilmiş, düzeltilmedi; MVP'den B'ye ertelendi, pilotta kabul edilmiş risk) | Açık | INF-19 |
 | R-09 | Orta | Kayıtta `409` yanıtı e-postanın kayıtlı olduğunu sızdırır (kullanıcı numaralandırma) | Açık | INF-20 |
 | R-10 | Orta | CSP `script-src 'unsafe-inline'` | Açık | INF-16 |
-| R-11 | Orta | CI yok; testler yalnızca yerelde koşuyor, kırık kod merge edilebilir | Açık | INF-10 |
+| R-11 | Orta | CI var (PR #11); zorunlu kontrol (branch protection) henüz açık değil — depo ayarı, kullanıcı | Kısmen | INF-10 + depo ayarı |
 | R-12 | Orta | Dev ortamı `main`'in gerisinde (`eda38da`; T5–T8 ve USR-17 dev'de yok) | Açık | §3 dev deploy (onay) |
 | R-13 | Orta | CAPTCHA ve sızmış şifre kontrolü yok | Açık | INF-15 |
 | R-14 | Düşük | `origin/HEAD` `feature/backend-setup`'a işaret ediyor, PR'lar `main`'e gidiyor; yerel `main` dalı `origin/main`'in gerisinde — yanlış hedef dal riski | Açık | Depo ayarı: varsayılan dalı `main` yap (kullanıcı) |
