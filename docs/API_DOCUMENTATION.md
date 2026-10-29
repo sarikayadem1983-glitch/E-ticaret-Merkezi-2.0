@@ -133,11 +133,19 @@ Yetki: Bearer token
 Yanıt: `200` register ile aynı (`TokenPair`)
 Hatalar: `401` `INVALID_REFRESH_TOKEN` (token yok, iptal edilmiş, süresi dolmuş, başka kullanıcının/mağazanın), `404` `TENANT_NOT_FOUND` (hedefte aktif üyelik yok, üyelik pasif, mağaza pasif veya yok — ayrım yapılmaz; token üretilmez, mevcut oturum geçerli kalır; üyelik satırı işlem içinde `FOR SHARE` ile yeniden okunur, eş zamanlı pasife alma da `404` verir), `422` (geçersiz gövde veya hedef zaten mevcut mağaza; token döndürülmez, audit yazılmaz)
 
+### POST /api/v1/auth/switch-tenant/abort
+Açıklama: Yalnızca BFF kullanır. `switch-tenant` başarılı olduktan sonra BFF yeni oturumu saklayamazsa (ör. Redis hatası) değişikliği geri alır, böylece eski oturum çalışmaya devam eder ve tekrar kullanım alarmı (`TOKEN_REUSE_DETECTED`) tetiklenmez (INF-18). Tek transaction'da: yeni (hedef mağaza) refresh token halefsiz iptal edilir, eski token'ın iptali ve `replaced_by_id`'si temizlenir. `last_tenant_id` eski mağazaya döner. Eski mağazadaki `auth_version` artışı geri alınmaz: eski access token bir kez `TOKEN_STALE` alır, eski refresh token ile yenilenir. Her iki mağazaya `TENANT_SWITCH` audit kaydı yazılır (`after: { fromTenantId, toTenantId, aborted: true }`).
+Koşullar (hepsi): iki token da var ve aynı kullanıcının; eski token'ın halefi tam olarak yeni token; yeni token hiç kullanılmamış (iptal edilmemiş, halefi yok) ve en fazla 60 sn önce üretilmiş; iki token'ın da süresi dolmamış.
+Yetki: Yok (`@Public`). İki refresh token'a birden sahip olmak gerekir. Redis kullanmaz ve rate limit uygulanmaz: geri alma tam Redis kesintisinde gerekir; token'lar 384 bit rastgeledir.
+İstek: `{ "refreshToken": "<yeni>", "previousRefreshToken": "<eski>" }`
+Yanıt: `204`
+Hatalar: `401` `INVALID_REFRESH_TOKEN` (koşullardan biri sağlanmıyor; hiçbir şey değişmez, tekrar kullanım alarmı verilmez), `422` (geçersiz gövde)
+
 ### BFF: POST /api/session/tenant
-Açıklama: Tarayıcının mağaza değiştirme çağrısı. CSRF kontrolü (§5 SECURITY.md) uygulanır. Backend `switch-tenant` başarılıysa yeni token'lar her zaman yeni oturum kimliğiyle saklanır (kimlik `auth/me`'den, o başarısızsa access token'ın `sub`/`tid` claim'lerinden), eski oturum kimliği silinir (eski refresh token backend'de iptal edildiği için asla kullanımda kalmaz), yeni oturum kimliği cookie olarak verilir, seçili firma sıfırlanır; mutlak oturum süresi ilk girişten saymaya devam eder.
+Açıklama: Tarayıcının mağaza değiştirme çağrısı. CSRF kontrolü (§5 SECURITY.md) uygulanır. Backend `switch-tenant` başarılıysa yeni token'lar her zaman yeni oturum kimliğiyle saklanır (kimlik `auth/me`'den, o başarısızsa access token'ın `sub`/`tid` claim'lerinden), eski oturum kimliği silinir (eski refresh token backend'de iptal edildiği için asla kullanımda kalmaz; silme başarısız olursa kayıt TTL ile düşer), yeni oturum kimliği cookie olarak verilir, seçili firma sıfırlanır; mutlak oturum süresi ilk girişten saymaya devam eder.
 İstek: `{ "tenantId": "<uuid>" }`
 Yanıt: `204` (gövde yok, token dönmez)
-Hatalar: `401` (oturum yok; veya yeni oturum kurulamadı — eski oturum silinir), `403` (CSRF), `404` (backend'den aynen; oturum değişmez), `415`, `422`, `503` (aynı oturumda token yenileme sürüyor, `Retry-After: 1`)
+Hatalar: `401` (oturum yok; veya yeni oturum kurulamadı — eski oturum silinir), `403` (CSRF), `404` (backend'den aynen; oturum değişmez), `415`, `422`, `503` (aynı oturumda token yenileme sürüyor, `Retry-After: 1`; veya oturum deposu (Redis) hatası. Hata backend değişikliğinden sonra yeni oturum yazılmadan olursa BFF `switch-tenant/abort` ile değişikliği geri alır: eski oturum ve cookie aynen kalır, tekrar kullanım alarmı oluşmaz; geri alma da başarısızsa cookie silinir ve kullanıcı yeniden giriş yapar)
 
 ### GET /api/v1/companies
 Açıklama: Firmalar, unvana göre sıralı. `companies:all` izni olmayan kullanıcı yalnızca atandığı firmaları görür.

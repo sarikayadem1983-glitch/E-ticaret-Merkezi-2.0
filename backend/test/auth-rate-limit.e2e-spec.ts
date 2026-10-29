@@ -274,6 +274,18 @@ describe('Auth rate limiting with Redis down (e2e)', () => {
     expect(JSON.stringify(res.body)).not.toMatch(/redis|ECONNREFUSED|stream/i);
   });
 
+  it('switch-tenant/abort does not depend on Redis (INF-18)', async () => {
+    // Unknown tokens: 401 from the database check, not 503 from the limiter.
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/auth/switch-tenant/abort')
+      .send({
+        refreshToken: 'x'.repeat(43),
+        previousRefreshToken: 'y'.repeat(43),
+      });
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe('INVALID_REFRESH_TOKEN');
+  });
+
   it('keeps unrelated endpoints working', async () => {
     await request(app.getHttpServer()).get('/api/v1/health').expect(200);
   });

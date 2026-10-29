@@ -52,6 +52,7 @@ export class AuthRepository {
         expiresAt: true,
         revokedAt: true,
         replacedById: true,
+        createdAt: true,
       },
     });
   }
@@ -100,6 +101,19 @@ export class AuthRepository {
     });
   }
 
+  /**
+   * System context only. Row-locks the user until the transaction ends, so
+   * reuse handling and a switch abort of the same user never interleave
+   * (otherwise the bulk revoke could miss a token the abort reactivates).
+   */
+  lockUser(db: PrismaTx, userId: string) {
+    return db.user.update({
+      where: { id: userId },
+      data: { updatedAt: new Date() },
+      select: { id: true },
+    });
+  }
+
   /** System context only: the store the next login opens by default. */
   setLastTenant(userId: string, tenantId: string) {
     return this.prisma.user.update({
@@ -128,6 +142,22 @@ export class AuthRepository {
     const { count } = await db.refreshToken.updateMany({
       where: { id, revokedAt: null },
       data: { revokedAt: new Date(), replacedById },
+    });
+    return count === 1;
+  }
+
+  /**
+   * Undoes a tenant switch's revocation (INF-18): reactivates the old token
+   * only while its successor is exactly `successorId`. Returns false otherwise.
+   */
+  async restoreSwitchedRefreshToken(
+    db: PrismaTx,
+    id: string,
+    successorId: string,
+  ): Promise<boolean> {
+    const { count } = await db.refreshToken.updateMany({
+      where: { id, replacedById: successorId, revokedAt: { not: null } },
+      data: { revokedAt: null, replacedById: null },
     });
     return count === 1;
   }

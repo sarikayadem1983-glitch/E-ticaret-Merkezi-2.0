@@ -1011,6 +1011,301 @@ describe('API (e2e)', () => {
       expect(alarms.length).toBeGreaterThan(0);
     });
 
+    describe('switch-tenant/abort (INF-18: BFF could not store the new session)', () => {
+      const abort = (refreshToken: string, previousRefreshToken: string) =>
+        http()
+          .post('/api/v1/auth/switch-tenant/abort')
+          .send({ refreshToken, previousRefreshToken });
+
+      const alarmCount = async () =>
+        (
+          await sql(
+            `SELECT 1 FROM audit_logs WHERE entity_id = $1 AND action = 'TOKEN_REUSE_DETECTED'`,
+            [userId],
+          )
+        ).length;
+
+      it('restores the old session without the reuse alarm', async () => {
+        const session = await loginA();
+        const switched = (await switchTo(session, tenantB).expect(200)).body
+          .data;
+        const alarmsBefore = await alarmCount();
+
+        await abort(switched.refreshToken, session.refreshToken).expect(204);
+
+        // The old access token went stale with the switch; the old refresh
+        // token works again and stays in A.
+        await http()
+          .get('/api/v1/auth/me')
+          .set('Authorization', `Bearer ${session.accessToken}`)
+          .expect(401);
+        const refreshed = await http()
+          .post('/api/v1/auth/refresh')
+          .send({ refreshToken: session.refreshToken })
+          .expect(200);
+        expect(claims(refreshed.body.data.accessToken).tid).toBe(tenantA);
+        await http()
+          .get('/api/v1/auth/me')
+          .set('Authorization', `Bearer ${refreshed.body.data.accessToken}`)
+          .expect(200);
+        // The token issued by the switch is dead, without an alarm either.
+        await http()
+          .post('/api/v1/auth/refresh')
+          .send({ refreshToken: switched.refreshToken })
+          .expect(401);
+        expect(await alarmCount()).toBe(alarmsBefore);
+        // The next login opens the store the user stayed in.
+        const relogin = await http()
+          .post('/api/v1/auth/login')
+          .send({ email, password: PASSWORD })
+          .expect(200);
+        expect(claims(relogin.body.data.accessToken).tid).toBe(tenantA);
+
+        const audits = await sql<{ tenant_id: string }>(
+          `SELECT tenant_id FROM audit_logs
+           WHERE entity_id = $1 AND action = 'TENANT_SWITCH'
+             AND after->>'aborted' = 'true' AND created_at > now() - interval '1 minute'`,
+          [userId],
+        );
+        expect(audits.map((a) => a.tenant_id).sort()).toEqual(
+          [tenantA, tenantB].sort(),
+        );
+      });
+
+      it('a replayed abort is 401 and changes nothing', async () => {
+        const session = await loginA();
+        const switched = (await switchTo(session, tenantB).expect(200)).body
+          .data;
+        await abort(switched.refreshToken, session.refreshToken).expect(204);
+        const alarmsBefore = await alarmCount();
+        const res = await abort(switched.refreshToken, session.refreshToken);
+        expect(res.status).toBe(401);
+        expect(res.body.error.code).toBe('INVALID_REFRESH_TOKEN');
+        expect(await alarmCount()).toBe(alarmsBefore);
+        await http()
+          .post('/api/v1/auth/refresh')
+          .send({ refreshToken: session.refreshToken })
+          .expect(200);
+      });
+
+      it('refuses once the new token has been used', async () => {
+        const session = await loginA();
+        const switched = (await switchTo(session, tenantB).expect(200)).body
+          .data;
+        const rotated = await http()
+          .post('/api/v1/auth/refresh')
+          .send({ refreshToken: switched.refreshToken })
+          .expect(200);
+        await abort(switched.refreshToken, session.refreshToken).expect(401);
+        // Nothing changed: the rotated session in B still works.
+        await http()
+          .post('/api/v1/auth/refresh')
+          .send({ refreshToken: rotated.body.data.refreshToken })
+          .expect(200);
+      });
+
+      it('refuses a pair that is not predecessor and successor', async () => {
+        const session = await loginA();
+        const switched = (await switchTo(session, tenantB).expect(200)).body
+          .data;
+        const other = await loginA();
+        // Unrelated predecessor: nothing is restored or revoked.
+        await abort(switched.refreshToken, other.refreshToken).expect(401);
+        // Swapped order.
+        await abort(session.refreshToken, switched.refreshToken).expect(401);
+        // A plain active token cannot be "un-rotated".
+        await abort(other.refreshToken, other.refreshToken).expect(401);
+        await http()
+          .post('/api/v1/auth/refresh')
+          .send({ refreshToken: switched.refreshToken })
+          .expect(200);
+        await http()
+          .post('/api/v1/auth/refresh')
+          .send({ refreshToken: other.refreshToken })
+          .expect(200);
+      });
+
+      it('refuses after a logout of the new session', async () => {
+        const session = await loginA();
+        const switched = (await switchTo(session, tenantB).expect(200)).body
+          .data;
+        await http()
+          .post('/api/v1/auth/logout')
+          .set('Authorization', `Bearer ${switched.accessToken}`)
+          .send({ refreshToken: switched.refreshToken })
+          .expect(204);
+        const alarmsBefore = await alarmCount();
+        await abort(switched.refreshToken, session.refreshToken).expect(401);
+        // The old token stays revoked; presenting it is still the reuse case.
+        const [old] = await sql<{ revoked_at: Date | null }>(
+          'SELECT revoked_at FROM refresh_tokens WHERE token_hash = $1',
+          [TokenService.hash(session.refreshToken)],
+        );
+        expect(old.revoked_at).not.toBeNull();
+        expect(await alarmCount()).toBe(alarmsBefore);
+      });
+
+      it('a restored token of a membership deactivated since is refused without the alarm', async () => {
+        const session = await loginA();
+        const switched = (await switchTo(session, tenantB).expect(200)).body
+          .data;
+        await abort(switched.refreshToken, session.refreshToken).expect(204);
+        await sql(
+          `UPDATE tenant_memberships SET status = 'inactive' WHERE tenant_id = $1 AND user_id = $2`,
+          [tenantA, userId],
+        );
+        const alarmsBefore = await alarmCount();
+        try {
+          await http()
+            .post('/api/v1/auth/refresh')
+            .send({ refreshToken: session.refreshToken })
+            .expect(401);
+          expect(await alarmCount()).toBe(alarmsBefore);
+        } finally {
+          await sql(
+            `UPDATE tenant_memberships SET status = 'active' WHERE tenant_id = $1 AND user_id = $2`,
+            [tenantA, userId],
+          );
+        }
+      });
+
+      /**
+       * Deterministic interleaving of an abort and reuse handling of the same
+       * user (a stolen pre-switch token presented while the abort runs). A
+       * blocker transaction holds a row the first request needs, so it stops
+       * mid-transaction (after locking the user row); the second request then
+       * queues on the user row. Releasing the blocker lets them finish in that
+       * order. Without the user-row lock the bulk revoke would skip the old
+       * token (revoked in its snapshot) and the abort would leave it active.
+       */
+      const interleave = async (
+        holdRow: { sql: string; params: unknown[] },
+        first: () => Promise<{ status: number }>,
+        second: () => Promise<{ status: number }>,
+      ) => {
+        const pool = ownerPool();
+        const blocker = await pool.connect();
+        const waiting = async () =>
+          Number(
+            (
+              await pool.query<{ n: string }>(
+                `SELECT count(*)::text AS n FROM pg_locks WHERE NOT granted`,
+              )
+            ).rows[0].n,
+          );
+        const until = async (n: number, what: string) => {
+          for (let polls = 0; (await waiting()) < n; polls++) {
+            if (polls > 2000) throw new Error(`${what} never waited`);
+          }
+        };
+        try {
+          await blocker.query('BEGIN');
+          await blocker.query(holdRow.sql, holdRow.params);
+          await blocker.query('SELECT pg_current_xact_id()');
+          const base = await waiting();
+          const a = first();
+          await until(base + 1, 'first request');
+          const b = second();
+          await until(base + 2, 'second request');
+          await blocker.query('COMMIT');
+          return { first: await a, second: await b };
+        } finally {
+          await blocker.query('ROLLBACK').catch(() => undefined);
+          blocker.release();
+          await pool.end();
+        }
+      };
+
+      const activeTokens = async () =>
+        (
+          await sql(
+            'SELECT 1 FROM refresh_tokens WHERE user_id = $1 AND revoked_at IS NULL',
+            [userId],
+          )
+        ).length;
+
+      it('race: reuse detected while an abort runs still ends every session', async () => {
+        const session = await loginA();
+        const switched = (await switchTo(session, tenantB).expect(200)).body
+          .data;
+        const alarmsBefore = await alarmCount();
+        // The abort holds the user row and waits on the new token's row.
+        const { first, second } = await interleave(
+          {
+            sql: 'SELECT 1 FROM refresh_tokens WHERE token_hash = $1 FOR UPDATE',
+            params: [TokenService.hash(switched.refreshToken)],
+          },
+          () =>
+            abort(switched.refreshToken, session.refreshToken).then((r) => r),
+          () =>
+            http()
+              .post('/api/v1/auth/refresh')
+              .send({ refreshToken: session.refreshToken })
+              .then((r) => r),
+        );
+        expect(first.status).toBe(204);
+        expect(second.status).toBe(401);
+        // Reuse ran after the abort committed and revoked the reactivated token.
+        expect(await activeTokens()).toBe(0);
+        await http()
+          .post('/api/v1/auth/refresh')
+          .send({ refreshToken: session.refreshToken })
+          .expect(401);
+        expect(await alarmCount()).toBeGreaterThan(alarmsBefore);
+      });
+
+      it('race: an abort queued behind reuse handling rolls back', async () => {
+        const session = await loginA();
+        const switched = (await switchTo(session, tenantB).expect(200)).body
+          .data;
+        // Reuse holds the user row, has revoked every token and waits to bump
+        // the membership the blocker holds.
+        const { first, second } = await interleave(
+          {
+            sql: `SELECT 1 FROM tenant_memberships
+                  WHERE tenant_id = $1 AND user_id = $2 FOR UPDATE`,
+            params: [tenantA, userId],
+          },
+          () =>
+            http()
+              .post('/api/v1/auth/refresh')
+              .send({ refreshToken: session.refreshToken })
+              .then((r) => r),
+          () =>
+            abort(switched.refreshToken, session.refreshToken).then((r) => r),
+        );
+        expect(first.status).toBe(401);
+        expect(second.status).toBe(401);
+        expect(await activeTokens()).toBe(0);
+        await http()
+          .post('/api/v1/auth/refresh')
+          .send({ refreshToken: session.refreshToken })
+          .expect(401);
+      });
+
+      it('refuses after the 60 s window', async () => {
+        const session = await loginA();
+        const switched = (await switchTo(session, tenantB).expect(200)).body
+          .data;
+        await sql(
+          `UPDATE refresh_tokens SET created_at = now() - interval '61 seconds' WHERE token_hash = $1`,
+          [TokenService.hash(switched.refreshToken)],
+        );
+        await abort(switched.refreshToken, session.refreshToken).expect(401);
+        await http()
+          .post('/api/v1/auth/refresh')
+          .send({ refreshToken: switched.refreshToken })
+          .expect(200);
+      });
+
+      it('rejects an invalid body with 422', async () => {
+        await http()
+          .post('/api/v1/auth/switch-tenant/abort')
+          .send({ refreshToken: 'x' })
+          .expect(422);
+      });
+    });
+
     it.each([
       ['a tenant without membership', () => tenantE],
       ['an inactive membership', () => tenantC],
