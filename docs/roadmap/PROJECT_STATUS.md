@@ -9,9 +9,9 @@ Son güncelleme: 2026-10-29 (PR #6, #8, #9 merge edildi) · Kaynak: `origin/main
 | Toplam EPIC / görev | 33 / 139 (133 + 6 kullanıcı yönetimi MVP dilimi) |
 | Tamamlanan | 20 (%14,4) — 11 `DONE-MERGED` (dev'de), 9 `DONE-NOT-DEPLOYED` (USR-T1…T8, USR-17; `main`'de, dev'e deploy edilmedi) |
 | BLOCKED | 1 — USR-18 (T16 + Aşama 2 migration onayı) |
-| Sürüm A (Trendyol-only MVP) ilerleme | 20 / 57 görev; kalan 37 görev, 106,5 iş günü; tahmini hedef 2027-02-03 (taahhüt değil) |
+| Sürüm A (Trendyol-only MVP) ilerleme | 20 / 57 görev merge edildi + 6 görev PR'da (merge bekliyor); merge sayımıyla kalan 37 görev, 106,5 iş günü (6 PR merge edilirse 31 görev, 92 iş günü; betikle sayıldı); tahmini hedef 2027-02-03 (taahhüt değil) |
 | Sürüm B / C | 61 / 21 görev |
-| Açık PR | #7 `docs/master-roadmap` (draft, doküman) · #11 INF-10 CI → `main` (`1016837`, CI ✓) · #10 INF-18 → `chore/inf-10-ci` (`740be6c`, CI ✓, güvenlik incelemesi temiz, deterministik yarış testi) · CAT-01, USR-T9a/T10a, INF-09 geliştiriliyor — hiçbiri merge edilmedi; önerilen merge sırası #11 → #10 |
+| Açık PR | #7 roadmap (draft) · #11 INF-10 → `main` · #10 INF-18, #12 USR-T9a, #13 CAT-01, #14 INF-09 → `chore/inf-10-ci` · #15 USR-T10a → `feature/usr-t9a-mail`. Hepsinde CI ✓; CRITICAL olanlarda bağımsız inceleme temiz. Hiçbiri merge edilmedi; önerilen sıra #11 → #10 → #12 → #15 → #13 → #14. Migration: yalnızca CAT-01 (`20261029120000_catalog_schema`), yalnızca izole DB'de denendi |
 | `origin/main` | `95b5bdb` (PR #9 merge; #6 `f1be19a`, #8 `cc8b72a`) |
 | Dev ortamı | Son deploy edilen kod `eda38da` (Task 4). `main` dev'e deploy edilmedi (kullanıcı onayı gerekir) |
 | Dev DB şeması | Aşama 1 migration `20261029090000_tenant_memberships` uygulanmış (kullanıcı onayıyla); PR #6/#8/#9 yeni migration getirmez |
