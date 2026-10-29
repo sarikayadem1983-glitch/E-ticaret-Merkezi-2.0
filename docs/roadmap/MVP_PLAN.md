@@ -1,5 +1,7 @@
 # MVP Planı (Sürüm A)
 
+> **Onay durumu:** Yalnızca kullanıcı yönetimi planındaki görevler (`USR-T1`…`USR-T16`, plan: `docs/superpowers/plans/2026-10-28-user-management.md`) ve merge edilmiş işler (INF-01…08, USR-01, USR-02, DSH-01) **onaylı plandır**. Diğer tüm modüller, görevler, tahminler ve tarihler **öneridir, kullanıcı onayı beklemektedir**. Her görevin kaynağı `TASK_REGISTER.md`'deki "Kaynak" sütunundadır.
+
 Amaç: pilot satıcının ürünlerini tek yerden yönetip Trendyol ve Hepsiburada'da satabildiği, siparişlerini, stoklarını ve iadelerini işleyebildiği ilk çalışan platform. Çıkış kriterleri: `RELEASE_PLAN.md`.
 
 **Kapsam:** 69 görev — 18 tamamlandı (11 `DONE-MERGED`, 7 `DONE-PR`), 51 kalan, 149 iş günü, hedef 2027-03-19.

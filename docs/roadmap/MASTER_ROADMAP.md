@@ -3,6 +3,8 @@
 Ticaret Merkezi 2.0 — çok kiracılı (multi-tenant) e-ticaret yönetim SaaS'ı.
 Hazırlanma: 2026-10-29, kaynak kod `feature/user-management` @ `946dec0` incelenerek.
 
+> **Onay durumu:** Yalnızca kullanıcı yönetimi planındaki görevler (`USR-T1`…`USR-T16`, plan: `docs/superpowers/plans/2026-10-28-user-management.md`) ve merge edilmiş işler (INF-01…08, USR-01, USR-02, DSH-01) **onaylı plandır**. Diğer tüm modüller, görevler, tahminler ve tarihler **öneridir, kullanıcı onayı beklemektedir**. Her görevin kaynağı `TASK_REGISTER.md`'deki "Kaynak" sütunundadır.
+
 | Doküman | İçerik |
 |---|---|
 | [TASK_REGISTER.md](TASK_REGISTER.md) | Tüm EPIC ve görevler: ID, öncelik, bağımlılık, tahmin, mod, sürüm, durum, kabul kriteri, test, risk |
@@ -91,3 +93,42 @@ Dağılım: 51 CRITICAL, 75 STANDARD, 7 FAST.
 ## 7. Riskler (özet)
 
 Tam liste ve "canlıdan önce mutlaka düzeltilecekler": `PROJECT_STATUS.md` §5. Öne çıkanlar: mağaza değiştirmede Redis hatasının sahte token hırsızlığı ve tüm cihazlardan çıkışa yol açması (INF-18), BFF `forceRefresh` yarışı (INF-19), kayıtta `409` ile hesap varlığı sızıntısı (INF-20), firma rolü yetki sınırlarının henüz uygulanmaması (USR-T7/T8), Aşama 2 öncesi `users.is_active` bağımlılığı (USR-18), prod öncesi yedek/izleme/güvenlik/performans eksikleri (OPS-*, INF-11..17).
+
+## 8. Dış erişim gerektiren entegrasyonlar
+
+Aşağıdaki erişimler kullanıcı tarafından sağlanır. Erişim gelmeden ilgili görev başlatılmaz veya `BLOCKED` olur. Kimlik bilgileri repoya ve sohbete yazılmaz; dev'de `.env`'de (commit edilmez), prod'da secret manager'da tutulur.
+
+| Entegrasyon | Görevler | Gereken erişim | Gerekli olduğu an |
+|---|---|---|---|
+| Trendyol | INT-TY-01…03, STL-01, EFT-04 | Satıcı hesabı, API anahtarı/secret ve satıcı ID'si; stage (test) ortamı erişimi ve IP yetkilendirmesi | Faz 3 öncesi (M2) |
+| Hepsiburada | INT-HB-01…03, STL-01 | Merchant ID, entegrasyon kullanıcısı/şifresi; SIT (test) ortamı erişimi | Faz 4 öncesi (M3) |
+| Amazon Türkiye | INT-AMZ-01…03 | Amazon Seller Central (TR) hesabı, SP-API geliştirici kaydı ve uygulama onayı, LWA client ID/secret; PII için Restricted Data Token rolleri | B başı |
+| n11 | INT-N11-01…03 | Mağaza hesabı, API anahtarı/secret, test mağazası | B |
+| Pazarama | INT-PZR-01…03 | Satıcı hesabı, API client ID/secret, test ortamı | C |
+| ÇiçekSepeti | INT-CS-01…03 | Satıcı hesabı, API anahtarı, test ortamı | C |
+| Temu | INT-TEMU-01…03 | Türkiye satıcı hesabı ve satıcı API erişimi (varlığı doğrulanmadı) | C |
+| Kargo (pazaryeri üzerinden) | SHP-02 | Ek hesap gerekmez; pazaryeri anlaşmalı kargo kullanılır | MVP |
+| Anlaşmalı kargo firmaları (ör. Yurtiçi, Aras, MNG) | SHP-03 | Kurumsal kargo sözleşmesi, müşteri kodu, API kullanıcısı, test ortamı | B |
+| e-Fatura / e-Arşiv özel entegratör | EFT-01…04, SUB-03 | GİB'e kayıtlı özel entegratörle sözleşme, test hesabı ve API kimlik bilgileri; satıcı firmaların e-Fatura mükellefiyeti | B başı (sözleşme M3'te başlatılmalı) |
+| Muhasebe yazılımı | EFT-05 | Hedef yazılımın dışa aktarım formatı veya API erişimi | C |
+| Ödeme sağlayıcı (ör. iyzico, PayTR) | SUB-02, SUB-03 | Üye işyeri başvurusu (şirket evrakı), sandbox ve canlı API anahtarları, webhook imza anahtarı | B başı (başvuru M3'te) |
+| E-posta (SMTP) | USR-T9, USR-19, DSH-03, RPT-03 | Dev: Mailpit (hesap gerekmez). Prod: SMTP/transactional e-posta sağlayıcısı, gönderen alan adı için SPF/DKIM/DMARC | Prod öncesi (B) |
+| LLM sağlayıcı | AIE-01 ve AI görevleri | API anahtarı, tenant başına maliyet bütçesi, veri işleme sözleşmesi (KVKK) | C |
+| CAPTCHA / HIBP | INF-15 | CAPTCHA site/secret anahtarı; HIBP Pwned Passwords (anahtarsız k-anonymity) | B |
+| Barındırma, nesne depolama, izleme | INF-11, INF-12, INF-14, OPS-01, OPS-02 | Bulut hesabı, alan adı, TLS, S3 uyumlu depolama, yönetilen Redis/PostgreSQL, Sentry vb. hesapları | Staging için M4 |
+
+## 9. Doğrulanmamış varsayımlar
+
+Bu yol haritasının şu varsayımları henüz doğrulanmamıştır; yanlış çıkarsa kapsam veya takvim değişir.
+
+1. **Kapsamın kendisi:** USR-T1…T16 dışındaki tüm modüller, görev bölümlemesi, öncelikler ve sürüm atamaları öneridir (kullanıcı onayı bekliyor).
+2. **Temu Türkiye satıcı API'si:** Türkiye satıcıları için açık/erişilebilir bir API olduğu doğrulanmadı. Yoksa INT-E7 iptal edilir veya `BLOCKED` kalır.
+3. **Pazaryeri API kapsamları:** Her pazaryerinin listeleme, stok/fiyat, sipariş, iade, kargo ve finans (hakediş) uçlarını sunduğu ve sandbox verdiği varsayıldı. Özellikle Pazarama, ÇiçekSepeti ve n11 için sandbox varlığı ve hakediş API'si doğrulanmadı.
+4. **Tahminler:** Görev başı iş günü tahminleri, Task 1–6'nın hızından (hazır plan, dış bağımlılık yok) daha temkinli seçildi, ancak yeni modüllerde ölçülmedi. İlk 3–4 yeni modülden sonra yeniden kalibre edilmeli.
+5. **Paralellik:** Aynı anda 2 iş akışı yürütülebileceği ve migration'ların çakışmayacağı varsayıldı.
+6. **Onay gecikmesi:** Her onay kapısı için ortalama 0,5–1 iş günü varsayıldı; daha uzun sürerse takvim doğrudan kayar.
+7. **Dış erişimlerin zamanında gelmesi:** §8'deki hesapların "Gerekli olduğu an" sütunundaki tarihe kadar sağlanacağı varsayıldı.
+8. **MVP'de e-Fatura yok:** Pilot satıcıların MVP döneminde kendi entegratörlerini kullanabileceği varsayıldı. Bu kabul edilmezse EFT-01…03 MVP'ye taşınır (+12 iş günü ve entegratör sözleşmesi gerekir).
+9. **MVP prod gerektirmez:** MVP'nin dev/kontrollü pilot ortamda çalışacağı, prod altyapısının B'de kurulacağı varsayıldı.
+10. **Resmî tatil tarihleri:** 2027 dinî bayram tarihleri yaklaşık alındı.
+11. **Kart verisi:** Ödeme sağlayıcının barındırılan ödeme sayfası/tokenization sunduğu ve sistemin PCI kapsamı dışında kalabileceği varsayıldı.

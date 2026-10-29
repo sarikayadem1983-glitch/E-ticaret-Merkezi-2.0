@@ -1,6 +1,8 @@
 # Sürüm Planı
 
-Görev listeleri `TASK_REGISTER.md`'deki "Sürüm" sütunundan türetilir. Tahmin varsayımları: `MASTER_ROADMAP.md` §6.
+> **Onay durumu:** Yalnızca kullanıcı yönetimi planındaki görevler (`USR-T1`…`USR-T16`, plan: `docs/superpowers/plans/2026-10-28-user-management.md`) ve merge edilmiş işler (INF-01…08, USR-01, USR-02, DSH-01) **onaylı plandır**. Diğer tüm modüller, görevler, tahminler ve tarihler **öneridir, kullanıcı onayı beklemektedir**. Her görevin kaynağı `TASK_REGISTER.md`'deki "Kaynak" sütunundadır.
+
+Görev listeleri `TASK_REGISTER.md`'deki "Sürüm" sütunundan türetilir. Tahmin varsayımları: `MASTER_ROADMAP.md` §6. Sürüm başına tam görev tabloları (durum, tahmin, mod, kaynak): `TASK_REGISTER.md` → "Sürümlere göre görev listeleri".
 
 ## Sürüm A — MVP: ilk çalışan e-ticaret operasyon platformu
 
