@@ -48,11 +48,54 @@ export async function runJob<P>(
     } catch {
       throw unrecoverable(new InvalidJobPayloadError());
     }
-    await handler(payload, { ...meta, tenantId });
+    try {
+      await handler(payload, { ...meta, tenantId });
+    } catch (error) {
+      throw handlerFailure(error);
+    }
   });
 }
 
-/** Keeps the code in the stored failedReason, e.g. "INVALID_JOB_TENANT: ...". */
+/**
+ * BullMQ stores the thrown error's message as failedReason and its stack in
+ * Redis, where they stay with the dead letter. Handler messages may carry
+ * secrets, so only a code is kept: `JOB_FAILED:<code>`, no stack.
+ */
+function handlerFailure(error: unknown): Error {
+  const code =
+    error instanceof UnrecoverableError
+      ? 'UNRECOVERABLE'
+      : error instanceof Error
+        ? errorCode(error)
+        : 'UNKNOWN';
+  const failure =
+    error instanceof UnrecoverableError
+      ? new UnrecoverableError(`JOB_FAILED:${code}`)
+      : new Error(`JOB_FAILED:${code}`);
+  return withoutStack(failure);
+}
+
+/** Refusals store only their code, e.g. "INVALID_JOB_TENANT". */
 function unrecoverable(error: Error & { code: string }): UnrecoverableError {
-  return new UnrecoverableError(`${error.code}: ${error.message}`);
+  return withoutStack(new UnrecoverableError(error.code));
+}
+
+function withoutStack<E extends Error>(error: E): E {
+  error.stack = '';
+  return error;
+}
+
+const CODE = /^[A-Z][A-Z0-9_]{0,63}$/;
+/** Messages this module produces: `CODE` or `JOB_FAILED:<code>`. */
+const OWN_MESSAGE = /^[A-Z][A-Z0-9_]{0,63}(:[A-Za-z0-9_]{1,64})?$/;
+
+/**
+ * A safe error code: the error's `code` when it looks like one (e.g. ETIMEDOUT),
+ * our own code-only message, else the class name. Never the free-text message.
+ */
+export function errorCode(error: Error): string {
+  const code = (error as { code?: unknown }).code;
+  if (typeof code === 'string' && CODE.test(code)) return code;
+  if (OWN_MESSAGE.test(error.message)) return error.message;
+  return /^[A-Za-z0-9_]{1,64}$/.test(error.name) ? error.name : 'Error';
 }

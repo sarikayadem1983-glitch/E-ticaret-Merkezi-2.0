@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
 import request from 'supertest';
@@ -13,6 +14,7 @@ import { QUEUE_PREFIX } from './../src/queue/queue.connection.js';
 import { QueueService } from './../src/queue/queue.service.js';
 import { defineJob, type JobContext } from './../src/queue/queue.types.js';
 import { TenantContext } from './../src/tenancy/tenant-context.js';
+import { TenantsService } from './../src/tenants/tenants.service.js';
 import { createTestApp, ownerPool, purgeTenants } from './helpers.js';
 
 const PASSWORD = 'Correct-Horse-9';
@@ -179,7 +181,7 @@ describe('Queue (e2e)', () => {
       await until(async () => (await raw.getJobState(added.id!)) === 'failed');
       const job = await raw.getJob(added.id!);
       expect(job!.attemptsMade).toBe(1);
-      expect(job!.failedReason).toMatch(/^INVALID_JOB_TENANT/);
+      expect(job!.failedReason).toBe('INVALID_JOB_TENANT');
       expect(handler).not.toHaveBeenCalled();
     });
 
@@ -188,13 +190,13 @@ describe('Queue (e2e)', () => {
         queue.enqueue(def, {}, { idempotencyKey: 'off' }),
       );
       const dead = await until(async () => {
-        const list = await asTenant(2, () => queue.deadLetters(def));
-        return list.length ? list : undefined;
+        const { items } = await asTenant(2, () => queue.deadLetters(def));
+        return items.length ? items : undefined;
       });
       expect(dead[0]).toMatchObject({
         tenantId: tenants[2],
         attemptsMade: 1,
-        failedReason: expect.stringMatching(/^INVALID_JOB_TENANT/),
+        errorCode: 'INVALID_JOB_TENANT',
       });
       expect(handler).not.toHaveBeenCalled();
     });
@@ -214,8 +216,8 @@ describe('Queue (e2e)', () => {
 
     await asTenant(0, () => queue.enqueue(def, {}, { idempotencyKey: 'r1' }));
     const dead = await until(async () => {
-      const list = await asTenant(0, () => queue.deadLetters(def));
-      return list.length ? list : undefined;
+      const { items } = await asTenant(0, () => queue.deadLetters(def));
+      return items.length ? items : undefined;
     }, 15_000);
 
     expect(runs.map((r) => r.attempt)).toEqual([1, 2, 3]);
@@ -223,10 +225,27 @@ describe('Queue (e2e)', () => {
     expect(runs[1].at - runs[0].at).toBeGreaterThanOrEqual(180);
     expect(runs[2].at - runs[1].at).toBeGreaterThanOrEqual(380);
     expect(dead).toHaveLength(1);
-    expect(dead[0]).toMatchObject({ tenantId: tenants[0], attemptsMade: 3 });
+    expect(dead[0]).toMatchObject({
+      tenantId: tenants[0],
+      attemptsMade: 3,
+      errorCode: 'JOB_FAILED:Error',
+    });
+
+    // Redis keeps only the code: no handler message, no stack trace.
+    const redis = new Redis(process.env.REDIS_URL!);
+    const stored = await redis.hgetall(
+      `${QUEUE_PREFIX}:${def.name}:${dead[0].id}`,
+    );
+    await redis.quit();
+    expect(stored.failedReason).toBe('JOB_FAILED:Error');
+    expect(JSON.stringify(stored)).not.toContain('secret-should-not');
+    expect(JSON.parse(stored.stacktrace ?? '[]')).toEqual([]);
 
     // Other tenants cannot see it.
-    expect(await asTenant(1, () => queue.deadLetters(def))).toEqual([]);
+    expect(await asTenant(1, () => queue.deadLetters(def))).toEqual({
+      items: [],
+      nextCursor: undefined,
+    });
 
     // A dead letter can be retried by its own tenant.
     await expect(
@@ -286,6 +305,68 @@ describe('Queue (e2e)', () => {
     expect(keys.every((k) => k.startsWith('queue:'))).toBe(true);
   });
 
+  it("one tenant's mass failures do not change another's dead letters", async () => {
+    const def = defineJob<{ n: number }>({ name: qn('mass'), attempts: 1 });
+    queue.register(def, async () => {
+      throw new Error('boom');
+    });
+    const raw = new Queue(def.name, {
+      connection: { url: process.env.REDIS_URL },
+      prefix: QUEUE_PREFIX,
+    });
+    // 300 failures for tenant 0 written in bulk, 2 for tenant 1.
+    await raw.addBulk(
+      Array.from({ length: 300 }, (_, n) => ({
+        name: def.name,
+        data: { tenantId: tenants[0], payload: { n } },
+        opts: { attempts: 1, stackTraceLimit: 0 },
+      })),
+    );
+    await asTenant(1, () =>
+      queue.enqueue(def, { n: -1 }, { idempotencyKey: 'm1' }),
+    );
+    await asTenant(1, () =>
+      queue.enqueue(def, { n: -2 }, { idempotencyKey: 'm2' }),
+    );
+    await until(async () => (await raw.getFailedCount()) === 302, 30_000);
+    await raw.close();
+
+    const b = await asTenant(1, () => queue.deadLetters(def));
+    expect(b.items.map((d) => d.payload?.n ?? 0).sort((x, y) => x - y)).toEqual(
+      [-2, -1],
+    );
+    expect(b.nextCursor).toBeUndefined();
+
+    const a = await asTenant(0, () => queue.deadLetters(def, { limit: 100 }));
+    expect(a.items).toHaveLength(100);
+    expect(a.nextCursor).toBeDefined();
+    expect(a.items.every((d) => d.tenantId === tenants[0])).toBe(true);
+  }, 40_000);
+
+  it('a hung handler does not block shutdown beyond QUEUE_SHUTDOWN_TIMEOUT_MS', async () => {
+    const config = app.get(ConfigService);
+    const own = new QueueService(
+      {
+        get: (k: string) =>
+          k === 'QUEUE_SHUTDOWN_TIMEOUT_MS' ? '500' : config.get(k),
+      } as unknown as ConfigService,
+      prisma,
+      app.get(TenantsService),
+    );
+    await own.onModuleInit();
+    const def = defineJob<object>({ name: qn('hung') });
+    let started = false;
+    own.register(def, async () => {
+      started = true;
+      await new Promise(() => undefined);
+    });
+    await asTenant(0, () => own.enqueue(def, {}, { idempotencyKey: 'h' }));
+    await until(() => started);
+    const t0 = Date.now();
+    await own.onApplicationShutdown();
+    expect(Date.now() - t0).toBeLessThan(2000);
+  });
+
   // Last: shuts the queue down.
   it('graceful shutdown lets the active job finish and then refuses enqueue', async () => {
     const def = defineJob<object>({ name: qn('shutdown') });
@@ -303,5 +384,40 @@ describe('Queue (e2e)', () => {
     await expect(
       asTenant(0, () => queue.enqueue(def, {}, { idempotencyKey: 's2' })),
     ).rejects.toMatchObject({ code: 'QUEUE_UNAVAILABLE' });
+  });
+});
+
+describe('Queue with Redis down (e2e)', () => {
+  let app: INestApplication<App>;
+  const previous = process.env.REDIS_URL;
+
+  beforeAll(async () => {
+    // Nothing listens on port 1: the whole app boots against a dead Redis.
+    process.env.REDIS_URL = 'redis://127.0.0.1:1';
+    app = await createTestApp();
+  });
+
+  afterAll(async () => {
+    await app?.close();
+    process.env.REDIS_URL = previous;
+  });
+
+  it('enqueue fails fast with QUEUE_UNAVAILABLE, no hang', async () => {
+    const queue = app.get(QueueService);
+    const def = defineJob<object>({ name: 'test.dead-redis' });
+    const t0 = Date.now();
+    await expect(
+      TenantContext.run(randomUUID(), () =>
+        queue.enqueue(def, {}, { idempotencyKey: 'k' }),
+      ),
+    ).rejects.toMatchObject({ code: 'QUEUE_UNAVAILABLE' });
+    expect(Date.now() - t0).toBeLessThan(1000);
+  });
+
+  it('health shows the queue down but stays 200', async () => {
+    await request(app.getHttpServer())
+      .get('/api/v1/health')
+      .expect(200)
+      .expect({ data: { status: 'ok', database: 'up', queue: 'down' } });
   });
 });

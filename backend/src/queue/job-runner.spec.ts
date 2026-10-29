@@ -56,7 +56,7 @@ describe('runJob', () => {
       (e) => e,
     );
     expect(error).toBeInstanceOf(UnrecoverableError);
-    expect((error as Error).message).toMatch(/^INVALID_JOB_TENANT/);
+    expect((error as Error).message).toBe('INVALID_JOB_TENANT');
     expect(handler).not.toHaveBeenCalled();
   });
 
@@ -72,7 +72,7 @@ describe('runJob', () => {
       },
     ).catch((e) => e);
     expect(error).toBeInstanceOf(UnrecoverableError);
-    expect((error as Error).message).toMatch(/^INVALID_JOB_TENANT/);
+    expect((error as Error).message).toBe('INVALID_JOB_TENANT');
     expect(handler).not.toHaveBeenCalled();
   });
 
@@ -94,22 +94,53 @@ describe('runJob', () => {
       active,
     ).catch((e) => e);
     expect(error).toBeInstanceOf(UnrecoverableError);
-    expect((error as Error).message).toMatch(/^INVALID_JOB_PAYLOAD/);
+    expect((error as Error).message).toBe('INVALID_JOB_PAYLOAD');
     expect(handler).not.toHaveBeenCalled();
   });
 
-  it('rethrows handler errors as retryable', async () => {
-    const error = await runJob(
+  const fail = (thrown: unknown) =>
+    runJob(
       def,
       async () => {
-        throw new Error('marketplace timeout');
+        throw thrown;
       },
       { tenantId: TENANT, payload: {} },
       meta,
       active,
-    ).catch((e) => e);
+    ).then(
+      () => new Error('resolved'),
+      (e: unknown) => e as Error,
+    );
+
+  it('rethrows handler errors as retryable, keeping only a code', async () => {
+    const error = await fail(new Error('token=abc marketplace timeout'));
     expect(error).not.toBeInstanceOf(UnrecoverableError);
-    expect((error as Error).message).toBe('marketplace timeout');
+    expect(error.message).toBe('JOB_FAILED:Error');
+    expect(error.stack).toBe('');
+    expect(JSON.stringify(error)).not.toContain('abc');
+  });
+
+  it('uses a safe error code from the handler error', async () => {
+    const coded = Object.assign(new Error('secret'), { code: 'ETIMEDOUT' });
+    expect((await fail(coded)).message).toBe('JOB_FAILED:ETIMEDOUT');
+    const unsafe = Object.assign(new Error('x'), { code: 'pw hunter2' });
+    expect((await fail(unsafe)).message).toBe('JOB_FAILED:Error');
+    expect((await fail('plain string')).message).toBe('JOB_FAILED:UNKNOWN');
+  });
+
+  it('keeps a handler UnrecoverableError unrecoverable, without its message', async () => {
+    const error = await fail(new UnrecoverableError('password=x'));
+    expect(error).toBeInstanceOf(UnrecoverableError);
+    expect(error.message).toBe('JOB_FAILED:UNRECOVERABLE');
+  });
+
+  it('stores only the code for refusals', async () => {
+    const error = await runJob(def, async () => {}, {}, meta, active).then(
+      () => new Error('resolved'),
+      (e: unknown) => e as Error,
+    );
+    expect(error.message).toBe('INVALID_JOB_TENANT');
+    expect(error.stack).toBe('');
   });
 });
 

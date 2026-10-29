@@ -56,6 +56,13 @@ export interface DeadLetter<P = unknown> {
   tenantId: string | undefined;
   payload: P | undefined;
   attemptsMade: number;
-  failedReason: string;
+  /** Only a code (`JOB_FAILED:<code>`, `INVALID_JOB_TENANT`, ...), never a message. */
+  errorCode: string;
   failedAt: Date | undefined;
+}
+
+export interface DeadLetterPage<P = unknown> {
+  items: DeadLetter<P>[];
+  /** Pass back as `cursor` to continue; undefined when the set is exhausted. */
+  nextCursor: number | undefined;
 }

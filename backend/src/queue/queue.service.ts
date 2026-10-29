@@ -15,7 +15,8 @@ import {
 import { waitForReady } from '../rate-limit/redis.provider.js';
 import { TenantContext } from '../tenancy/tenant-context.js';
 import { TenantsService } from '../tenants/tenants.service.js';
-import { isTenantId, runJob } from './job-runner.js';
+import { scanFailed } from './dead-letters.js';
+import { errorCode, isTenantId, runJob } from './job-runner.js';
 import {
   CONNECT_TIMEOUT_MS,
   ENQUEUE_TIMEOUT_MS,
@@ -25,7 +26,7 @@ import {
 } from './queue.connection.js';
 import { QueueUnavailableError } from './queue.errors.js';
 import {
-  type DeadLetter,
+  type DeadLetterPage,
   DEFAULT_ATTEMPTS,
   DEFAULT_BACKOFF_MS,
   type JobDefinition,
@@ -37,6 +38,8 @@ import {
 export const COMPLETED_RETENTION_S = 7 * 24 * 3600;
 /** Dead letters (failed after all attempts, or refused) are kept this long. */
 export const FAILED_RETENTION_S = 30 * 24 * 3600;
+/** Default wait for active jobs on shutdown before they are force-closed. */
+export const DEFAULT_SHUTDOWN_TIMEOUT_MS = 10_000;
 
 export interface EnqueueOptions {
   /**
@@ -75,6 +78,7 @@ export class QueueService implements OnModuleInit, OnApplicationShutdown {
     string,
     { worker: Worker | undefined; redis: Redis | undefined }
   >();
+  private readonly shutdownTimeoutMs: number;
   private closing = false;
 
   constructor(
@@ -84,6 +88,11 @@ export class QueueService implements OnModuleInit, OnApplicationShutdown {
   ) {
     this.url = config.get<string>('REDIS_URL') ?? 'redis://localhost:6379';
     this.workersEnabled = config.get<string>('QUEUE_WORKERS') !== 'false';
+    const timeout = Number(config.get<string>('QUEUE_SHUTDOWN_TIMEOUT_MS'));
+    this.shutdownTimeoutMs =
+      Number.isFinite(timeout) && timeout > 0
+        ? timeout
+        : DEFAULT_SHUTDOWN_TIMEOUT_MS;
   }
 
   /**
@@ -190,6 +199,8 @@ export class QueueService implements OnModuleInit, OnApplicationShutdown {
           delay: options.delayMs,
           removeOnComplete: { age: COMPLETED_RETENTION_S },
           removeOnFail: { age: FAILED_RETENTION_S },
+          // No stack traces in Redis: they can quote handler data.
+          stackTraceLimit: 0,
         });
         // For a known id BullMQ keeps the existing job and returns a local copy
         // of OUR data, so read back what is stored to tell a duplicate apart.
@@ -212,24 +223,22 @@ export class QueueService implements OnModuleInit, OnApplicationShutdown {
     };
   }
 
-  /** Dead letters of the current tenant: jobs that failed for good. */
+  /**
+   * Dead letters of the current tenant, newest first. Reads the failed set in
+   * bounded batches (at most 2000 jobs per call, whatever other tenants have
+   * there); continue with `nextCursor`. Returns codes only, never messages.
+   */
   async deadLetters<P>(
     definition: JobDefinition<P>,
-    limit = 100,
-  ): Promise<DeadLetter<P>[]> {
+    page: { limit?: number; cursor?: number } = {},
+  ): Promise<DeadLetterPage<P>> {
     const tenantId = TenantContext.requireTenantId();
-    const jobs = await this.queue(definition).getFailed(0, -1);
-    return jobs
-      .filter((job) => (job.data as JobEnvelope<P>)?.tenantId === tenantId)
-      .slice(0, limit)
-      .map((job) => ({
-        id: job.id ?? '',
-        tenantId,
-        payload: (job.data as JobEnvelope<P>).payload,
-        attemptsMade: job.attemptsMade,
-        failedReason: job.failedReason,
-        failedAt: job.finishedOn ? new Date(job.finishedOn) : undefined,
-      }));
+    const queue = this.queue(definition);
+    return scanFailed<P>(
+      (start, end) => queue.getFailed(start, end),
+      tenantId,
+      page,
+    );
   }
 
   /** Re-queues a dead letter of the current tenant. False when not found or not its own. */
@@ -258,19 +267,37 @@ export class QueueService implements OnModuleInit, OnApplicationShutdown {
   }
 
   /**
-   * Graceful shutdown: refuse new jobs, let active jobs finish (Worker.close
-   * waits for them), then close connections. A job cut off by a hard kill is
-   * detected as stalled by BullMQ and run again.
+   * Graceful shutdown: refuse new jobs and let active jobs finish, for at most
+   * QUEUE_SHUTDOWN_TIMEOUT_MS (default 10 s). After that, or when Redis is
+   * down, workers are force-closed and connections dropped. A job cut off this
+   * way is detected as stalled by BullMQ and run again by another worker.
    */
   async onApplicationShutdown(): Promise<void> {
     this.closing = true;
     await Promise.allSettled(
-      [...this.workers.values()].map(async ({ worker, redis }) => {
-        await worker?.close();
+      [...this.workers.entries()].map(async ([name, { worker, redis }]) => {
+        if (worker) {
+          const graceful = await withTimeout(
+            worker.close().then(() => true),
+            this.shutdownTimeoutMs,
+            () => new Error('timeout'),
+          ).catch(() => false);
+          if (!graceful) {
+            this.logger.warn(
+              `Worker ${name} did not stop in ${this.shutdownTimeoutMs} ms; force-closing`,
+            );
+            // Not awaited: with Redis down even a forced close may wait on the socket.
+            void worker.close(true).catch(() => undefined);
+          }
+        }
         redis?.disconnect();
       }),
     );
-    await Promise.allSettled([...this.queues.values()].map((q) => q.close()));
+    await Promise.allSettled(
+      [...this.queues.values()].map((q) =>
+        withTimeout(q.close(), 1000, () => new Error('timeout')),
+      ),
+    );
     this.producer?.disconnect();
   }
 
@@ -335,15 +362,6 @@ export function jobIdFor(
   return createHash('sha256')
     .update(`${definition.name}\0${tenantId}\0${key}`)
     .digest('hex');
-}
-
-/** Error code for logs: the code prefix of refusals, else `code` or the class name. */
-export function errorCode(error: Error): string {
-  if (error instanceof UnrecoverableError) {
-    return /^[A-Z_]+/.exec(error.message)?.[0] ?? 'UNRECOVERABLE';
-  }
-  const code = (error as { code?: unknown }).code;
-  return typeof code === 'string' && /^[A-Z_]+$/.test(code) ? code : error.name;
 }
 
 function withTimeout<T>(

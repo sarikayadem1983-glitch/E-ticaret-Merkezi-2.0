@@ -144,7 +144,7 @@ Ayrıntı: [ARCHITECTURE.md → Kuyruk](ARCHITECTURE.md#kuyruk-arka-plan-işleri
 - Worker her işi `TenantContext.run(job.tenantId)` içinde çalıştırır. Geçersiz/eksik/bilinmeyen/pasif tenant'lı iş hiç çalışmaz, system context'e düşmez; `INVALID_JOB_TENANT` ile ölü kuyruğa gider. Redis'e doğrudan yazılmış sahte bir iş de bu kontrolden geçer.
 - Kuyruk modülü `runAsSystem` kullanmaz (izin listesine eklenmedi).
 - Ölü kuyruk okuma ve yeniden deneme yalnızca çağıranın tenant'ının işlerini döner.
-- Payload'a gizli bilgi konmaz. Başarısızlık logları payload ve hata mesajı içermez, yalnızca hata kodu içerir. Hata mesajı Redis'teki `failedReason` alanında durur: handler'lar hata mesajına gizli bilgi yazmamalıdır.
+- Payload'a gizli bilgi konmaz. Başarısızlık logları payload ve hata mesajı içermez, yalnızca hata kodu içerir. Redis'teki `failedReason` da yalnızca koddur (`JOB_FAILED:<kod>`), stack trace saklanmaz.
 - **Redis kesintisi:** `enqueue` hızlı hata verir (`QUEUE_UNAVAILABLE`, istek askıda kalmaz); worker'lar bekler ve yeniden bağlanır. `/health` `queue: "down"` gösterir.
 
 ## 4. Canlıya çıkış öncesi kontrol listesi
