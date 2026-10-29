@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Throwaway values for the job's own containers only. No repository secrets
+# are used; nothing here is valid outside this workflow run.
+env:
+  POSTGRES_USER: ci_su
+  POSTGRES_PASSWORD: ci-su-throwaway
+  POSTGRES_DB: tm_ci
+  DATABASE_URL: postgresql://tm_app:ci-app-throwaway@127.0.0.1:5432/tm_ci
+  MIGRATION_DATABASE_URL: postgresql://tm_migrator:ci-migrator-throwaway@127.0.0.1:5432/tm_ci
+  REDIS_URL: redis://127.0.0.1:6379
+  JWT_ACCESS_SECRET: ci-access-secret-throwaway-00000000000000
+  SESSION_SECRET: ci-session-secret-throwaway-0000000000000
+  APP_ORIGIN: http://localhost:3000
+  BACKEND_URL: http://localhost:4000
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ci_su
+          POSTGRES_PASSWORD: ci-su-throwaway
+          POSTGRES_DB: tm_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U ci_su -d tm_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - name: Create least-privilege roles
+        env:
+          PGPASSWORD: ci-su-throwaway
+        run: >-
+          psql -h 127.0.0.1 -U ci_su -d tm_ci -X -q -v ON_ERROR_STOP=1
+          -v app_password=ci-app-throwaway -v migrator_password=ci-migrator-throwaway
+          -f ../database/roles/setup-roles.sql
+      - run: npx prisma migrate deploy
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+      - run: npm run test:e2e
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npx next typegen
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
