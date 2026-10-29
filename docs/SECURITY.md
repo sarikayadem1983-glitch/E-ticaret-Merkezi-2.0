@@ -61,7 +61,17 @@ Ayarlar açılışta `backend/src/config/security.config.ts` ile okunur ve doğr
 
 ## 3. Kimlik doğrulama koruması
 
-Mevcut katmanlar: argon2id şifre hash'i, bilinmeyen email'de sahte hash doğrulaması (yanıt süresi kullanıcı varlığını ele vermez), refresh token rotation ve tekrar kullanımda tüm oturumların kapatılması, başarısız girişlerin Audit Log'a yazılması.
+Mevcut katmanlar: argon2id şifre hash'i, bilinmeyen email'de sahte hash doğrulaması (yanıt süresi kullanıcı varlığını ele vermez), refresh token rotation ve tekrar kullanımda kullanıcının tüm mağazalardaki oturumlarının hemen kapatılması, başarısız girişlerin Audit Log'a yazılması.
+
+### Refresh token tekrar kullanımı
+
+İptal edilmiş (döndürülmüş) bir refresh token aktif bir kullanıcı tarafından tekrar gönderilirse veya aynı token'ın eş zamanlı iki rotation'ından biri yarışı kaybederse token çalınmış sayılır:
+
+- Kullanıcının **tüm mağazalardaki** iptal edilmemiş refresh token'ları iptal edilir ve **tüm üyeliklerinin** (pasifler dahil) `auth_version`'ı artırılır. İkisi tek veritabanı transaction'ında, `runAsSystem` bağlamında çalışır; sorgular `user_id` ile açıkça filtrelenir (`AuthRepository.revokeAllForUserEverywhere`, `MembershipsRepository.bumpAuthVersionForUser`). İzin listesine yeni dosya eklenmedi. Sonuç: açık access token'lar bir sonraki istekte `401 TOKEN_STALE` alır (15 dk beklenmez), refresh yapılamaz, kullanıcı tüm cihazlarda yeniden giriş yapar.
+- Yanıt `401 INVALID_REFRESH_TOKEN`, token üretilmez.
+- İptal veya `auth_version` artırımı başarısız olursa transaction geri alınır, istek `500` ile biter (token yine üretilmez), hata loglanır ve **audit yazılmaz**: gerçekleşmeyen iptal hiçbir yerde yapılmış gibi kaydedilmez.
+- Commit sonrası etkilenen her mağazaya (tespitin yapıldığı mağaza her zaman dahil) birer `TOKEN_REUSE_DETECTED` kaydı yazılır: `after: { detectedInTenantId, refreshRevokedCount (o mağazada), accessRevoked, totalRefreshRevokedCount, affectedTenantIds }`. Token veya hash içermez. Alan adları bilerek `token`/`session` kelimesini içermez; aksi halde audit sanitizer değerleri `[REDACTED]` yapar. İptal edilmiş bir token'ın sonradan tekrar sunulması da yeniden tekrar kullanım sayılır ve sayıları 0 olan yeni kayıtlar yazar. Audit yazımı başarısız olursa loglanır; iptal geri alınmaz ve yanıt değişmez.
+- Pasif/silinmiş kullanıcının token'ı tekrar kullanım sayılmaz (aşağıda).
 
 ### Access token sürümü (`ver`) ve eski token'lar
 

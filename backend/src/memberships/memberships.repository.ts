@@ -169,6 +169,23 @@ export class MembershipsRepository {
     }
   }
 
+  /**
+   * System context, inside the caller's transaction (refresh token reuse):
+   * bumps auth_version on every membership of the user in every tenant, active
+   * or not, so every access token of the user is refused on its next request.
+   * The query filters by userId itself. Returns the affected tenant ids.
+   */
+  async bumpAuthVersionForUser(tx: PrismaTx, userId: string): Promise<string[]> {
+    const rows = await TenantContext.runAsSystem(() =>
+      tx.tenantMembership.updateManyAndReturn({
+        where: { userId },
+        data: { authVersion: { increment: 1 } },
+        select: { tenantId: true },
+      }),
+    );
+    return rows.map((r) => r.tenantId);
+  }
+
   /** Tenant context: adds the user to the current tenant as an active member. */
   create(db: PrismaTx, userId: string) {
     return db.tenantMembership.create({

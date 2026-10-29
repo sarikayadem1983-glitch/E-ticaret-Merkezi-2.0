@@ -158,10 +158,27 @@ export class AuthRepository {
     });
   }
 
-  revokeAllForUser(userId: string) {
-    return this.prisma.refreshToken.updateMany({
+  /**
+   * System context only (refresh token reuse): revokes every unrevoked refresh
+   * token of the user in every tenant, inside the caller's transaction. The
+   * query filters by userId itself. Returns the revoked count per tenant.
+   */
+  async revokeAllForUserEverywhere(
+    tx: PrismaTx,
+    userId: string,
+  ): Promise<{ tenantId: string; count: number }[]> {
+    if (!TenantContext.isSystem()) {
+      throw new Error('revokeAllForUserEverywhere requires system context');
+    }
+    const rows = await tx.refreshToken.updateManyAndReturn({
       where: { userId, revokedAt: null },
       data: { revokedAt: new Date() },
+      select: { tenantId: true },
     });
+    const counts = new Map<string, number>();
+    for (const { tenantId } of rows) {
+      counts.set(tenantId, (counts.get(tenantId) ?? 0) + 1);
+    }
+    return [...counts].map(([tenantId, count]) => ({ tenantId, count }));
   }
 }

@@ -326,6 +326,133 @@ describe('session revocation (e2e)', () => {
     ).toEqual({ [tenant.a]: 2, [tenant.b]: 1 });
   });
 
+  describe('refresh token reuse', () => {
+    const refresh = (refreshToken: string) =>
+      http().post('/api/v1/auth/refresh').send({ refreshToken });
+    const me = (accessToken: string) =>
+      http().get('/api/v1/auth/me').set(bearer(accessToken));
+    const reuseAudits = (userId: string) =>
+      sql<{ tenant_id: string; actor_user_id: string | null; after: unknown }>(
+        `SELECT tenant_id, actor_user_id, after FROM audit_logs
+         WHERE action = 'TOKEN_REUSE_DETECTED' AND entity_id = $1`,
+        [userId],
+      );
+    const unrevoked = (userId: string) =>
+      sql<{ n: number }>(
+        `SELECT count(*)::int AS n FROM refresh_tokens
+         WHERE user_id = $1 AND revoked_at IS NULL`,
+        [userId],
+      ).then((r) => r[0].n);
+
+    it('ends the sessions of a multi-store user in every store', async () => {
+      const { email, userId } = await member('reuse-multi', [
+        { tenantId: tenant.a, role: 'admin' },
+        { tenantId: tenant.b, role: 'admin' },
+      ]);
+      // A session in A and one in B (switch bumps A, so refresh A afterwards).
+      const first = await login(email);
+      const toSwitch = await login(email);
+      const switched = await http()
+        .post('/api/v1/auth/switch-tenant')
+        .set(bearer(toSwitch.accessToken))
+        .send({ tenantId: tenant.b, refreshToken: toSwitch.refreshToken })
+        .expect(200);
+      const inB = switched.body.data as {
+        accessToken: string;
+        refreshToken: string;
+      };
+      const rotated = await refresh(first.refreshToken).expect(200);
+      const inA = rotated.body.data as {
+        accessToken: string;
+        refreshToken: string;
+      };
+      expect(claims(inA.accessToken).tid).toBe(tenant.a);
+      expect(claims(inB.accessToken).tid).toBe(tenant.b);
+      await me(inA.accessToken).expect(200);
+      await me(inB.accessToken).expect(200);
+      expect(await unrevoked(userId)).toBe(2);
+
+      // Reuse the rotated A token.
+      const reuse = await refresh(first.refreshToken).expect(401);
+      expect(reuse.body.error.code).toBe('INVALID_REFRESH_TOKEN');
+      // Snapshot now: presenting a revoked token below is itself a reuse and
+      // writes further (zero-count) audit rows.
+      const audits = await reuseAudits(userId);
+
+      // Refresh tokens are revoked in both stores…
+      await refresh(inB.refreshToken).expect(401);
+      await refresh(inA.refreshToken).expect(401);
+      expect(await unrevoked(userId)).toBe(0);
+      // …and access tokens in both stores are refused immediately.
+      const b = await me(inB.accessToken).expect(401);
+      expect(b.body.error.code).toBe('TOKEN_STALE');
+      const a = await me(inA.accessToken).expect(401);
+      expect(a.body.error.code).toBe('TOKEN_STALE');
+
+      const byTenant = Object.fromEntries(
+        audits.map((r) => [r.tenant_id, r]),
+      );
+      expect(audits).toHaveLength(2);
+      const affected = [tenant.a, tenant.b];
+      for (const [tid, count] of [
+        [tenant.a, 1],
+        [tenant.b, 1],
+      ] as const) {
+        expect(byTenant[tid].actor_user_id).toBeNull();
+        expect(byTenant[tid].after).toEqual({
+          detectedInTenantId: tenant.a,
+          refreshRevokedCount: count,
+          accessRevoked: true,
+          totalRefreshRevokedCount: 2,
+          affectedTenantIds: expect.arrayContaining(affected),
+        });
+      }
+      const text = JSON.stringify(audits);
+      for (const secret of [
+        first.refreshToken,
+        inA.refreshToken,
+        inB.refreshToken,
+        inA.accessToken,
+        inB.accessToken,
+      ]) {
+        expect(text).not.toContain(secret);
+      }
+    });
+
+    it('ends every session of a single-store user', async () => {
+      const { email, userId } = await member('reuse-single', [
+        { tenantId: tenant.a, role: 'admin' },
+      ]);
+      const other = await login(email);
+      const first = await login(email);
+      const rotated = await refresh(first.refreshToken).expect(200);
+      const next = rotated.body.data as {
+        accessToken: string;
+        refreshToken: string;
+      };
+
+      await refresh(first.refreshToken).expect(401);
+      // Snapshot before retrying revoked tokens (each retry is a reuse too).
+      const audits = await reuseAudits(userId);
+      await refresh(next.refreshToken).expect(401);
+      await refresh(other.refreshToken).expect(401);
+      for (const token of [next.accessToken, other.accessToken]) {
+        const res = await me(token).expect(401);
+        expect(res.body.error.code).toBe('TOKEN_STALE');
+      }
+
+      expect(audits).toHaveLength(1);
+      expect(audits[0].tenant_id).toBe(tenant.a);
+      expect(audits[0].after).toEqual({
+        detectedInTenantId: tenant.a,
+        refreshRevokedCount: 2,
+        accessRevoked: true,
+        totalRefreshRevokedCount: 2,
+        affectedTenantIds: [tenant.a],
+      });
+    });
+  });
+
   it('public routes do not consult memberships', async () => {
     await http().get('/api/v1/health').expect(200);
   });

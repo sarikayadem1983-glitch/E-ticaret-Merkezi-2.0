@@ -271,8 +271,7 @@ export class AuthService {
       }
       if (stored.revokedAt) {
         // Reuse of a rotated token: assume it leaked and end every session.
-        await this.repository.revokeAllForUser(stored.userId);
-        await this.recordTokenReuse(stored.userId);
+        await this.handleTokenReuse(stored.userId, stored.tenantId);
         throw invalidRefreshToken();
       }
       if (stored.expiresAt <= new Date()) throw invalidRefreshToken();
@@ -300,8 +299,7 @@ export class AuthService {
       });
       if (!rotated) {
         // Lost a race with a concurrent refresh of the same token: treat as reuse.
-        await this.repository.revokeAllForUser(stored.userId);
-        await this.recordTokenReuse(stored.userId);
+        await this.handleTokenReuse(stored.userId, stored.tenantId);
         throw invalidRefreshToken();
       }
 
@@ -358,15 +356,71 @@ export class AuthService {
     }
   }
 
-  private recordTokenReuse(userId: string) {
-    return this.audit.record({
-      action: 'TOKEN_REUSE_DETECTED',
-      module: MODULE,
-      entityType: 'User',
-      entityId: userId,
-      after: { revokedAllSessions: true },
-      actorUserId: null,
-    });
+  /**
+   * Ends every session of the user in every tenant: all unrevoked refresh
+   * tokens are revoked and auth_version is bumped on all memberships, in one
+   * transaction in system context (both queries filter by userId). If it
+   * fails the error propagates (500, no token issued) and nothing is audited
+   * as done. After commit, one TOKEN_REUSE_DETECTED row is written into each
+   * affected tenant (always including the detecting one) with that tenant's
+   * revoked count; an audit failure is logged and does not undo the
+   * revocation or change the 401.
+   */
+  private async handleTokenReuse(
+    userId: string,
+    detectedInTenantId: string,
+  ): Promise<void> {
+    let revoked: { tenantId: string; count: number }[];
+    let bumped: string[];
+    try {
+      ({ revoked, bumped } = await TenantContext.runAsSystem(() =>
+        this.repository.prisma.$transaction(async (tx) => {
+          const revoked = await TenantContext.runAsSystem(() =>
+            this.repository.revokeAllForUserEverywhere(tx, userId),
+          );
+          const bumped = await this.memberships.bumpAuthVersionForUser(
+            tx,
+            userId,
+          );
+          return { revoked, bumped };
+        }),
+      ));
+    } catch (error) {
+      this.logger.error(
+        `Refresh token tekrar kullanımı: oturumlar iptal EDİLEMEDİ (user ${userId}): ${(error as Error).message}`,
+      );
+      throw error;
+    }
+
+    const perTenant = new Map(revoked.map((r) => [r.tenantId, r.count]));
+    const affectedTenantIds = [
+      ...new Set([detectedInTenantId, ...bumped, ...perTenant.keys()]),
+    ];
+    const totalRefreshRevokedCount = revoked.reduce((n, r) => n + r.count, 0);
+    for (const tenantId of affectedTenantIds) {
+      try {
+        await TenantContext.run(tenantId, () =>
+          this.audit.record({
+            action: 'TOKEN_REUSE_DETECTED',
+            module: MODULE,
+            entityType: 'User',
+            entityId: userId,
+            after: {
+              detectedInTenantId,
+              refreshRevokedCount: perTenant.get(tenantId) ?? 0,
+              accessRevoked: bumped.includes(tenantId),
+              totalRefreshRevokedCount,
+              affectedTenantIds,
+            },
+            actorUserId: null,
+          }),
+        );
+      } catch (error) {
+        this.logger.error(
+          `TOKEN_REUSE_DETECTED audit kaydı yazılamadı (tenant ${tenantId}): ${(error as Error).message}`,
+        );
+      }
+    }
   }
 
   /** The user's active stores in active tenants, marking the current one. */

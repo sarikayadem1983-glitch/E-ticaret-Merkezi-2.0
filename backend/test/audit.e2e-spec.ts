@@ -198,6 +198,9 @@ describe('Audit log (e2e)', () => {
         .post('/api/v1/auth/refresh')
         .send({ refreshToken: session.refreshToken })
         .expect(401);
+      // Reuse ends every session of the user, including ownerA's access token.
+      await http().get('/api/v1/auth/me').set(auth(ownerA)).expect(401);
+      ownerA = await login(a.email);
       const { data } = await listAll(ownerA, '&action=TOKEN_REUSE_DETECTED');
       expect(data[0]).toMatchObject({ entityId: userA, actorUserId: null });
     });

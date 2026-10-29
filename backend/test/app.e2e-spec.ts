@@ -235,12 +235,25 @@ describe('API (e2e)', () => {
         .post('/api/v1/auth/refresh')
         .send({ refreshToken: second })
         .expect(401);
+      // …and the open access token is refused at once.
+      const stale = await http()
+        .get('/api/v1/auth/me')
+        .set('Authorization', `Bearer ${rotated.body.data.accessToken}`)
+        .expect(401);
+      expect(stale.body.error.code).toBe('TOKEN_STALE');
+
+      // Later tests use tokens.b: sign in again.
+      const fresh = await http()
+        .post('/api/v1/auth/login')
+        .send({ email: tenants.b.email, password: PASSWORD })
+        .expect(200);
+      tokens.b = fresh.body.data;
     });
 
     it('logout revokes the refresh token', async () => {
       const login = await http()
         .post('/api/v1/auth/login')
-        .send({ email: tenants.a.email, password: PASSWORD })
+        .send({ email: tenants.b.email, password: PASSWORD })
         .expect(200);
       const { accessToken, refreshToken } = login.body.data;
 
@@ -253,6 +266,13 @@ describe('API (e2e)', () => {
         .post('/api/v1/auth/refresh')
         .send({ refreshToken })
         .expect(401);
+      // Presenting a revoked token counts as reuse and ends every session of
+      // the user (b, so a's auth_version stays 1), so tokens.b is renewed.
+      const fresh = await http()
+        .post('/api/v1/auth/login')
+        .send({ email: tenants.b.email, password: PASSWORD })
+        .expect(200);
+      tokens.b = fresh.body.data;
     });
   });
   describe('memberships', () => {
