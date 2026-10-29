@@ -1,7 +1,8 @@
 -- User management, phase 2 (PREPARED, NOT APPLIED). Lives outside prisma/migrations on purpose:
 -- prisma migrate deploy must not pick it up. Move it into database/prisma/migrations/<ts>_drop_legacy_user_columns/
--- only after: phase 1 is applied and verified on the dev database, no code reads users.tenant_id / users.is_active,
--- and the Prisma schema drops both fields in the same change. Rehearse first with database/scripts/backup-and-rehearse.sh.
+-- only after: phase 1 is applied and verified on the dev database, no code reads users.tenant_id,
+-- and the Prisma schema drops that field in the same change. users.is_active stays: login, refresh and
+-- JwtAuthGuard read it to refuse deactivated global users. Rehearse first with database/scripts/backup-and-rehearse.sh.
 -- Irreversible without a backup: rollback.sql of phase 1 no longer works once these columns are gone.
 
 DO $$
@@ -16,7 +17,7 @@ BEGIN
 END $$;
 
 -- Drops the (tenant_id, id) unique index and the tenant_id index together with the column.
-ALTER TABLE "users" DROP COLUMN "tenant_id", DROP COLUMN "is_active";
+ALTER TABLE "users" DROP COLUMN "tenant_id";
 
 -- Phase 1 snapshots are no longer needed.
 DROP TABLE IF EXISTS _mig_snapshot_users, _mig_snapshot_user_roles, _mig_snapshot_user_company_roles,
