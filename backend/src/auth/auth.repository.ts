@@ -55,6 +55,7 @@ export class AuthRepository {
         userId: true,
         expiresAt: true,
         revokedAt: true,
+        replacedById: true,
       },
     });
   }

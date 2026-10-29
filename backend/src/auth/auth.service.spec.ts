@@ -166,12 +166,17 @@ describe('AuthService.login', () => {
 });
 
 describe('AuthService.refresh', () => {
-  const stored = (revokedAt: Date | null = null) => ({
+  /** A revoked token defaults to a rotated one (replacedById set). */
+  const stored = (
+    revokedAt: Date | null = null,
+    replacedById: string | null = revokedAt ? 'rt-2' : null,
+  ) => ({
     id: 'rt-1',
     tenantId: TENANT,
     userId: USER,
     expiresAt: new Date(Date.now() + 60_000),
     revokedAt,
+    replacedById,
   });
 
   it.each([
@@ -225,6 +230,21 @@ describe('AuthService.refresh', () => {
       code: 'INVALID_REFRESH_TOKEN',
     });
     expect(repository.revokeAllForUserEverywhere).not.toHaveBeenCalled();
+  });
+
+  it('refuses a token revoked without a successor (logout) without the reuse alarm', async () => {
+    const { service, repository, memberships, audit, tokens } = setup();
+    repository.findRefreshToken.mockResolvedValue(stored(new Date(), null));
+    repository.findUserState.mockResolvedValue(ACTIVE);
+
+    expect(await rejection(service.refresh('presented'))).toMatchObject({
+      code: 'INVALID_REFRESH_TOKEN',
+    });
+    expect(repository.revokeAllForUserEverywhere).not.toHaveBeenCalled();
+    expect(memberships.bumpAuthVersionForUser).not.toHaveBeenCalled();
+    expect(repository.prisma.$transaction).not.toHaveBeenCalled();
+    expect(audit.record).not.toHaveBeenCalled();
+    expect(tokens.signAccess).not.toHaveBeenCalled();
   });
 
   describe('reuse', () => {

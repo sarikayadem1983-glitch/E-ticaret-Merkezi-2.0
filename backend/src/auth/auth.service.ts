@@ -270,8 +270,12 @@ export class AuthService {
         throw invalidRefreshToken();
       }
       if (stored.revokedAt) {
-        // Reuse of a rotated token: assume it leaked and end every session.
-        await this.handleTokenReuse(stored.userId, stored.tenantId);
+        // Only rotation sets replacedById. A token revoked without a successor
+        // (logout, bulk revocation) is refused without the reuse alarm.
+        if (stored.replacedById) {
+          // Reuse of a rotated token: assume it leaked and end every session.
+          await this.handleTokenReuse(stored.userId, stored.tenantId);
+        }
         throw invalidRefreshToken();
       }
       if (stored.expiresAt <= new Date()) throw invalidRefreshToken();
