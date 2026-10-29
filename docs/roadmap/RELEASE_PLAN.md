@@ -4,27 +4,29 @@
 
 Görev listeleri `TASK_REGISTER.md`'deki "Sürüm" sütunundan türetilir. Tahmin varsayımları: `MASTER_ROADMAP.md` §6. Sürüm başına tam görev tabloları (durum, tahmin, mod, kaynak): `TASK_REGISTER.md` → "Sürümlere göre görev listeleri".
 
-## Sürüm A — MVP: ilk çalışan e-ticaret operasyon platformu
+## Sürüm A — MVP: Trendyol-only e-ticaret operasyon platformu (kullanıcı kararı, 2026-10-29)
 
 **Hedef kullanıcı:** pilot satıcılar (ücretsiz/erken erişim), kontrollü ortam.
 
-**Zorunlu özellikler:** çoklu tenant ve firma başına rol, davetle kullanıcı ekleme, şifre sıfırlama; ürün kataloğu (varyant, fiyat, görsel, Excel/CSV içe aktarma); Trendyol ve Hepsiburada'da listeleme, stok/fiyat senkronu, sipariş içeri alma; sipariş ekranları, stok rezervasyonu ve düşümü, iptal/iade, pazaryeri kargo etiketi; müşteri listesi; temel satış/stok raporları ve KPI dashboard; hata izleme, otomatik yedek.
+**Zorunlu özellikler:** çoklu tenant ve firma başına rol (USR-T7/T8), temel rol/yetki yönetimi, davetle ekip ekleme ve personeli pasife alma (MVP dilimleri USR-T9a…T15a), şifre sıfırlama, yetki yükseltme güvenlik paketi (USR-T14); ürün kataloğu (varyant, fiyat, görsel, Excel/CSV içe aktarma); Trendyol'da listeleme, stok/fiyat senkronu, sipariş içeri alma, iptal (tedarik edememe) ve iade (claim) senkronu ile yerel stok iadesi; sipariş ekranları, stok rezervasyonu ve düşümü, Trendyol kargo etiketi; temel satış raporu; hata izleme, otomatik yedek.
 
-**Görevler:** 69 (18 tamamlandı, 51 kalan). Kalan: INF-09, INF-10, INF-12, INF-18, INF-19 · USR-T7…USR-T16, USR-19 · DSH-02 · CAT-01…CAT-06 · IMP-01, IMP-02 · IMG-01, IMG-02 · INT-01…INT-04 · INT-TY-01…03 · INT-HB-01…03 · ORD-01…ORD-03 · INV-01…INV-03 · SHP-01, SHP-02 · CRM-01, CRM-02 · RPT-01, RPT-02 · OPS-01, OPS-03. Tahmin: 149 iş günü.
+**Görevler:** 57 (18 tamamlandı, 39 kalan). Kalan: INF-09, INF-10, INF-12, INF-18 · USR-T7, USR-T8, USR-T9a, USR-T10a, USR-T11a, USR-T12a, USR-T13a, USR-T14, USR-T15a, USR-T16, USR-19 · CAT-01…CAT-06 · IMP-01 · IMG-01 · INT-01…INT-03 · INT-TY-01…03 · ORD-01…ORD-03 · INV-01…INV-03 · SHP-02 · RPT-01 · OPS-01, OPS-03.
+
+**İş yükü:** 110,5 iş günü (takvim değil). **Takvim:** M0'dan sonra ≈ 64 iş günü + 5 iş günü kabul → **tahmini hedef 2027-02-12** (taahhüt değil). Hesap: `MVP_PLAN.md` §3.
 
 **Çıkış kriterleri:**
 1. Tüm A görevleri `DONE-MERGED` ve dev'e deploy edilmiş; CI yeşil.
-2. Sandbox/test hesabında uçtan uca senaryo: ürün oluştur → Trendyol ve Hepsiburada'da listele → sipariş gelir → stok düşer → etiket → iade → stok geri gelir.
+2. Trendyol stage ortamında uçtan uca senaryo: ürün oluştur → Trendyol'da listele → test siparişi gelir → stok düşer → etiket → müşteri iptali ve tedarik edememe stok geri alır → iade claim'i onaylanır → stok geri gelir.
 3. USR-T14 yetki yükseltme/tenant izolasyonu paketi ve her modülün izolasyon testleri PASS.
-4. INF-18 ve INF-19 kapalı; kritik/yüksek açık risk yok (`PROJECT_STATUS.md` §5).
+4. INF-18 kapalı; kritik açık risk yok (`PROJECT_STATUS.md` §5). INF-19 B'de kabul edilmiş risk olarak listelenir.
 5. Yedekten geri yükleme tatbikatı (OPS-03) başarılı.
 6. Kullanıcının pilot kabulü.
 
 ## Sürüm B — Ticari SaaS: ücretli müşteriye satılabilir, güvenli, yönetilebilir
 
-**Zorunlu özellikler:** abonelik planları, kartla ödeme, limitler; e-Arşiv/e-Fatura kesimi, iptal/iade faturası; kârlılık ve gider hesaplama; hakediş ve mutabakat; Amazon TR ve n11; manuel sipariş, çoklu depo, tedarikçi; kampanya yönetimi; anlaşmalı kargo; dışa aktarma ve zamanlanmış rapor; bildirim merkezi; 2FA; Aşama 2 migration; staging + prod deploy, Redis HA, secret yönetimi, TLS/ağ, CAPTCHA, nonce CSP, enumeration düzeltmesi; izleme/alarm, süper admin paneli, KVKK süreçleri, yük testi, bağımsız güvenlik denetimi.
+**Zorunlu özellikler:** MVP'den ertelenenler: Hepsiburada, genel iptal/iade iş akışı ve iade UI, webhook alıcısı, asenkron içe aktarma, görsel türev/uygunluk, KPI dashboard, müşteri modeli ve UI, stok raporları, BFF `forceRefresh` yarışı, kullanıcı yönetimi kalan kısımları (USR-T9…T13, T15: `T9b`…`T15b`); abonelik planları, kartla ödeme, limitler; e-Arşiv/e-Fatura kesimi, iptal/iade faturası; kârlılık ve gider hesaplama; hakediş ve mutabakat; Amazon TR ve n11; manuel sipariş, çoklu depo, tedarikçi; kampanya yönetimi; anlaşmalı kargo; dışa aktarma ve zamanlanmış rapor; bildirim merkezi; 2FA; Aşama 2 migration; staging + prod deploy, Redis HA, secret yönetimi, TLS/ağ, CAPTCHA, nonce CSP, enumeration düzeltmesi; izleme/alarm, süper admin paneli, KVKK süreçleri, yük testi, bağımsız güvenlik denetimi.
 
-**Görevler:** 43 — INF-11, INF-13…INF-17, INF-20 · USR-18, USR-20 · DSH-03 · IMP-03, IMP-04 · INT-AMZ-01…03, INT-N11-01…03 · ORD-04 · INV-04 · SHP-03 · EFT-01…EFT-04 · CRM-03 · CMP-01 · PRF-01…03 · STL-01…03 · RPT-03 · SUB-01…04 · OPS-02, OPS-04…OPS-07. Tahmin: 149 iş günü.
+**Görevler:** 61 — MVP'den ertelenen 18: INT-HB-01…03, SHP-01, INT-04, IMP-02, IMG-02, DSH-02, CRM-01, CRM-02, RPT-02, INF-19, USR-T9…T13, USR-T15 (kalan kısımlar) · önceki 43: INF-11, INF-13…INF-17, INF-20 · USR-18, USR-20 · DSH-03 · IMP-03, IMP-04 · INT-AMZ-01…03, INT-N11-01…03 · ORD-04 · INV-04 · SHP-03 · EFT-01…EFT-04 · CRM-03 · CMP-01 · PRF-01…03 · STL-01…03 · RPT-03 · SUB-01…04 · OPS-02, OPS-04…OPS-07. Tahmin: 188,5 iş günü (149 + ertelenen 35 + kullanıcı yönetimi kalanları 4,5).
 
 **Çıkış kriterleri:**
 1. `SECURITY.md` §4 "Canlıya çıkış öncesi kontrol listesi" tamamen işaretli.
@@ -47,19 +49,18 @@ Görev listeleri `TASK_REGISTER.md`'deki "Sürüm" sütunundan türetilir. Tahmi
 
 ## Takvim
 
-Varsayım: başlangıç **2026-11-02** (PR #6 merge onayı o hafta), 2 paralel akış, %15 tampon, resmî tatiller (1 Ocak, Ramazan Bayramı ~9–11 Mart 2027, 23 Nisan, 1 Mayıs, Kurban Bayramı ~16–19 Mayıs 2027, 15 Temmuz, 30 Ağustos, 29 Ekim) düşülmüş. Dış erişim gecikirse ilgili kilometre taşı kayar.
+Tüm tarihler **tahmini hedeftir, taahhüt değildir**. Yöntem: kalan iş yükü / 2 paralel akış, +%15 tampon (onay gecikmesi dahil), resmî tatiller (1 Ocak, Ramazan Bayramı ~9–11 Mart 2027, 23 Nisan, 1 Mayıs, Kurban Bayramı ~16–19 Mayıs 2027, 15 Temmuz, 30 Ağustos, 29 Ekim) düşülmüş. Dış erişim gecikirse ilgili kilometre taşı kayar.
 
-| Kilometre taşı | Hedef | İçerik |
+| Kilometre taşı | Tahmini hedef | İçerik |
 |---|---|---|
-| M0 | 2026-11-06 | PR #6 incelendi, merge + dev deploy (kullanıcı onayıyla) |
-| M1 | 2026-11-27 | Kullanıcı yönetimi tamam (USR-T7…T16), INF-09/10/18/19, CAT-01/02 |
-| M2 | 2026-12-25 | Katalog, görsel, içe aktarma, entegrasyon çerçevesi, sipariş/stok çekirdeği |
-| M3 | 2027-02-05 | Trendyol uçtan uca; Hepsiburada listeleme |
-| M4 | 2027-03-05 | Hepsiburada tamam, iade/kargo, raporlar, dashboard, yedek tatbikatı |
-| **A — MVP** | **2027-03-19** | Kabul testi ve pilot başlangıcı |
-| M5 | 2027-05-14 | Abonelik/ödeme, e-Fatura, staging/prod altyapısı |
-| M6 | 2027-07-02 | Amazon TR, n11, kârlılık, hakediş, KVKK, süper admin |
-| **B — Ticari** | **2027-07-30** | Güvenlik denetimi kapandı, satışa açılış |
-| **C — Gelişmiş** | **2027-10-15** | AI, kampanya optimizasyonu, gelişmiş analitik, 7 pazaryeri |
+| M0 | 2026-11-06 | PR #6 (M1 düzeltmesi dahil) incelendi, kullanıcı onayıyla merge + dev deploy |
+| M1 | 2026-12-04 | USR-T7/T8, kullanıcı yönetimi backend dilimleri, INF-09/10/18, CAT-01/02/03/05, görsel |
+| M2 | 2027-01-06 | Entegrasyon çerçevesi, kanal eşleme, katalog UI, içe aktarma, kullanıcı yönetimi PR'ı, şifre sıfırlama, sipariş/stok çekirdeği |
+| M3 | 2027-02-05 | Trendyol uçtan uca (listeleme, stok/fiyat, sipariş, iptal/iade, kargo), raporlar, yedek tatbikatı |
+| **A — MVP** | **2027-02-12 (tahmini)** | Kabul testi ve pilot başlangıcı |
+| M5 | 2027-04-21 | Abonelik/ödeme, e-Fatura, staging/prod altyapısı, Hepsiburada |
+| M6 | 2027-06-29 | Amazon TR, n11, kârlılık, hakediş, KVKK, süper admin |
+| **B — Ticari** | **2027-07-27 (tahmini)** | 188,5 iş günü; güvenlik denetimi kapandı, satışa açılış |
+| **C — Gelişmiş** | **2027-10-06 (tahmini)** | AI, kampanya optimizasyonu, gelişmiş analitik, 7 pazaryeri |
 
-**Önceden başlatılması gereken dış işler (MVP sırasında):** Trendyol ve Hepsiburada satıcı/sandbox erişimi (M1'den önce); e-Fatura entegratör sözleşmesi ve ödeme sağlayıcı başvurusu (M3'ten önce); Amazon SP-API geliştirici kaydı (M4'ten önce); barındırma sağlayıcısı seçimi (M4'ten önce).
+**Önceden başlatılması gereken dış işler:** Trendyol satıcı hesabı, API anahtarı ve stage erişimi/IP whitelist (M1'den önce; MVP'nin ana dış kapısı); Hepsiburada SIT erişimi, e-Fatura entegratör sözleşmesi ve ödeme sağlayıcı başvurusu (A'dan önce); Amazon SP-API geliştirici kaydı ve barındırma sağlayıcısı seçimi (M5'ten önce).
