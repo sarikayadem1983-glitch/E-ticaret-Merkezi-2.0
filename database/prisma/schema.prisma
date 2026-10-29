@@ -39,7 +39,8 @@ model User {
   /// Lowercase; globally unique.
   email           String    @unique
   passwordHash    String    @map("password_hash")
-  /// Deprecated (phase 1): replaced by TenantMembership.status; dropped in phase 2.
+  /// Global account switch, kept in phase 2: login, refresh and JwtAuthGuard refuse inactive users.
+  /// Per-tenant access is TenantMembership.status.
   isActive        Boolean   @default(true) @map("is_active")
   /// Default tenant at login. Not a foreign key.
   lastTenantId    String?   @map("last_tenant_id") @db.Uuid
