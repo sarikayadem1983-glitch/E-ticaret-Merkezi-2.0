@@ -114,7 +114,14 @@ async function switchOnce(
       // The backend already swapped the refresh token but the new session was
       // not stored (INF-18). Undo the swap so the old session keeps working
       // instead of raising the reuse alarm on its next refresh.
-      await abortSwitch(data.refreshToken, session.refreshToken, client);
+      if (
+        !(await abortSwitch(data.refreshToken, session.refreshToken, client))
+      ) {
+        // Not undone: the old session holds a revoked token whose next refresh
+        // would raise the reuse alarm. Drop the cookie (no Redis needed) so
+        // the user signs in again instead.
+        await clearSessionCookie().catch(() => {});
+      }
       throw error;
     }
     return {
@@ -131,24 +138,24 @@ async function switchOnce(
   }
 }
 
-/** Never throws: the caller answers 503 either way. */
+/** Never throws: the caller answers 503 either way. True when undone. */
 async function abortSwitch(
   refreshToken: string,
   previousRefreshToken: string,
   client: ClientContext,
-): Promise<void> {
+): Promise<boolean> {
   try {
     const res = await backendFetch('auth/switch-tenant/abort', {
       method: 'POST',
       body: { refreshToken, previousRefreshToken },
       client,
     });
-    if (!res.ok) {
-      console.error(`[bff] mağaza değişikliği geri alınamadı: ${res.status}`);
-    }
+    if (res.ok) return true;
+    console.error(`[bff] mağaza değişikliği geri alınamadı: ${res.status}`);
   } catch (error) {
     console.error('[bff] mağaza değişikliği geri alınamadı:', error);
   }
+  return false;
 }
 
 async function revoke(store: SessionStore, sid: string): Promise<Response> {

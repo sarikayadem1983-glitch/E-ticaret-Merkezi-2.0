@@ -1125,6 +1125,50 @@ describe('API (e2e)', () => {
           .expect(200);
       });
 
+      it('refuses after a logout of the new session', async () => {
+        const session = await loginA();
+        const switched = (await switchTo(session, tenantB).expect(200)).body
+          .data;
+        await http()
+          .post('/api/v1/auth/logout')
+          .set('Authorization', `Bearer ${switched.accessToken}`)
+          .send({ refreshToken: switched.refreshToken })
+          .expect(204);
+        const alarmsBefore = await alarmCount();
+        await abort(switched.refreshToken, session.refreshToken).expect(401);
+        // The old token stays revoked; presenting it is still the reuse case.
+        const [old] = await sql<{ revoked_at: Date | null }>(
+          'SELECT revoked_at FROM refresh_tokens WHERE token_hash = $1',
+          [TokenService.hash(session.refreshToken)],
+        );
+        expect(old.revoked_at).not.toBeNull();
+        expect(await alarmCount()).toBe(alarmsBefore);
+      });
+
+      it('a restored token of a membership deactivated since is refused without the alarm', async () => {
+        const session = await loginA();
+        const switched = (await switchTo(session, tenantB).expect(200)).body
+          .data;
+        await abort(switched.refreshToken, session.refreshToken).expect(204);
+        await sql(
+          `UPDATE tenant_memberships SET status = 'inactive' WHERE tenant_id = $1 AND user_id = $2`,
+          [tenantA, userId],
+        );
+        const alarmsBefore = await alarmCount();
+        try {
+          await http()
+            .post('/api/v1/auth/refresh')
+            .send({ refreshToken: session.refreshToken })
+            .expect(401);
+          expect(await alarmCount()).toBe(alarmsBefore);
+        } finally {
+          await sql(
+            `UPDATE tenant_memberships SET status = 'active' WHERE tenant_id = $1 AND user_id = $2`,
+            [tenantA, userId],
+          );
+        }
+      });
+
       it('refuses after the 60 s window', async () => {
         const session = await loginA();
         const switched = (await switchTo(session, tenantB).expect(200)).body

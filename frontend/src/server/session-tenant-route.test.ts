@@ -68,7 +68,7 @@ async function signedInAsA(): Promise<string> {
   return sid;
 }
 
-/** Backend double: switch-tenant succeeds for B, auth/me answers for the new token. */
+/** Backend double: switch-tenant succeeds for B, auth/me answers for the new token, abort succeeds. */
 function backendSwitchesToB() {
   fetchMock.mockImplementation(async (path) => {
     if (path === 'auth/switch-tenant') {
@@ -83,6 +83,8 @@ function backendSwitchesToB() {
     if (path === 'auth/me') {
       return json(200, { data: { id: USER, tenantId: TENANT_B } });
     }
+    if (path === 'auth/switch-tenant/abort')
+      return new Response(null, { status: 204 });
     return json(404, {});
   });
 }
@@ -331,7 +333,7 @@ describe('POST /api/session/tenant', () => {
       await store.destroy(sid);
     });
 
-    it('still answers 503 when the abort call itself fails', async () => {
+    it('answers 503 and drops the cookie when the abort call fails', async () => {
       const sid = await signedInAsA();
       backendSwitchesToB();
       const switched = fetchMock.getMockImplementation()!;
@@ -352,7 +354,8 @@ describe('POST /api/session/tenant', () => {
         create.mockRestore();
         log.mockRestore();
       }
-      expect(jar.get(COOKIE)).toBe(sid);
+      // Not undone: the old session must not be used again (reuse alarm).
+      expect(jar.get(COOKIE)).toBeUndefined();
       await store.destroy(sid);
     });
 

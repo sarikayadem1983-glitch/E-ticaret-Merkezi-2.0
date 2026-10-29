@@ -661,9 +661,14 @@ export class AuthService {
       .catch(nullOnLostRace);
     if (!aborted) throw invalidRefreshToken();
 
+    // Only the default store of the next login: the abort itself is done.
     await TenantContext.runAsSystem(() =>
       this.repository.setLastTenant(next.userId, previous.tenantId),
-    );
+    ).catch((error: unknown) => {
+      this.logger.error(
+        `Mağaza değişikliği geri alındı, last_tenant_id güncellenemedi (user ${next.userId}): ${(error as Error).message}`,
+      );
+    });
   }
 
   /** Runs in the authenticated request's tenant context; the user is read through the membership. */
