@@ -102,6 +102,7 @@ Tenant filtresi geliştiriciye bırakılmaz; Prisma seviyesinde zorunludur ve **
 | `companies` | Tenant altındaki işletmeler: unvan, vergi, adres, e-Fatura bilgileri |
 | `audit` | Değiştirilemez işlem geçmişi |
 | `auth` | Kullanıcı, rol, yetki, oturum |
+| `mail` | E-posta gönderimi: `MailService.send({ to, subject, html, text })`, SMTP veya log taşıyıcısı. Diğer modüller içeriği kendisi üretir, taşıyıcıya dokunmaz |
 | `catalog` | Ürün, kategori, marka, varyant |
 | `inventory` | Stok, depo, stok hareketleri |
 | `orders` | Sipariş, sipariş kalemi, durum akışı |

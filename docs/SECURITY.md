@@ -149,6 +149,7 @@ Production'a çıkmadan önce her madde tamamlanmış ve doğrulanmış olmalıd
 - [ ] **`SESSION_SECRET`:** Secret manager'dan verilir, en az 32 karakter. Değiştirildiğinde tüm oturumlar düşer (kullanıcılar yeniden giriş yapar).
 - [ ] **Backend'e ağ erişimi:** Backend yalnızca BFF sunucularından erişilebilir olmalı (internal network / güvenlik grubu); internete açık olmamalı.
 - [ ] **Rate limit değerleri:** Mevcut varsayılanlar (§3) korunur. Canlı trafik izlendikten sonra (ör. ortak NAT arkasındaki ofisler) gözden geçirilmeli.
+- [ ] **SMTP:** `MAIL_TRANSPORT=smtp`, `MAIL_FROM` ve TLS (`SMTP_SECURE=true` veya STARTTLS zorunlu) ayarlı; SMTP kullanıcı/şifresi secret manager'dan. Gönderen alan adı için SPF, DKIM ve DMARC kayıtları yapılmalı (§6).
 - [ ] **Nonce tabanlı CSP:** `script-src 'unsafe-inline'` yerine `proxy.ts`'te istek başına nonce üretilmeli (§5 Güvenlik başlıkları).
 
 ## 5. Frontend (BFF) oturum güvenliği
@@ -213,3 +214,14 @@ Production'da (`NODE_ENV=production`) HTTP istekleri reddedilir: `GET/HEAD` → 
 - `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` (kamera, mikrofon, konum, ödeme kapalı), `Cross-Origin-Opener-Policy: same-origin`. `X-Powered-By` gönderilmez.
 
 Bilinen sınır: Next.js satır içi başlatma script'leri kullandığı için `script-src` şu an `'unsafe-inline'` içerir (geliştirmede ek olarak `'unsafe-eval'` ve HMR için `ws:`). Canlıya çıkmadan önce `proxy.ts`'te istek başına nonce üreten CSP'ye geçilmeli (§4 kontrol listesi).
+
+## 6. E-posta
+
+Kod: `backend/src/mail/`. Diğer modüller yalnızca `MailService.send({ to, subject, html, text })` kullanır.
+
+- **Taşıyıcı:** `MAIL_TRANSPORT=smtp` (nodemailer) veya `log`. `log` mesaj içeriğini yazmaz, yalnızca maskeli alıcı (`a***@ornek.com`) ve konuyu loglar; davet bağlantısı ve token hiçbir logda yer almaz. **Production'da `log` reddedilir** (uygulama açılmaz).
+- **TLS:** Production'da düz SMTP reddedilir: `SMTP_SECURE=true` (doğrudan TLS) ya da STARTTLS zorunlu (`SMTP_REQUIRE_TLS`, production'da varsayılan `true`; `false` verilirse uygulama açılmaz). Sertifika doğrulaması her zaman açıktır. Production'da `MAIL_FROM` zorunlu.
+- **Zaman aşımı:** Bağlantı, karşılama ve soket için 10 sn; tek gönderim en fazla 10 sn sürer. Hata `MailDeliveryError` olarak döner ve yalnızca kısa kod taşır: `SMTP_TIMEOUT`, `SMTP_REJECTED` (5xx / zarf reddi), `SMTP_UNAVAILABLE` (bağlantı, TLS, kimlik doğrulama). Ham SMTP yanıtı hata mesajına ve veritabanına girmez.
+- **Başlık enjeksiyonu:** Alıcı tek düz adres olmalı (liste, görünen ad, satır sonu yok); konu satır sonu içeremez.
+- **Yapılandırma hataları:** Mesajlarda `SMTP_PASSWORD` değeri yer almaz.
+- **Geliştirme:** Mailpit (`docker/docker-compose.yml`, `axllent/mailpit:v1.21`, yalnızca `127.0.0.1`: SMTP `1025`, arayüz/API `8025`). Hiçbir e-posta dışarı çıkmaz. Testler log taşıyıcısını veya yerel sahte SMTP sunucusunu kullanır; gerçek SMTP bilgisi kullanılmaz.
