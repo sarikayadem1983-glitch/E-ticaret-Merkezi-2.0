@@ -194,6 +194,33 @@ describe('POST /api/session/tenant', () => {
     await (await sessionStore()).destroy(sid);
   });
 
+  it.each([
+    ['an error status', () => Promise.resolve(json(500, {}))],
+    ['a network failure', () => Promise.reject(new Error('ECONNRESET'))],
+  ])(
+    'answers 503 and keeps the current session when auth/me fails with %s',
+    async (_n, meFails) => {
+      const sid = await signedInAsA();
+      backendSwitchesToB();
+      const switched = fetchMock.getMockImplementation()!;
+      fetchMock.mockImplementation((path, init) =>
+        path === 'auth/me' ? meFails() : switched(path, init),
+      );
+
+      const res = await POST(post({ tenantId: TENANT_B }));
+      expect(res.status).toBe(503);
+      expect(await res.text()).not.toContain('access-B');
+      // The cookie and the old session id survive; no new session is created.
+      expect(jar.get(COOKIE)).toBe(sid);
+      const store = await sessionStore();
+      expect(await store.get(sid)).toMatchObject({
+        tenantId: TENANT_A,
+        accessToken: 'access-A',
+      });
+      await store.destroy(sid);
+    },
+  );
+
   it('refuses to switch while a token refresh of the session is running', async () => {
     const sid = await signedInAsA();
     const store = await sessionStore();

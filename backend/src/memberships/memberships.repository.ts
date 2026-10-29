@@ -98,6 +98,31 @@ export class MembershipsRepository {
     });
   }
 
+  /**
+   * Inside a transaction: the auth version of the user's membership in the
+   * tenant when the membership is active and the tenant is active, else null.
+   * The membership row is held with FOR SHARE until the transaction ends, so
+   * a concurrent deactivation either commits first (null here) or waits.
+   * Row locks need raw SQL, which the extension allows only in system
+   * context; the query filters by the given tenant itself.
+   */
+  async lockActive(
+    tx: PrismaTx,
+    tenantId: string,
+    userId: string,
+  ): Promise<number | null> {
+    const rows = await TenantContext.runAsSystem(
+      () => tx.$queryRaw<{ auth_version: number }[]>`
+      SELECT m.auth_version
+      FROM tenant_memberships m
+      JOIN tenants t ON t.id = m.tenant_id
+      WHERE m.tenant_id = ${tenantId}::uuid AND m.user_id = ${userId}::uuid
+        AND m.status = 'active' AND t.is_active AND t.deleted_at IS NULL
+      FOR SHARE OF m`,
+    );
+    return rows[0]?.auth_version ?? null;
+  }
+
   /** Tenant context: adds the user to the current tenant as an active member. */
   create(db: PrismaTx, userId: string) {
     return db.tenantMembership.create({

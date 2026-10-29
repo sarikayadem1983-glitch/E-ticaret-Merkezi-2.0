@@ -2,6 +2,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  UnprocessableEntityException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { hash, verify } from '@node-rs/argon2';
@@ -367,18 +368,19 @@ export class AuthService {
       throw invalidRefreshToken();
     }
 
+    if (targetTenantId === current.tid) {
+      throw new UnprocessableEntityException({
+        code: 'VALIDATION_ERROR',
+        message: 'Zaten bu mağazadasınız',
+      });
+    }
+
     const active = await this.memberships.findActiveForUser(current.sub);
     if (!active.some((m) => m.tenantId === targetTenantId)) {
       throw tenantNotFound();
     }
 
     return TenantContext.run(targetTenantId, async () => {
-      const membership = await this.memberships.get(
-        targetTenantId,
-        current.sub,
-      );
-      if (membership?.status !== 'active') throw tenantNotFound();
-
       const event: AuditEvent = {
         action: 'TENANT_SWITCH',
         module: MODULE,
@@ -388,7 +390,14 @@ export class AuthService {
         actorUserId: current.sub,
       };
       const next = this.tokens.newRefreshToken();
+      // Throws 404 inside the transaction so nothing is revoked or issued.
       const switched = await this.repository.prisma.$transaction(async (tx) => {
+        const ver = await this.memberships.lockActive(
+          tx,
+          targetTenantId,
+          current.sub,
+        );
+        if (ver === null) throw tenantNotFound();
         const revoked = await TenantContext.run(current.tid, async () => {
           if (
             !(await this.repository.revokeRefreshToken(tx, stored.id, null))
@@ -399,14 +408,14 @@ export class AuthService {
           return true;
         });
         // Used concurrently by another request: nothing is issued.
-        if (!revoked) return false;
+        if (!revoked) return null;
         await this.repository.createRefreshToken(tx, {
           userId: current.sub,
           tokenHash: next.hash,
           expiresAt: next.expiresAt,
         });
         await this.audit.record(event, tx);
-        return true;
+        return { ver };
       });
       if (!switched) throw invalidRefreshToken();
 
@@ -418,7 +427,7 @@ export class AuthService {
         {
           tenantId: targetTenantId,
           userId: current.sub,
-          ver: membership.authVersion,
+          ver: switched.ver,
         },
         perms,
         next.token,

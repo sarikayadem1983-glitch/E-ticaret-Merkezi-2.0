@@ -112,32 +112,40 @@ export async function startSession(
 }
 
 /**
- * Replaces the current session after a store switch. The old session id is
- * destroyed (its refresh token is already revoked by the backend) and a new id
- * is issued, so nothing bound to the old store survives: the selected company
- * is reset and tid/perms come only from the new tokens. The absolute timeout
- * keeps counting from the original login.
+ * Replaces the current session after a store switch. The new tokens are
+ * checked with auth/me first; only then is a new session id issued and the
+ * old one destroyed, so nothing bound to the old store survives: the selected
+ * company is reset and tid/perms come only from the new tokens. The absolute
+ * timeout keeps counting from the original login. When auth/me fails the
+ * current session and cookie are left as they are and 503 is returned.
  */
 export async function switchSession(
   tokens: TokenPair,
   client: ClientContext,
 ): Promise<Response | null> {
-  const store = await sessionStore();
-  const previousSid = await readSessionId();
-  const previous = previousSid ? await store.get(previousSid) : null;
-  if (previousSid) await store.destroy(previousSid);
-
-  const me = await backendFetch('auth/me', {
-    accessToken: tokens.accessToken,
-    client,
-  });
+  let me: Response;
+  try {
+    me = await backendFetch('auth/me', {
+      accessToken: tokens.accessToken,
+      client,
+    });
+  } catch {
+    me = new Response(null, { status: 503 });
+  }
   if (!me.ok) {
-    await clearSessionCookie();
-    return errorResponse(502, 'BAD_GATEWAY', 'Mağaza değiştirilemedi');
+    return errorResponse(
+      503,
+      'SERVICE_UNAVAILABLE',
+      'Mağaza değiştirilemedi, tekrar deneyin',
+    );
   }
   const { data } = (await me.json()) as {
     data: { id: string; tenantId: string };
   };
+
+  const store = await sessionStore();
+  const previousSid = await readSessionId();
+  const previous = previousSid ? await store.get(previousSid) : null;
   const now = Date.now();
   const sid = await store.create({
     ...sessionFromTokens(
@@ -148,6 +156,7 @@ export async function switchSession(
     createdAt: previous?.createdAt ?? now,
   });
   await setSessionCookie(sid);
+  if (previousSid) await store.destroy(previousSid);
   return null;
 }
 

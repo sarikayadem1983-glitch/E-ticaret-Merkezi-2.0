@@ -1001,6 +1001,82 @@ describe('API (e2e)', () => {
         .expect(200);
     });
 
+    it('switch-tenant to the current tenant is 422 and rotates nothing', async () => {
+      const session = await loginA();
+      const res = await switchTo(session, tenantA).expect(422);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      const audits = await sql<{ n: string }>(
+        `SELECT count(*)::text AS n FROM audit_logs
+         WHERE entity_id = $1 AND action = 'TENANT_SWITCH'
+           AND after->>'toTenantId' = $2`,
+        [userId, tenantA],
+      );
+      expect(audits[0].n).toBe('0');
+      // The refresh token was not consumed.
+      await http()
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: session.refreshToken })
+        .expect(200);
+    });
+
+    it('a membership deactivated while the switch runs yields 404 and issues nothing', async () => {
+      const session = await loginA();
+      const pool = ownerPool();
+      const blocker = await pool.connect();
+      const started = (await pool.query<{ t: Date }>('SELECT now() AS t'))
+        .rows[0].t;
+      try {
+        await blocker.query('BEGIN');
+        await blocker.query(
+          `UPDATE tenant_memberships SET status = 'inactive'
+           WHERE tenant_id = $1 AND user_id = $2`,
+          [tenantB, userId],
+        );
+        const xid = (
+          await blocker.query<{ xid: string }>(
+            'SELECT pg_current_xact_id()::xid::text AS xid',
+          )
+        ).rows[0].xid;
+        const pending = switchTo(session, tenantB).then((r) => r);
+        // Wait until the switch transaction is blocked on the membership row
+        // (pg_locks is visible to every role, unlike pg_stat_activity).
+        for (let polls = 0; ; polls++) {
+          if (polls > 2000) throw new Error('switch never waited for the lock');
+          const waiting = await pool.query(
+            `SELECT 1 FROM pg_locks
+             WHERE NOT granted AND locktype = 'transactionid'
+               AND transactionid = $1::xid`,
+            [xid],
+          );
+          if (waiting.rowCount) break;
+        }
+        await blocker.query('COMMIT');
+        const res = await pending;
+        expect(res.status).toBe(404);
+        expect(JSON.stringify(res.body)).not.toMatch(/eyJ/);
+        const issued = await pool.query(
+          `SELECT 1 FROM refresh_tokens
+           WHERE tenant_id = $1 AND user_id = $2 AND created_at >= $3`,
+          [tenantB, userId, started],
+        );
+        expect(issued.rowCount).toBe(0);
+        // Nothing was rotated: the current session keeps working.
+        await http()
+          .post('/api/v1/auth/refresh')
+          .send({ refreshToken: session.refreshToken })
+          .expect(200);
+      } finally {
+        await blocker.query('ROLLBACK').catch(() => undefined);
+        await pool.query(
+          `UPDATE tenant_memberships SET status = 'active'
+           WHERE tenant_id = $1 AND user_id = $2`,
+          [tenantB, userId],
+        );
+        blocker.release();
+        await pool.end();
+      }
+    });
+
     it('validates the body and requires authentication', async () => {
       const session = await loginA();
       await switchTo(session, 'not-a-uuid').expect(422);
