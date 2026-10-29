@@ -221,6 +221,29 @@ describe('session revocation (e2e)', () => {
     }
   });
 
+  it.each([
+    [
+      'globally deactivated',
+      'UPDATE users SET is_active = false WHERE id = $1',
+    ],
+    ['soft-deleted', 'UPDATE users SET deleted_at = now() WHERE id = $1'],
+  ])('a %s user is rejected on the next request', async (label, update) => {
+    const { email, userId } = await member(`user-${label.split(' ')[0]}`, [
+      { tenantId: tenant.a, role: 'admin' },
+    ]);
+    const session = await login(email);
+    await http()
+      .get('/api/v1/auth/me')
+      .set(bearer(session.accessToken))
+      .expect(200);
+    await sql(update, [userId]);
+    const res = await http()
+      .get('/api/v1/auth/me')
+      .set(bearer(session.accessToken))
+      .expect(401);
+    expect(res.body.error.code).toBe('SESSION_REVOKED');
+  });
+
   it('a token without a membership in its tenant is SESSION_REVOKED', async () => {
     const { userId } = await member('nomember', [
       { tenantId: tenant.a, role: 'admin' },

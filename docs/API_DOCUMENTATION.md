@@ -197,7 +197,7 @@ Audit log kayıtlarını değiştiren veya silen endpoint yoktur.
 |---|---|---|
 | `VALIDATION_ERROR` | 422 | Girdi doğrulanamadı; `details` alan hatalarını içerir |
 | `UNAUTHORIZED` | 401 | Token yok veya geçersiz |
-| `SESSION_REVOKED` | 401 | Token geçerli ama üyelik pasif/yok veya mağaza pasif; yeniden giriş gerekir |
+| `SESSION_REVOKED` | 401 | Token geçerli ama üyelik pasif/yok, mağaza pasif veya kullanıcı pasif/silinmiş; yeniden giriş gerekir |
 | `TOKEN_STALE` | 401 | Token'ın `ver`'i üyeliğin `auth_version`'ından farklı (rol/mağaza değişti); refresh yapıp isteği tekrarlayın |
 | `FORBIDDEN` | 403 | İzin yok |
 | `CONFLICT` | 409 | Tekil alan çakışması |

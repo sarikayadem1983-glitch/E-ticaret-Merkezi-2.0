@@ -289,4 +289,129 @@ describe('POST /api/session/tenant', () => {
     await store.unlock(sid, owner!);
     await store.destroy(sid);
   });
+  describe('per-request revocation', () => {
+    const stale = () =>
+      json(401, { error: { code: 'TOKEN_STALE', message: 'x', details: [] } });
+    const revoked = () =>
+      json(401, {
+        error: { code: 'SESSION_REVOKED', message: 'x', details: [] },
+      });
+    const refresh = vi.mocked(refreshTokens);
+    const refreshedA = {
+      kind: 'ok',
+      tokens: {
+        accessToken: 'access-A2',
+        refreshToken: 'refresh-A2',
+        expiresIn: 900,
+      },
+    } as never;
+
+    beforeEach(() => refresh.mockReset());
+
+    it('refreshes once after TOKEN_STALE and retries the switch once', async () => {
+      const oldSid = await signedInAsA();
+      refresh.mockResolvedValue(refreshedA);
+      const switchBodies: unknown[] = [];
+      fetchMock.mockImplementation(async (path, init) => {
+        if (path === 'auth/switch-tenant') {
+          switchBodies.push({ token: init?.accessToken, body: init?.body });
+          if (init?.accessToken === 'access-A') return stale();
+          return json(200, {
+            data: {
+              accessToken: 'access-B',
+              refreshToken: 'refresh-B',
+              expiresIn: 900,
+            },
+          });
+        }
+        if (path === 'auth/me') {
+          return json(200, { data: { id: USER, tenantId: TENANT_B } });
+        }
+        return json(404, {});
+      });
+
+      const res = await POST(post({ tenantId: TENANT_B }));
+      expect(res.status).toBe(204);
+      expect(refresh).toHaveBeenCalledTimes(1);
+      expect(refresh.mock.calls[0][0]).toBe('refresh-A');
+      expect(switchBodies).toEqual([
+        {
+          token: 'access-A',
+          body: { tenantId: TENANT_B, refreshToken: 'refresh-A' },
+        },
+        {
+          token: 'access-A2',
+          body: { tenantId: TENANT_B, refreshToken: 'refresh-A2' },
+        },
+      ]);
+      const store = await sessionStore();
+      expect(await store.get(oldSid)).toBeNull();
+      const newSid = jar.get(COOKIE)!;
+      expect(await store.get(newSid)).toMatchObject({
+        tenantId: TENANT_B,
+        refreshToken: 'refresh-B',
+      });
+      await store.destroy(newSid);
+    });
+
+    it('destroys the session when the retry is stale again (no loop)', async () => {
+      const sid = await signedInAsA();
+      refresh.mockResolvedValue(refreshedA);
+      fetchMock.mockImplementation(async () => stale());
+
+      const res = await POST(post({ tenantId: TENANT_B }));
+      expect(res.status).toBe(401);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(refresh).toHaveBeenCalledTimes(1);
+      expect(jar.get(COOKIE)).toBeUndefined();
+      expect(await (await sessionStore()).get(sid)).toBeNull();
+    });
+
+    it('destroys the session when the refresh after TOKEN_STALE is rejected', async () => {
+      const sid = await signedInAsA();
+      refresh.mockResolvedValue({ kind: 'invalid' } as never);
+      fetchMock.mockImplementation(async () => stale());
+
+      const res = await POST(post({ tenantId: TENANT_B }));
+      expect(res.status).toBe(401);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(jar.get(COOKIE)).toBeUndefined();
+      expect(await (await sessionStore()).get(sid)).toBeNull();
+    });
+
+    it('destroys the session on SESSION_REVOKED without refreshing', async () => {
+      const sid = await signedInAsA();
+      fetchMock.mockImplementation(async () => revoked());
+
+      const res = await POST(post({ tenantId: TENANT_B }));
+      expect(res.status).toBe(401);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(refresh).not.toHaveBeenCalled();
+      expect(jar.get(COOKIE)).toBeUndefined();
+      expect(await (await sessionStore()).get(sid)).toBeNull();
+    });
+
+    it('releases the session lock after a TOKEN_STALE retry', async () => {
+      const sid = await signedInAsA();
+      refresh.mockResolvedValue(refreshedA);
+      fetchMock.mockImplementation(async (path, init) =>
+        init?.accessToken === 'access-A'
+          ? stale()
+          : json(404, { error: { code: 'TENANT_NOT_FOUND', message: 'x' } }),
+      );
+
+      const res = await POST(post({ tenantId: TENANT_B }));
+      expect(res.status).toBe(404);
+      const store = await sessionStore();
+      expect(await store.get(sid)).toMatchObject({
+        tenantId: TENANT_A,
+        accessToken: 'access-A2',
+        refreshToken: 'refresh-A2',
+      });
+      const owner = await store.lock(sid, 1000);
+      expect(owner).toBeTruthy();
+      await store.unlock(sid, owner!);
+      await store.destroy(sid);
+    });
+  });
 });

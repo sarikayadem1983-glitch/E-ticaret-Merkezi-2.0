@@ -125,8 +125,9 @@ export class MembershipsRepository {
 
   /**
    * Per-request session check (JwtAuthGuard): the membership's status, its
-   * auth_version and whether its tenant is active, in one primary-key lookup
-   * joined to tenants. Null when the user has no membership in the tenant.
+   * auth_version and whether its tenant and the global user are active (not
+   * deactivated, not soft-deleted), in one primary-key lookup joined to
+   * tenants and users. Null when the user has no membership in the tenant.
    * Raw SQL runs only in system context; the query filters by the given
    * tenant itself.
    */
@@ -136,10 +137,12 @@ export class MembershipsRepository {
   ): Promise<{ usable: boolean; authVersion: number } | null> {
     const rows = await TenantContext.runAsSystem(
       () => this.prisma.$queryRaw<{ usable: boolean; auth_version: number }[]>`
-      SELECT (m.status = 'active' AND t.is_active AND t.deleted_at IS NULL) AS usable,
+      SELECT (m.status = 'active' AND t.is_active AND t.deleted_at IS NULL
+              AND u.is_active AND u.deleted_at IS NULL) AS usable,
              m.auth_version
       FROM tenant_memberships m
       JOIN tenants t ON t.id = m.tenant_id
+      JOIN users u ON u.id = m.user_id
       WHERE m.tenant_id = ${tenantId}::uuid AND m.user_id = ${userId}::uuid`,
     );
     const row = rows[0];

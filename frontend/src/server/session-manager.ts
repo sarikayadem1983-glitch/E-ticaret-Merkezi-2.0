@@ -36,7 +36,7 @@ export type SendResult =
   | { kind: 'signed-out' };
 
 /** `error.code` of a standard error body, or null. Reads a clone. */
-async function errorCode(res: Response): Promise<string | null> {
+export async function errorCode(res: Response): Promise<string | null> {
   try {
     const body = (await res.clone().json()) as { error?: { code?: unknown } };
     return typeof body.error?.code === 'string' ? body.error.code : null;
@@ -130,7 +130,7 @@ export class SessionManager {
    * request already replaced the stale token. Same lock as resolve(), so a
    * refresh token is never used twice.
    */
-  private forceRefresh(
+  forceRefresh(
     sid: string,
     stale: SessionData,
   ): Promise<SessionData | null> {
