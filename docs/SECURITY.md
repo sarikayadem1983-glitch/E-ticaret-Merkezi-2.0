@@ -136,6 +136,17 @@ Sayaçlar Redis'te tutulur (`rl:` önekli anahtarlar). Her kontrol tek bir atomi
 
 Production'da Redis yüksek erişilebilirlik (replika + otomatik failover) ile çalıştırılmalı ve izlenmelidir.
 
+### Kuyruk işlerinde tenant bağlamı
+
+Ayrıntı: [ARCHITECTURE.md → Kuyruk](ARCHITECTURE.md#kuyruk-arka-plan-işleri).
+
+- İş yalnızca bir tenant bağlamından kuyruğa alınabilir; tenant çağıranın `TenantContext`'inden alınır, parametre olarak verilemez. System context'ten (`runAsSystem`) kuyruğa iş alınamaz.
+- Worker her işi `TenantContext.run(job.tenantId)` içinde çalıştırır. Geçersiz/eksik/bilinmeyen/pasif tenant'lı iş hiç çalışmaz, system context'e düşmez; `INVALID_JOB_TENANT` ile ölü kuyruğa gider. Redis'e doğrudan yazılmış sahte bir iş de bu kontrolden geçer.
+- Kuyruk modülü `runAsSystem` kullanmaz (izin listesine eklenmedi).
+- Ölü kuyruk okuma ve yeniden deneme yalnızca çağıranın tenant'ının işlerini döner.
+- Payload'a gizli bilgi konmaz. Başarısızlık logları payload ve hata mesajı içermez, yalnızca hata kodu içerir. Hata mesajı Redis'teki `failedReason` alanında durur: handler'lar hata mesajına gizli bilgi yazmamalıdır.
+- **Redis kesintisi:** `enqueue` hızlı hata verir (`QUEUE_UNAVAILABLE`, istek askıda kalmaz); worker'lar bekler ve yeniden bağlanır. `/health` `queue: "down"` gösterir.
+
 ## 4. Canlıya çıkış öncesi kontrol listesi
 
 Production'a çıkmadan önce her madde tamamlanmış ve doğrulanmış olmalıdır.
@@ -144,6 +155,7 @@ Production'a çıkmadan önce her madde tamamlanmış ve doğrulanmış olmalıd
 - [ ] **CAPTCHA:** Kayıt ve tekrarlanan başarısız girişlerden sonra login için CAPTCHA (ör. Cloudflare Turnstile, hCaptcha) eklenmeli.
 - [ ] **Sızmış şifre kontrolü:** Kayıt ve şifre değişikliğinde şifre, sızmış şifre listelerine karşı kontrol edilmeli (ör. HIBP Pwned Passwords k-anonymity API). Şifrenin kendisi dışarı gönderilmez.
 - [ ] **`TRUST_PROXY`:** Production'daki load balancer / reverse proxy adresleriyle ayarlanmalı. Yanlış ayarda tüm istemciler proxy IP'sini paylaşır ve IP bazlı sınırlar herkesi birlikte engeller. Çıkıştan sonra `req.ip`'nin gerçek istemci IP'si olduğu doğrulanmalı.
+- [ ] **Kuyruk Redis'i:** Kuyruk işleri Redis'te durur. AOF kalıcılığı açık olmalı, `maxmemory-policy noeviction` olmalı (aksi halde Redis iş anahtarlarını silebilir), `/health` içindeki `queue: "down"` için alarm tanımlanmalı.
 - [ ] **BFF Redis'i:** Oturumlar Redis'te tutulur; Redis kesintisinde kimse giriş yapamaz ve açık oturumlar çalışmaz. Rate limiting ile aynı yedeklilik gerekir (§5).
 - [ ] **HTTPS ve sertifika:** Next.js önünde TLS sonlandıran load balancer/proxy. `APP_ORIGIN=https://...`, `BFF_TRUST_PROXY` o proxy'nin adresi, backend `TRUST_PROXY` Next.js sunucularının adresi.
 - [ ] **`SESSION_SECRET`:** Secret manager'dan verilir, en az 32 karakter. Değiştirildiğinde tüm oturumlar düşer (kullanıcılar yeniden giriş yapar).

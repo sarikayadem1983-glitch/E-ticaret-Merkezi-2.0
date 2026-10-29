@@ -81,7 +81,7 @@ describe('API (e2e)', () => {
     http()
       .get('/api/v1/health')
       .expect(200)
-      .expect({ data: { status: 'ok', database: 'up' } }));
+      .expect({ data: { status: 'ok', database: 'up', queue: 'up' } }));
 
   describe('tenant isolation', () => {
     it('blocks queries with no tenant context', async () => {

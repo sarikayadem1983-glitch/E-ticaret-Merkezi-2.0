@@ -6,6 +6,7 @@ import { CompaniesModule } from './companies/companies.module.js';
 import { RequestContextMiddleware } from './common/request-context.middleware.js';
 import { DatabaseModule } from './database/database.module.js';
 import { HealthModule } from './health/health.module.js';
+import { QueueModule } from './queue/queue.module.js';
 import { TenantContextMiddleware } from './tenancy/tenant-context.middleware.js';
 
 @Module({
@@ -16,6 +17,7 @@ import { TenantContextMiddleware } from './tenancy/tenant-context.middleware.js'
     AuthModule,
     CompaniesModule,
     HealthModule,
+    QueueModule,
   ],
 })
 export class AppModule implements NestModule {
