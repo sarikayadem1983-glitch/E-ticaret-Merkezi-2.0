@@ -34,6 +34,8 @@ sh docker/postgres/setup-roles.sh
 
 Script tekrar çalıştırılabilir (idempotent). Şifre değiştirmek için `.env`'deki değeri güncelleyip yeniden çalıştırın.
 
+`setup-roles.sql` doğrudan `psql` ile de çalıştırılabilir; parola değişkenlerinden biri eksik veya boşsa hiçbir değişiklik yapmadan durur (boş değer `ALTER ROLE ... PASSWORD ''` ile rolün parolasını silerdi). Test: `bash database/scripts/test-setup-roles-guard.sh` (atılabilir konteynerde, mevcut veritabanı veya `.env` kullanılmaz).
+
 ### Production bağlantı bilgileri
 
 - `DATABASE_URL` ve `MIGRATION_DATABASE_URL` ayrı gizli değerlerdir. Bir secret manager (ör. AWS Secrets Manager, GCP Secret Manager, Vault, Kubernetes Secret) ile ortam değişkeni olarak verilir. Repoya, imaja veya loglara yazılmaz.
