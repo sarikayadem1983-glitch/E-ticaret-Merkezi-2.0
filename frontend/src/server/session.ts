@@ -188,7 +188,14 @@ export async function switchSession(
     createdAt: previous?.createdAt ?? now,
   });
   await setSessionCookie(sid);
-  if (previousSid) await store.destroy(previousSid);
+  // The new session is live from here on: a failed cleanup must not fail the
+  // switch (the caller would undo it). The old record holds a revoked token
+  // and expires with its TTL.
+  if (previousSid) {
+    await store.destroy(previousSid).catch((error: unknown) => {
+      console.error('[bff] eski oturum silinemedi:', error);
+    });
+  }
   return null;
 }
 

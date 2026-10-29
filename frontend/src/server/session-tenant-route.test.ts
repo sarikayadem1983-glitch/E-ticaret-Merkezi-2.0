@@ -2,7 +2,7 @@ import { POST } from '@/app/api/session/tenant/route';
 import { backendFetch, refreshTokens } from './backend-client';
 import { redis } from './redis';
 import { currentSession, sessionStore } from './session';
-import type { SessionData } from './session-store';
+import { type SessionData, SessionStore } from './session-store';
 
 const { jar } = vi.hoisted(() => ({ jar: new Map<string, string>() }));
 
@@ -68,7 +68,7 @@ async function signedInAsA(): Promise<string> {
   return sid;
 }
 
-/** Backend double: switch-tenant succeeds for B, auth/me answers for the new token. */
+/** Backend double: switch-tenant succeeds for B, auth/me answers for the new token, abort succeeds. */
 function backendSwitchesToB() {
   fetchMock.mockImplementation(async (path) => {
     if (path === 'auth/switch-tenant') {
@@ -83,6 +83,8 @@ function backendSwitchesToB() {
     if (path === 'auth/me') {
       return json(200, { data: { id: USER, tenantId: TENANT_B } });
     }
+    if (path === 'auth/switch-tenant/abort')
+      return new Response(null, { status: 204 });
     return json(404, {});
   });
 }
@@ -289,6 +291,103 @@ describe('POST /api/session/tenant', () => {
     await store.unlock(sid, owner!);
     await store.destroy(sid);
   });
+
+  describe('session store failure after the backend switched (INF-18)', () => {
+    const redisDown = () => new Error('Connection is closed.');
+
+    it('answers 503, aborts the switch and keeps the old session', async () => {
+      const sid = await signedInAsA();
+      backendSwitchesToB();
+      const store = await sessionStore();
+      const create = vi
+        .spyOn(SessionStore.prototype, 'create')
+        .mockRejectedValueOnce(redisDown());
+      try {
+        const res = await POST(post({ tenantId: TENANT_B }));
+        expect(res.status).toBe(503);
+        expect(JSON.stringify(await res.json())).not.toMatch(/refresh-/);
+      } finally {
+        create.mockRestore();
+      }
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'auth/switch-tenant/abort',
+        expect.objectContaining({
+          method: 'POST',
+          body: {
+            refreshToken: 'refresh-B',
+            previousRefreshToken: 'refresh-A',
+          },
+        }),
+      );
+      // The browser keeps the old session; its next refresh uses refresh-A,
+      // which the abort reactivated, so no reuse alarm is raised.
+      expect(jar.get(COOKIE)).toBe(sid);
+      expect(await store.get(sid)).toMatchObject({
+        tenantId: TENANT_A,
+        refreshToken: 'refresh-A',
+      });
+      const owner = await store.lock(sid, 1000);
+      expect(owner).toBeTruthy();
+      await store.unlock(sid, owner!);
+      await store.destroy(sid);
+    });
+
+    it('answers 503 and drops the cookie when the abort call fails', async () => {
+      const sid = await signedInAsA();
+      backendSwitchesToB();
+      const switched = fetchMock.getMockImplementation()!;
+      fetchMock.mockImplementation(async (path, init) => {
+        if (path === 'auth/switch-tenant/abort')
+          throw new Error('ECONNREFUSED');
+        return switched(path, init);
+      });
+      const store = await sessionStore();
+      const create = vi
+        .spyOn(SessionStore.prototype, 'create')
+        .mockRejectedValueOnce(redisDown());
+      const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const res = await POST(post({ tenantId: TENANT_B }));
+        expect(res.status).toBe(503);
+      } finally {
+        create.mockRestore();
+        log.mockRestore();
+      }
+      // Not undone: the old session must not be used again (reuse alarm).
+      expect(jar.get(COOKIE)).toBeUndefined();
+      await store.destroy(sid);
+    });
+
+    it('does not abort once the new session is stored (old one is left to its TTL)', async () => {
+      const oldSid = await signedInAsA();
+      backendSwitchesToB();
+      const store = await sessionStore();
+      const destroy = vi
+        .spyOn(SessionStore.prototype, 'destroy')
+        .mockRejectedValueOnce(redisDown());
+      let res: Response;
+      try {
+        res = await POST(post({ tenantId: TENANT_B }));
+      } finally {
+        destroy.mockRestore();
+      }
+      expect(res.status).toBe(204);
+      expect(fetchMock).not.toHaveBeenCalledWith(
+        'auth/switch-tenant/abort',
+        expect.anything(),
+      );
+      const newSid = jar.get(COOKIE)!;
+      expect(newSid).not.toBe(oldSid);
+      expect(await store.get(newSid)).toMatchObject({
+        tenantId: TENANT_B,
+        refreshToken: 'refresh-B',
+      });
+      await store.destroy(oldSid);
+      await store.destroy(newSid);
+    });
+  });
+
   describe('per-request revocation', () => {
     const stale = () =>
       json(401, { error: { code: 'TOKEN_STALE', message: 'x', details: [] } });

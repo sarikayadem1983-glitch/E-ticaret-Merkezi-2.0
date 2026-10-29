@@ -62,6 +62,9 @@ const REGISTER_TX_OPTIONS = { timeout: 10_000 };
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
+/** How long after switch-tenant the BFF may still undo it (INF-18). */
+const SWITCH_ABORT_WINDOW_MS = 60_000;
+
 function invalidCredentials() {
   return new UnauthorizedException({
     code: 'INVALID_CREDENTIALS',
@@ -405,6 +408,9 @@ export class AuthService {
     try {
       ({ revoked, bumped } = await TenantContext.runAsSystem(() =>
         this.repository.prisma.$transaction(async (tx) => {
+          // Before the bulk revoke: waits for an in-flight switch abort, then
+          // sees the token it reactivated.
+          await this.repository.lockUser(tx, userId);
           const revoked = await TenantContext.runAsSystem(() =>
             this.repository.revokeAllForUserEverywhere(tx, userId),
           );
@@ -570,6 +576,105 @@ export class AuthService {
         },
         perms,
         next.token,
+      );
+    });
+  }
+
+  /**
+   * Undoes a switch whose new session the BFF could not store (INF-18), so the
+   * old session keeps working instead of raising the reuse alarm later. Only
+   * while the new token is the old one's successor, unused and at most
+   * SWITCH_ABORT_WINDOW_MS old. Otherwise 401 and nothing changes; never the
+   * reuse alarm. The old store's auth_version bump stays: the old access token
+   * refreshes once.
+   */
+  async abortSwitchTenant(
+    refreshToken: string,
+    previousRefreshToken: string,
+  ): Promise<void> {
+    const [next, previous] = await TenantContext.runAsSystem(() =>
+      Promise.all([
+        this.repository.findRefreshToken(TokenService.hash(refreshToken)),
+        this.repository.findRefreshToken(
+          TokenService.hash(previousRefreshToken),
+        ),
+      ]),
+    );
+    const now = Date.now();
+    if (
+      !next ||
+      !previous ||
+      next.userId !== previous.userId ||
+      next.tenantId === previous.tenantId ||
+      previous.replacedById !== next.id ||
+      !previous.revokedAt ||
+      next.revokedAt ||
+      next.replacedById ||
+      next.createdAt.getTime() < now - SWITCH_ABORT_WINDOW_MS ||
+      next.expiresAt.getTime() <= now ||
+      previous.expiresAt.getTime() <= now
+    ) {
+      throw invalidRefreshToken();
+    }
+
+    const after = {
+      fromTenantId: previous.tenantId,
+      toTenantId: next.tenantId,
+      aborted: true,
+    };
+    // Recorded in each store's tenant context below.
+    const event: AuditEvent = {
+      action: 'TENANT_SWITCH',
+      module: MODULE,
+      entityType: 'User',
+      entityId: next.userId,
+      after,
+      actorUserId: next.userId,
+    };
+    const aborted = await this.repository.prisma
+      .$transaction(async (tx) => {
+        // Serializes with handleTokenReuse; if reuse ran first, the new token
+        // is revoked and the conditional revoke below rolls the abort back.
+        await TenantContext.runAsSystem(() =>
+          this.repository.lockUser(tx, next.userId),
+        );
+        const revoked = await TenantContext.run(next.tenantId, async () => {
+          if (!(await this.repository.revokeRefreshToken(tx, next.id, null))) {
+            return false;
+          }
+          await this.audit.record(event, tx);
+          return true;
+        });
+        // Used or aborted concurrently: roll back.
+        if (!revoked) throw new LostRotationRace();
+        const restored = await TenantContext.run(
+          previous.tenantId,
+          async () => {
+            if (
+              !(await this.repository.restoreSwitchedRefreshToken(
+                tx,
+                previous.id,
+                next.id,
+              ))
+            ) {
+              return false;
+            }
+            await this.audit.record(event, tx);
+            return true;
+          },
+        );
+        if (!restored) throw new LostRotationRace();
+        return true;
+      })
+      .catch(nullOnLostRace);
+    if (!aborted) throw invalidRefreshToken();
+
+    // Only the default store of the next login: the abort itself is done.
+    await TenantContext.runAsSystem(() =>
+      this.repository.setLastTenant(next.userId, previous.tenantId),
+    ).catch((error: unknown) => {
+      this.logger.error(
+        `Mağaza değişikliği geri alındı, last_tenant_id güncellenemedi (user ${next.userId}): ${(error as Error).message}`,
       );
     });
   }

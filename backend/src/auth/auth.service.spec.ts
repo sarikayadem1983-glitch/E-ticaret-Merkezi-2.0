@@ -30,6 +30,7 @@ function setup() {
     findRefreshToken: vi.fn(),
     revokeRefreshToken: vi.fn().mockResolvedValue(true),
     revokeAllForUserEverywhere: vi.fn(),
+    lockUser: vi.fn(),
     createRefreshToken: vi.fn().mockResolvedValue({ id: 'new-rt' }),
     touchLastLogin: vi.fn(),
   };
@@ -299,6 +300,11 @@ describe('AuthService.refresh', () => {
         USER,
       );
       expect(memberships.bumpAuthVersionForUser).toHaveBeenCalledWith(tx, USER);
+      // The user row is locked first, inside the same transaction.
+      expect(repository.lockUser).toHaveBeenCalledWith(tx, USER);
+      expect(repository.lockUser.mock.invocationCallOrder[0]).toBeLessThan(
+        repository.revokeAllForUserEverywhere.mock.invocationCallOrder[0],
+      );
       expect(repository.prisma.$transaction).toHaveBeenCalledTimes(1);
       expect(seen.revoke).toEqual([{ system: true, tenant: undefined }]);
       expect(seen.bump).toEqual([{ system: true, tenant: undefined }]);
