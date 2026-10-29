@@ -166,6 +166,8 @@ export const RELAXED_RATE_LIMITS: AuthRateLimits = {
   loginPerAccount: { free: 1_000_000, baseMs: 1, maxMs: 1, windowMs: 60_000 },
   registerPerIp: { limit: 1_000_000, windowMs: 60_000 },
   refreshPerIp: { limit: 1_000_000, windowMs: 60_000 },
+  invitationLookupPerIp: { limit: 1_000_000, windowMs: 60_000 },
+  invitationAcceptPerIp: { limit: 1_000_000, windowMs: 60_000 },
 };
 
 /**

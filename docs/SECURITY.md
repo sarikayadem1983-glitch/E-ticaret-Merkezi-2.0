@@ -225,3 +225,18 @@ Kod: `backend/src/mail/`. Diğer modüller yalnızca `MailService.send({ to, sub
 - **Başlık enjeksiyonu:** Alıcı tek düz adres olmalı (liste, görünen ad, satır sonu yok); konu satır sonu içeremez.
 - **Yapılandırma hataları:** Mesajlarda `SMTP_PASSWORD` değeri yer almaz.
 - **Geliştirme:** Mailpit (`docker/docker-compose.yml`, `axllent/mailpit:v1.21`, yalnızca `127.0.0.1`: SMTP `1025`, arayüz/API `8025`). Hiçbir e-posta dışarı çıkmaz. Testler log taşıyıcısını veya yerel sahte SMTP sunucusunu kullanır; gerçek SMTP bilgisi kullanılmaz.
+
+## 7. Davetler
+
+Kod: `backend/src/invitations/`. Tasarım: [kullanıcı yönetimi spec'i](superpowers/specs/2026-10-28-user-management-design.md) "Davet akışı".
+
+- **Token:** 32 bayt rastgele (base64url), veritabanında yalnızca SHA-256 hash'i (`token_hash`). Düz token yalnızca e-postadaki bağlantıda (`APP_ORIGIN/invite/<token>`) bulunur; log, audit ve API yanıtlarında yoktur. Yeniden gönderme yeni token üretir, eski bağlantı geçersiz olur. Süre `INVITATION_TTL_HOURS` (varsayılan 168, en çok 720). Production'da `APP_ORIGIN` https olmalı.
+- **Tek kullanım:** kabul `UPDATE ... WHERE status='pending' AND expires_at > now() AND token_hash = ...` ile koşullu geçiş yapar; eş zamanlı istekler satır kilidinde bekler ve 0 satır görür. İptal edilmiş, süresi dolmuş, kullanılmış ve bilinmeyen token tek tip `404 INVITATION_INVALID` alır.
+- **Yetki yükseltme:** davet edenin rolü veritabanından okunur ve `canGrant` ile kontrol edilir (JWT `perms`'e güvenilmez): Owner'a davet yok, Admin'i yalnızca Owner davet eder, Admin firma rollerini verir. Yeniden gönderme ve iptal de aynı kontrolden geçer (Admin, Owner'ın Admin davetine dokunamaz). Kabulde davet edenin hâlâ aktif üye olduğu (`FOR SHARE` kilidiyle) ve rolü hâlâ verebildiği yeniden doğrulanır; mağaza ve firmalar yeniden okunur (pasif firmalar atlanır, hiç kalmazsa geçersiz).
+- **Tenant izolasyonu:** tenant içi uç noktalar Prisma tenant eklentisiyle süzülür; başka tenant'ın daveti veya firma kimliği `404`. Herkese açık lookup/accept token hash'iyle tek satırı sistem bağlamında bulur (`invitations.repository.ts`, izin listesinde); sonraki her şey davetin tenant bağlamında çalışır.
+- **Hesap varlığı sızmaz:** davet oluşturma yanıtı, e-postanın başka tenant'ta hesabı olup olmadığına göre değişmez (yalnızca bu tenant'taki üyelik `409 ALREADY_MEMBER` / `MEMBERSHIP_INACTIVE` döner; tenant içi bilgi). `accountExists` yalnızca geçerli token sahibine gösterilir. Hız sınırı anahtarları yalnızca IP'ye bağlıdır.
+- **Mevcut hesapla kabul:** geçerli token **ve** hesabın şifresi gerekir; yanlış şifre `401`, davet `pending` kalır. Kabul `email_verified_at`'i doldurur. Pasif veya silinmiş global hesap kabul edemez.
+- **Atomiklik:** üyelik, roller, firma atamaları, `email_verified_at`, davet durumu ve audit tek transaction'dadır; hata olursa hiçbiri yazılmaz.
+- **Oturum:** kabul token çifti döndürmez ve mağaza değiştirmez.
+- **Hız sınırı:** `lookup` ve `accept` IP başına 10/dk (Redis, fail-closed). Yeniden gönderme sınırları USR-T10b'de.
+- **Kalan risk (spec ile aynı):** kayıtta e-posta doğrulaması olmadığından biri başkasının e-postasıyla önceden hesap açmışsa gerçek sahip daveti kabul edemez (yetki sızıntısı yok, yalnızca engelleme). Gönderim istek içinde (outbox yok).
