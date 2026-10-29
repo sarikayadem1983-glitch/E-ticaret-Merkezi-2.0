@@ -12,6 +12,7 @@
 - Dal adları: `feature/<konu>`, `fix/<konu>`, `docs/<konu>`, `chore/<konu>`.
 - Commit mesajları Conventional Commits biçiminde: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`.
 - Birleştirme Pull Request ile yapılır.
+- CI (`.github/workflows/ci.yml`) her PR'da ve `main`'e push'ta çalışır: backend (lint, build, unit, e2e; servis konteynerinde PostgreSQL 16 + Redis 7, `setup-roles.sql` + `prisma migrate deploy`) ve frontend (lint, `next typegen` + typecheck, unit, build). Yalnızca iş akışının kendi konteynerleri için geçici değerler kullanılır; depo sırrı (secret) kullanılmaz. Kırmızı CI ile merge yapılmaz.
 
 ## Kod
 
