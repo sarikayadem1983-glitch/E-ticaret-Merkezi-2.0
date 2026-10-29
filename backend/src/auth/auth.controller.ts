@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { AuthRateLimitService } from './auth-rate-limit.service.js';
 import {
+  AbortSwitchTenantDto,
   LoginDto,
   RefreshTokenDto,
   RegisterDto,
@@ -79,5 +80,20 @@ export class AuthController {
     return {
       data: await this.auth.switchTenant(user, dto.tenantId, dto.refreshToken),
     };
+  }
+
+  /**
+   * BFF only: undoes a switch whose new session could not be stored (INF-18).
+   * Not rate limited on purpose: the limiter needs Redis, and this runs when
+   * Redis is down. Possession of both refresh tokens is required.
+   */
+  @Public()
+  @Post('switch-tenant/abort')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async abortSwitchTenant(@Body() dto: AbortSwitchTenantDto) {
+    await this.auth.abortSwitchTenant(
+      dto.refreshToken,
+      dto.previousRefreshToken,
+    );
   }
 }
