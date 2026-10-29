@@ -6,7 +6,7 @@ import {
   refreshTokens,
 } from './backend-client';
 import { serverEnv } from './env';
-import { errorResponse } from './http';
+import { errorResponse, unauthenticated } from './http';
 import { readyRedis } from './redis';
 import {
   SessionManager,
@@ -111,48 +111,78 @@ export async function startSession(
   return null;
 }
 
+const UUID_CLAIM =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
- * Replaces the current session after a store switch. The new tokens are
- * checked with auth/me first; only then is a new session id issued and the
- * old one destroyed, so nothing bound to the old store survives: the selected
- * company is reset and tid/perms come only from the new tokens. The absolute
- * timeout keeps counting from the original login. When auth/me fails the
- * current session and cookie are left as they are and 503 is returned.
+ * sub/tid of an access token the backend just returned to this server. Only
+ * a fallback for identifying the session; the signature is checked by the
+ * backend on every use of the token.
+ */
+function identityFromClaims(
+  accessToken: string,
+): { userId: string; tenantId: string } | null {
+  try {
+    const payload = accessToken.split('.')[1];
+    if (!payload) return null;
+    const claims = JSON.parse(
+      Buffer.from(payload, 'base64url').toString('utf8'),
+    ) as { sub?: unknown; tid?: unknown };
+    if (
+      typeof claims.sub !== 'string' ||
+      typeof claims.tid !== 'string' ||
+      !UUID_CLAIM.test(claims.sub) ||
+      !UUID_CLAIM.test(claims.tid)
+    ) {
+      return null;
+    }
+    return { userId: claims.sub, tenantId: claims.tid };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Replaces the current session after a store switch. The backend has already
+ * revoked the old refresh token, so the old session must never stay in use:
+ * the new tokens are always persisted under a new session id and the old id
+ * is destroyed. The identity comes from auth/me, or from the token claims
+ * when auth/me fails. The selected company is reset and the absolute timeout
+ * keeps counting from the original login. When no new session can be built
+ * the old one is destroyed anyway and 401 is returned.
  */
 export async function switchSession(
   tokens: TokenPair,
   client: ClientContext,
 ): Promise<Response | null> {
-  let me: Response;
+  let identity: { userId: string; tenantId: string } | null = null;
   try {
-    me = await backendFetch('auth/me', {
+    const me = await backendFetch('auth/me', {
       accessToken: tokens.accessToken,
       client,
     });
+    if (me.ok) {
+      const { data } = (await me.json()) as {
+        data: { id: string; tenantId: string };
+      };
+      identity = { userId: data.id, tenantId: data.tenantId };
+    }
   } catch {
-    me = new Response(null, { status: 503 });
+    // Falls back to the token claims below.
   }
-  if (!me.ok) {
-    return errorResponse(
-      503,
-      'SERVICE_UNAVAILABLE',
-      'Mağaza değiştirilemedi, tekrar deneyin',
-    );
-  }
-  const { data } = (await me.json()) as {
-    data: { id: string; tenantId: string };
-  };
+  identity ??= identityFromClaims(tokens.accessToken);
 
   const store = await sessionStore();
   const previousSid = await readSessionId();
   const previous = previousSid ? await store.get(previousSid) : null;
+  if (!identity) {
+    if (previousSid) await store.destroy(previousSid);
+    await clearSessionCookie();
+    return unauthenticated();
+  }
   const now = Date.now();
   const sid = await store.create({
-    ...sessionFromTokens(
-      tokens,
-      { userId: data.id, tenantId: data.tenantId },
-      now,
-    ),
+    ...sessionFromTokens(tokens, identity, now),
     createdAt: previous?.createdAt ?? now,
   });
   await setSessionCookie(sid);

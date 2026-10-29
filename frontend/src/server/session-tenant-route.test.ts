@@ -1,5 +1,5 @@
 import { POST } from '@/app/api/session/tenant/route';
-import { backendFetch } from './backend-client';
+import { backendFetch, refreshTokens } from './backend-client';
 import { redis } from './redis';
 import { currentSession, sessionStore } from './session';
 import type { SessionData } from './session-store';
@@ -194,32 +194,90 @@ describe('POST /api/session/tenant', () => {
     await (await sessionStore()).destroy(sid);
   });
 
+  const jwt = (claims: Record<string, unknown>) =>
+    `h.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.s`;
+
+  /** switch-tenant succeeds with a JWT access token; auth/me fails. */
+  function switchesButMeFails(
+    accessToken: string,
+    meFails: () => Promise<Response>,
+  ) {
+    fetchMock.mockImplementation(async (path) => {
+      if (path === 'auth/switch-tenant') {
+        return json(200, {
+          data: { accessToken, refreshToken: 'refresh-B', expiresIn: 900 },
+        });
+      }
+      if (path === 'auth/me') return meFails();
+      return json(404, {});
+    });
+  }
+
   it.each([
     ['an error status', () => Promise.resolve(json(500, {}))],
     ['a network failure', () => Promise.reject(new Error('ECONNRESET'))],
   ])(
-    'answers 503 and keeps the current session when auth/me fails with %s',
+    'keeps the new tokens from the token claims when auth/me fails with %s',
     async (_n, meFails) => {
-      const sid = await signedInAsA();
-      backendSwitchesToB();
-      const switched = fetchMock.getMockImplementation()!;
-      fetchMock.mockImplementation((path, init) =>
-        path === 'auth/me' ? meFails() : switched(path, init),
-      );
+      const oldSid = await signedInAsA();
+      switchesButMeFails(jwt({ sub: USER, tid: TENANT_B }), meFails);
 
       const res = await POST(post({ tenantId: TENANT_B }));
-      expect(res.status).toBe(503);
-      expect(await res.text()).not.toContain('access-B');
-      // The cookie and the old session id survive; no new session is created.
-      expect(jar.get(COOKIE)).toBe(sid);
+      expect(res.status).toBe(204);
+      const newSid = jar.get(COOKIE)!;
+      expect(newSid).not.toBe(oldSid);
       const store = await sessionStore();
-      expect(await store.get(sid)).toMatchObject({
-        tenantId: TENANT_A,
-        accessToken: 'access-A',
+      // The old session held the refresh token the backend just revoked.
+      expect(await store.get(oldSid)).toBeNull();
+      expect(await store.get(newSid)).toMatchObject({
+        userId: USER,
+        tenantId: TENANT_B,
+        refreshToken: 'refresh-B',
+        selectedCompanyId: null,
+        createdAt,
       });
-      await store.destroy(sid);
+      await store.destroy(newSid);
     },
   );
+
+  it('the next refresh after a switch with a failed auth/me uses the new refresh token (no reuse)', async () => {
+    await signedInAsA();
+    switchesButMeFails(jwt({ sub: USER, tid: TENANT_B }), () =>
+      Promise.resolve(json(502, {})),
+    );
+    expect((await POST(post({ tenantId: TENANT_B }))).status).toBe(204);
+    const sid = jar.get(COOKIE)!;
+    const store = await sessionStore();
+    const session = (await store.get(sid))!;
+    await store.save(sid, { ...session, accessExpiresAt: Date.now() - 1 });
+
+    const refresh = vi.mocked(refreshTokens);
+    refresh.mockReset();
+    refresh.mockResolvedValue({
+      kind: 'ok',
+      tokens: {
+        accessToken: 'access-B2',
+        refreshToken: 'refresh-B2',
+        expiresIn: 900,
+      },
+    } as never);
+    const resolved = await currentSession({ ip: '127.0.0.1', userAgent: 't' });
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(refresh.mock.calls[0][0]).toBe('refresh-B');
+    expect(refresh.mock.calls.flat()).not.toContain('refresh-A');
+    expect(resolved?.session.tenantId).toBe(TENANT_B);
+    await store.destroy(sid);
+  });
+
+  it('destroys the old session and answers 401 when no new session can be built', async () => {
+    const oldSid = await signedInAsA();
+    switchesButMeFails('not-a-jwt', () => Promise.resolve(json(500, {})));
+
+    const res = await POST(post({ tenantId: TENANT_B }));
+    expect(res.status).toBe(401);
+    expect(jar.get(COOKIE)).toBeUndefined();
+    expect(await (await sessionStore()).get(oldSid)).toBeNull();
+  });
 
   it('refuses to switch while a token refresh of the session is running', async () => {
     const sid = await signedInAsA();
