@@ -309,8 +309,11 @@ model AuditLog {
 }
 
 // Catalog (CAT-01). Soft delete only: tm_app has no DELETE on these tables.
-// SQL-only CHECKs: categories_no_self_parent, categories_slug_format,
-// product_variants_sku_not_blank, product_variants_barcode_not_blank.
+// SQL-only (never declare them here; `prisma migrate dev` / `db push` are not used):
+//   partial unique indexes brands_tenant_id_name_active_key, categories_tenant_id_slug_active_key;
+//   CHECKs categories_no_self_parent, categories_slug_format, brands_name_trimmed,
+//   product_variants_sku_not_blank, product_variants_sku_trimmed,
+//   product_variants_barcode_not_blank, product_variants_barcode_trimmed.
 
 enum ProductStatus {
   draft
@@ -326,7 +329,7 @@ model Category {
   tenantId  String    @map("tenant_id") @db.Uuid
   parentId  String?   @map("parent_id") @db.Uuid
   name      String    @db.VarChar(150)
-  /// Lowercase, hyphen-separated; unique within the tenant.
+  /// Lowercase, hyphen-separated; unique within the tenant among non-deleted rows.
   slug      String    @db.VarChar(160)
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
@@ -338,12 +341,12 @@ model Category {
   products Product[]
 
   @@unique([tenantId, id])
-  @@unique([tenantId, slug])
+  // SQL-only: unique (tenant_id, slug) WHERE deleted_at IS NULL.
   @@index([tenantId, parentId])
   @@map("categories")
 }
 
-/// Tenant-wide brand list.
+/// Tenant-wide brand list. Name is trimmed and unique per tenant case-insensitively among non-deleted rows.
 model Brand {
   id        String    @id @default(uuid()) @db.Uuid
   tenantId  String    @map("tenant_id") @db.Uuid
@@ -356,7 +359,7 @@ model Brand {
   products Product[]
 
   @@unique([tenantId, id])
-  @@unique([tenantId, name])
+  // SQL-only: unique (tenant_id, lower(btrim(name))) WHERE deleted_at IS NULL.
   @@map("brands")
 }
 
@@ -389,7 +392,8 @@ model Product {
   @@map("products")
 }
 
-/// Sellable unit. SKU and barcode are unique within the tenant (across companies, soft-deleted rows included).
+/// Sellable unit. SKU and barcode are trimmed, case-sensitive and unique within the tenant
+/// (across companies, soft-deleted rows included: never reused, history refers to them).
 model ProductVariant {
   id        String    @id @default(uuid()) @db.Uuid
   tenantId  String    @map("tenant_id") @db.Uuid

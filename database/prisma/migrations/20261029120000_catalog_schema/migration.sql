@@ -2,7 +2,8 @@
 -- Additive only; no existing table or row is changed except roles.permissions (informational
 -- copy of backend/src/access/roles.catalog.ts). Undo: down.sql in this folder.
 -- Generated with `prisma migrate diff`, then edited: SQL-only objects of earlier
--- migrations (role_scope columns/FKs) are not touched; CHECKs and grants are added by hand.
+-- migrations (role_scope columns/FKs) are not touched; partial/expression unique indexes,
+-- CHECKs and grants are added by hand.
 
 -- CreateEnum
 CREATE TYPE "product_status" AS ENUM ('draft', 'active', 'archived');
@@ -71,14 +72,14 @@ CREATE INDEX "categories_tenant_id_parent_id_idx" ON "categories"("tenant_id", "
 -- CreateIndex
 CREATE UNIQUE INDEX "categories_tenant_id_id_key" ON "categories"("tenant_id", "id");
 
--- CreateIndex
-CREATE UNIQUE INDEX "categories_tenant_id_slug_key" ON "categories"("tenant_id", "slug");
+-- Unique among non-deleted rows: a soft-deleted category's slug can be reused (SQL-only).
+CREATE UNIQUE INDEX "categories_tenant_id_slug_active_key" ON "categories"("tenant_id", "slug") WHERE "deleted_at" IS NULL;
 
 -- CreateIndex
 CREATE UNIQUE INDEX "brands_tenant_id_id_key" ON "brands"("tenant_id", "id");
 
--- CreateIndex
-CREATE UNIQUE INDEX "brands_tenant_id_name_key" ON "brands"("tenant_id", "name");
+-- Case-insensitive, trimmed, among non-deleted rows (SQL-only).
+CREATE UNIQUE INDEX "brands_tenant_id_name_active_key" ON "brands"("tenant_id", lower(btrim("name"))) WHERE "deleted_at" IS NULL;
 
 -- CreateIndex
 CREATE INDEX "products_tenant_id_company_id_status_idx" ON "products"("tenant_id", "company_id", "status");
@@ -138,9 +139,14 @@ ALTER TABLE "product_variants" ADD CONSTRAINT "product_variants_tenant_id_compan
 -- SQL-only CHECKs (Prisma cannot express them) -----------------------------------
 
 ALTER TABLE "categories" ADD CONSTRAINT "categories_no_self_parent" CHECK ("parent_id" IS NULL OR "parent_id" <> "id");
+-- Lowercase only (no A-Z in the pattern), so slug uniqueness is effectively case-insensitive.
 ALTER TABLE "categories" ADD CONSTRAINT "categories_slug_format" CHECK ("slug" ~ '^[a-z0-9]+(-[a-z0-9]+)*$');
+ALTER TABLE "brands" ADD CONSTRAINT "brands_name_trimmed" CHECK ("name" = btrim("name") AND "name" <> '');
 ALTER TABLE "product_variants" ADD CONSTRAINT "product_variants_sku_not_blank" CHECK (btrim("sku") <> '');
 ALTER TABLE "product_variants" ADD CONSTRAINT "product_variants_barcode_not_blank" CHECK ("barcode" IS NULL OR btrim("barcode") <> '');
+-- SKU and barcode are exact strings (case-sensitive, as marketplaces match them); no surrounding whitespace.
+ALTER TABLE "product_variants" ADD CONSTRAINT "product_variants_sku_trimmed" CHECK ("sku" = btrim("sku"));
+ALTER TABLE "product_variants" ADD CONSTRAINT "product_variants_barcode_trimmed" CHECK ("barcode" IS NULL OR "barcode" = btrim("barcode"));
 
 -- System role permissions (runtime source is roles.catalog.ts) --------------------
 

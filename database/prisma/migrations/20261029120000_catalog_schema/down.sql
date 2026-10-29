@@ -2,6 +2,8 @@
 -- from _prisma_migrations. Refuses to run while any catalog row exists: catalog
 -- data is never dropped by a rollback (restore from backup instead).
 
+BEGIN;
+
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM "categories") OR EXISTS (SELECT 1 FROM "brands")
@@ -17,4 +19,6 @@ DROP TABLE "categories";
 DROP TYPE "product_status";
 
 UPDATE "roles" SET "permissions" = array_remove(array_remove("permissions", 'products:read'), 'products:write')
-WHERE "permissions" && ARRAY['products:read', 'products:write'];
+WHERE "key" IS NOT NULL AND "permissions" && ARRAY['products:read', 'products:write'];
+
+COMMIT;

@@ -308,6 +308,94 @@ describe('Catalog schema (e2e)', () => {
       ).rejects.toThrow(checkViolation);
     });
 
+    it.each([
+      ['SKU', 'sku', ' TS-001 '],
+      ['barcode', 'barcode', '8690000000011 '],
+    ])(
+      'rejects a %s with surrounding whitespace',
+      async (_l, column, value) => {
+        await expect(
+          db.query(`UPDATE product_variants SET ${column} = $2 WHERE id = $1`, [
+            variantA,
+            value,
+          ]),
+        ).rejects.toThrow(checkViolation);
+      },
+    );
+
+    it('a soft-deleted SKU and barcode still cannot be reused', async () => {
+      const product = await insertProduct(tenantA, companyA);
+      const old = await insertVariant(
+        tenantA,
+        companyA,
+        product,
+        'DEL-001',
+        '8690000000099',
+      );
+      await db.query(
+        'UPDATE product_variants SET deleted_at = now() WHERE id = $1',
+        [old],
+      );
+      await expect(
+        insertVariant(tenantA, companyA, product, 'DEL-001'),
+      ).rejects.toThrow(uniqueViolation);
+      await expect(
+        insertVariant(tenantA, companyA, product, 'DEL-002', '8690000000099'),
+      ).rejects.toThrow(uniqueViolation);
+    });
+
+    it('SKU is case-sensitive', async () => {
+      await insertVariant(tenantA, companyA, productA, 'ts-001');
+    });
+
+    it('brand name is unique case-insensitively', async () => {
+      await expect(
+        db.query(
+          `INSERT INTO brands (id, tenant_id, name, updated_at) VALUES (gen_random_uuid(), $1, 'MARKA', now())`,
+          [tenantA],
+        ),
+      ).rejects.toThrow(uniqueViolation);
+    });
+
+    it.each([' Marka', 'Marka ', '   '])(
+      'rejects brand name %j (untrimmed or blank)',
+      async (name) => {
+        await expect(
+          db.query(
+            `INSERT INTO brands (id, tenant_id, name, updated_at) VALUES (gen_random_uuid(), $1, $2, now())`,
+            [tenantA, name],
+          ),
+        ).rejects.toThrow(checkViolation);
+      },
+    );
+
+    it('a brand and a category can be recreated after soft delete', async () => {
+      const { rows } = await db.query<{ id: string }>(
+        `INSERT INTO brands (id, tenant_id, name, updated_at) VALUES (gen_random_uuid(), $1, 'Eski', now()) RETURNING id`,
+        [tenantA],
+      );
+      const cat = await db.query<{ id: string }>(
+        `INSERT INTO categories (id, tenant_id, name, slug, updated_at)
+         VALUES (gen_random_uuid(), $1, 'Eski', 'eski', now()) RETURNING id`,
+        [tenantA],
+      );
+      await db.query('UPDATE brands SET deleted_at = now() WHERE id = $1', [
+        rows[0].id,
+      ]);
+      await db.query('UPDATE categories SET deleted_at = now() WHERE id = $1', [
+        cat.rows[0].id,
+      ]);
+      await db.query(
+        `INSERT INTO brands (id, tenant_id, name, updated_at) VALUES (gen_random_uuid(), $1, 'eski', now())`,
+        [tenantA],
+      );
+      await db.query(
+        `INSERT INTO categories (id, tenant_id, name, slug, updated_at)
+         VALUES (gen_random_uuid(), $1, 'Eski', 'eski', now())`,
+        [tenantA],
+      );
+    });
+
     it('rejects an invalid category slug', async () => {
       await expect(
         db.query("UPDATE categories SET slug = 'Büyük Harf' WHERE id = $1", [

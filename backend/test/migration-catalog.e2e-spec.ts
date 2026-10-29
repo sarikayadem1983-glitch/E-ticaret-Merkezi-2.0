@@ -154,6 +154,20 @@ describe('catalog migration (CAT-01)', () => {
     ]);
   });
 
+  it('re-running the roles UPDATE is idempotent', async () => {
+    const sql = migrationSql(CATALOG);
+    const section = sql.slice(
+      sql.indexOf('-- System role permissions'),
+      sql.indexOf('-- Application role privileges'),
+    );
+    const snapshot = () =>
+      data.query('select key, permissions from roles where tenant_id = $1 order by key', [tenantId]);
+    const before = (await snapshot()).rows;
+    await data.query(section);
+    await data.query(section);
+    expect((await snapshot()).rows).toEqual(before);
+  });
+
   it('grants tm_app SELECT/INSERT/UPDATE but not DELETE/TRUNCATE', async () => {
     const { rows } = await fresh.query(
       `select t, has_table_privilege('tm_app', t, 'SELECT') s, has_table_privilege('tm_app', t, 'INSERT') i,
@@ -168,14 +182,43 @@ describe('catalog migration (CAT-01)', () => {
   it('SQL-only constraints exist after migration', async () => {
     const { rows } = await fresh.query<{ c: string }>(
       `select conname as c from pg_constraint where conname = any($1) order by 1`,
-      [['categories_no_self_parent', 'categories_slug_format', 'product_variants_barcode_not_blank', 'product_variants_sku_not_blank']],
+      [['brands_name_trimmed', 'categories_no_self_parent', 'categories_slug_format', 'product_variants_barcode_not_blank', 'product_variants_barcode_trimmed', 'product_variants_sku_not_blank', 'product_variants_sku_trimmed']],
     );
     expect(rows.map((r) => r.c)).toEqual([
+      'brands_name_trimmed',
       'categories_no_self_parent',
       'categories_slug_format',
       'product_variants_barcode_not_blank',
+      'product_variants_barcode_trimmed',
       'product_variants_sku_not_blank',
+      'product_variants_sku_trimmed',
     ]);
+    const idx = await fresh.query<{ i: string; def: string }>(
+      `select indexname as i, indexdef as def from pg_indexes
+       where indexname in ('brands_tenant_id_name_active_key', 'categories_tenant_id_slug_active_key', 'brands_tenant_id_name_key', 'categories_tenant_id_slug_key')
+       order by 1`,
+    );
+    expect(idx.rows.map((r) => r.i)).toEqual(['brands_tenant_id_name_active_key', 'categories_tenant_id_slug_active_key']);
+    for (const r of idx.rows) expect(r.def).toMatch(/WHERE \(deleted_at IS NULL\)/);
+  });
+
+  it('down.sql leaves custom roles (key IS NULL) untouched', async () => {
+    await fresh.query('BEGIN');
+    try {
+      const t = randomUUID();
+      await fresh.query(`insert into tenants (id, name, slug, updated_at) values ($1, 'C', $2, now())`, [t, `c-${t}`]);
+      await fresh.query(
+        `insert into roles (id, tenant_id, name, permissions, scope, updated_at)
+         values (gen_random_uuid(), $1, 'Özel', '{products:read}', 'tenant', now())`,
+        [t],
+      );
+      // down.sql has its own BEGIN/COMMIT; run its body only, inside this transaction.
+      await fresh.query(downSql(CATALOG).replace(/^BEGIN;$/m, '').replace(/^COMMIT;$/m, ''));
+      const { rows } = await fresh.query(`select permissions from roles where tenant_id = $1`, [t]);
+      expect(rows[0].permissions).toEqual(['products:read']);
+    } finally {
+      await fresh.query('ROLLBACK');
+    }
   });
 
   it('fails safely when applied a second time', async () => {
