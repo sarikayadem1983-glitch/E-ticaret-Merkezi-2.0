@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import type { StringValue } from 'ms';
+import { MembershipsModule } from '../memberships/memberships.module.js';
 import { RateLimitModule } from '../rate-limit/rate-limit.module.js';
 import { TenantsModule } from '../tenants/tenants.module.js';
 import { AuthRateLimitService } from './auth-rate-limit.service.js';
@@ -15,6 +16,7 @@ import { TokenService } from './token.service.js';
 @Module({
   imports: [
     TenantsModule,
+    MembershipsModule,
     RateLimitModule,
     JwtModule.registerAsync({
       inject: [ConfigService],

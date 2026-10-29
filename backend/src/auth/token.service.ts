@@ -7,6 +7,12 @@ export interface AccessTokenPayload {
   sub: string;
   tid: string;
   perms: string[];
+  /**
+   * The membership's auth_version when the token was issued. Tokens issued before
+   * memberships existed carry no `ver` and are read as 0; auth_version starts at 1,
+   * so they count as stale once the guard compares versions.
+   */
+  ver: number;
 }
 
 export interface TokenPair {
@@ -35,8 +41,15 @@ export class TokenService {
     return { token, expiresIn: exp - iat };
   }
 
-  verifyAccess(token: string): Promise<AccessTokenPayload> {
-    return this.jwt.verifyAsync<AccessTokenPayload>(token);
+  async verifyAccess(token: string): Promise<AccessTokenPayload> {
+    const payload = await this.jwt.verifyAsync<
+      Omit<AccessTokenPayload, 'ver'> & { ver?: unknown }
+    >(token);
+    const { ver } = payload;
+    if (ver !== undefined && !Number.isInteger(ver)) {
+      throw new Error('Geçersiz token sürümü');
+    }
+    return { ...payload, ver: (ver as number | undefined) ?? 0 };
   }
 
   /** Opaque refresh token; only its SHA-256 hash is stored. */

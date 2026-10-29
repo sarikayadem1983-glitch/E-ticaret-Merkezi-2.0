@@ -8,6 +8,44 @@ import {
 /** Model keyed by its own id instead of a tenantId column. */
 const TENANT_ROOT_MODEL = 'Tenant';
 
+/**
+ * Global models have no tenant column (one identity across tenants). They are only
+ * reachable in system context; inside a tenant, read them through TenantMembership.
+ */
+export const GLOBAL_MODELS = new Set(['User']);
+
+/**
+ * Relation fields (on any model) whose target is a global model. Kept in sync
+ * with schema.prisma by a unit test. In tenant context, nested writes through
+ * them are refused; only `connect` (no global row is written) is allowed.
+ */
+export const GLOBAL_RELATION_FIELDS = new Set(['user', 'acceptedBy']);
+const NESTED_GLOBAL_ALLOWED = new Set(['connect']);
+
+/** Refuses nested writes that would create/modify a global (User) row from a tenant. */
+function assertNoGlobalWrite(value: unknown, op: string): void {
+  if (Array.isArray(value)) {
+    value.forEach((item) => assertNoGlobalWrite(item, op));
+    return;
+  }
+  if (!isObject(value)) return;
+  for (const [key, child] of Object.entries(value)) {
+    if (GLOBAL_RELATION_FIELDS.has(key) && isObject(child)) {
+      const writes = Object.keys(child).filter(
+        (k) => !NESTED_GLOBAL_ALLOWED.has(k),
+      );
+      if (writes.length > 0) {
+        throw new TenantViolationError(
+          op,
+          `global model tenant bağlamında yazılamaz (${key}.${writes.join(',')})`,
+        );
+      }
+      continue;
+    }
+    assertNoGlobalWrite(child, op);
+  }
+}
+
 const WHERE_OPERATIONS = new Set([
   'findUnique',
   'findUniqueOrThrow',
@@ -126,6 +164,13 @@ export function applyTenantScope(
   const tenantId = TenantContext.tenantId();
   if (!tenantId) throw new TenantContextMissingError(label);
 
+  if (model && GLOBAL_MODELS.has(model)) {
+    throw new TenantViolationError(
+      label,
+      'global model tenant bağlamında kullanılamaz; üyelik üzerinden okuyun',
+    );
+  }
+
   if (!model) {
     throw new TenantViolationError(label, 'ham SQL tenant bağlamında yasak');
   }
@@ -141,6 +186,10 @@ export function applyTenantScope(
   }
 
   const scoped: Args = isObject(args) ? { ...args } : {};
+  // Reads (include/select of user fields) are allowed; writes are not.
+  assertNoGlobalWrite(scoped.data, label);
+  assertNoGlobalWrite(scoped.create, label);
+  assertNoGlobalWrite(scoped.update, label);
 
   if (WHERE_OPERATIONS.has(operation)) {
     scoped.where = scopeWhere(model, scoped.where, tenantId, label);

@@ -1,5 +1,11 @@
 import { TenantContext } from './tenant-context.js';
-import { applyTenantScope } from './tenant-prisma.extension.js';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import {
+  applyTenantScope,
+  GLOBAL_MODELS,
+  GLOBAL_RELATION_FIELDS,
+} from './tenant-prisma.extension.js';
 import {
   TenantContextMissingError,
   TenantViolationError,
@@ -40,7 +46,7 @@ describe('applyTenantScope', () => {
     it('adds tenantId to where', () => {
       expect(
         asA(() =>
-          applyTenantScope('User', 'findMany', { where: { email: 'x' } }),
+          applyTenantScope('Company', 'findMany', { where: { email: 'x' } }),
         ),
       ).toEqual({ where: { email: 'x', tenantId: A } });
     });
@@ -54,7 +60,7 @@ describe('applyTenantScope', () => {
     it('scopes findUnique by id to the tenant', () => {
       expect(
         asA(() =>
-          applyTenantScope('User', 'findUnique', { where: { id: 'u1' } }),
+          applyTenantScope('Company', 'findUnique', { where: { id: 'u1' } }),
         ),
       ).toEqual({ where: { id: 'u1', tenantId: A } });
     });
@@ -62,7 +68,7 @@ describe('applyTenantScope', () => {
     it('rejects an explicit foreign tenantId', () => {
       expect(() =>
         asA(() =>
-          applyTenantScope('User', 'findMany', { where: { tenantId: B } }),
+          applyTenantScope('Company', 'findMany', { where: { tenantId: B } }),
         ),
       ).toThrow(TenantViolationError);
     });
@@ -70,7 +76,7 @@ describe('applyTenantScope', () => {
     it('rejects a tenantId filter object (e.g. { in: [...] })', () => {
       expect(() =>
         asA(() =>
-          applyTenantScope('User', 'findMany', {
+          applyTenantScope('Company', 'findMany', {
             where: { tenantId: { in: [A, B] } },
           }),
         ),
@@ -80,7 +86,7 @@ describe('applyTenantScope', () => {
     it('rejects a foreign tenantId hidden in OR', () => {
       expect(() =>
         asA(() =>
-          applyTenantScope('User', 'findMany', {
+          applyTenantScope('Company', 'findMany', {
             where: { OR: [{ tenantId: B }] },
           }),
         ),
@@ -146,7 +152,7 @@ describe('applyTenantScope', () => {
     it('rejects a foreign tenantId in a nested write', () => {
       expect(() =>
         asA(() =>
-          applyTenantScope('User', 'update', {
+          applyTenantScope('Company', 'update', {
             where: { id: 'u1' },
             data: {
               userRoles: { create: { roleId: 'r1', tenantId: B } },
@@ -159,7 +165,7 @@ describe('applyTenantScope', () => {
     it('rejects moving a row to another tenant', () => {
       expect(() =>
         asA(() =>
-          applyTenantScope('User', 'updateMany', { data: { tenantId: B } }),
+          applyTenantScope('Company', 'updateMany', { data: { tenantId: B } }),
         ),
       ).toThrow(TenantViolationError);
     });
@@ -181,7 +187,7 @@ describe('applyTenantScope', () => {
     });
 
     it('scopes deleteMany with no where', () => {
-      expect(asA(() => applyTenantScope('User', 'deleteMany', {}))).toEqual({
+      expect(asA(() => applyTenantScope('Company', 'deleteMany', {}))).toEqual({
         where: { tenantId: A },
       });
     });
@@ -200,8 +206,131 @@ describe('applyTenantScope', () => {
 
     it('fails closed on unknown operations', () => {
       expect(() =>
-        asA(() => applyTenantScope('User', 'someFutureOp', {})),
+        asA(() => applyTenantScope('Company', 'someFutureOp', {})),
       ).toThrow(TenantViolationError);
+    });
+  });
+
+  describe('global models (User)', () => {
+    it.each([
+      'findMany',
+      'findFirst',
+      'findUnique',
+      'create',
+      'update',
+      'count',
+    ])('refuses User.%s inside a tenant store', (op) => {
+      expect(() => asA(() => applyTenantScope('User', op, {}))).toThrow(
+        TenantViolationError,
+      );
+    });
+
+    it('refuses User queries inside a tenant store', () => {
+      expect(() => asA(() => applyTenantScope('User', 'findMany', {}))).toThrow(
+        TenantViolationError,
+      );
+    });
+
+    it('refuses nested user update from tenant context', () => {
+      expect(() =>
+        asA(() =>
+          applyTenantScope('TenantMembership', 'update', {
+            where: { tenantId_userId: { tenantId: A, userId: 'u1' } },
+            data: { user: { update: { passwordHash: 'x' } } },
+          }),
+        ),
+      ).toThrow(TenantViolationError);
+    });
+
+    it('refuses nested user create from tenant context', () => {
+      expect(() =>
+        asA(() =>
+          applyTenantScope('TenantMembership', 'create', {
+            data: { user: { create: { email: 'x', name: 'x' } } },
+          }),
+        ),
+      ).toThrow(TenantViolationError);
+    });
+
+    it.each([
+      'upsert',
+      'connectOrCreate',
+      'delete',
+      'updateMany',
+      'deleteMany',
+      'createMany',
+      'set',
+      'disconnect',
+    ])('refuses nested user.%s from tenant context', (op) => {
+      expect(() =>
+        asA(() =>
+          applyTenantScope('Invitation', 'updateMany', {
+            data: { acceptedBy: { [op]: {} } },
+          }),
+        ),
+      ).toThrow(TenantViolationError);
+    });
+
+    it('refuses a global write nested deeper (upsert create/update branches)', () => {
+      expect(() =>
+        asA(() =>
+          applyTenantScope('Company', 'upsert', {
+            where: { id: 'c1' },
+            create: { name: 'c' },
+            update: {
+              userCompanyRoles: {
+                create: { membership: { create: { user: { create: {} } } } },
+              },
+            },
+          }),
+        ),
+      ).toThrow(TenantViolationError);
+    });
+
+    it('allows connecting an existing user (no User row is written)', () => {
+      expect(
+        asA(() =>
+          applyTenantScope('TenantMembership', 'create', {
+            data: { user: { connect: { id: 'u1' } } },
+          }),
+        ),
+      ).toEqual({ data: { user: { connect: { id: 'u1' } }, tenantId: A } });
+    });
+
+    it('allows include of user fields from tenant context', () => {
+      expect(
+        asA(() =>
+          applyTenantScope('TenantMembership', 'findMany', {
+            include: {
+              user: { select: { id: true, name: true, email: true } },
+            },
+          }),
+        ),
+      ).toEqual({
+        include: { user: { select: { id: true, name: true, email: true } } },
+        where: { tenantId: A },
+      });
+    });
+
+    it('lists every relation field that points at a global model', () => {
+      const schema = readFileSync(
+        join(import.meta.dirname, '../../../database/prisma/schema.prisma'),
+        'utf8',
+      );
+      const fields = new Set<string>();
+      for (const line of schema.split('\n')) {
+        const m = /^\s+(\w+)\s+(\w+)(\?|\[\])?\s/.exec(line);
+        if (m && GLOBAL_MODELS.has(m[2])) fields.add(m[1]);
+      }
+      expect([...fields].sort()).toEqual([...GLOBAL_RELATION_FIELDS].sort());
+    });
+
+    it('leaves User unscoped in system context', () => {
+      expect(
+        TenantContext.runAsSystem(() =>
+          applyTenantScope('User', 'findFirst', { where: { email: 'x' } }),
+        ),
+      ).toEqual({ where: { email: 'x' } });
     });
   });
 

@@ -4,23 +4,44 @@ import {
   type TenantPrismaClient,
 } from '../database/prisma.service.js';
 import type { PrismaTx } from '../database/prisma.types.js';
+import {
+  ROLE_CATALOG,
+  type RoleKey,
+  rolePermissions,
+} from '../access/roles.catalog.js';
 import { TenantContext } from '../tenancy/tenant-context.js';
 
-/** Data access for users, roles, user_roles and refresh_tokens. All calls are tenant-scoped by the Prisma extension. */
+/**
+ * Data access for users, roles, user_roles and refresh_tokens. Tenant-scoped by the
+ * Prisma extension; User queries (global model) only work in system context.
+ */
 @Injectable()
 export class AuthRepository {
   constructor(@InjectPrisma() readonly prisma: TenantPrismaClient) {}
 
-  /** System context only: login resolves the tenant from the email. */
+  /**
+   * System context only: users are global (one identity across tenants).
+   * Deactivated and soft-deleted users are returned too, so login runs the
+   * same path for them and can audit the attempt; the caller refuses them.
+   */
   findUserForLogin(email: string) {
-    return this.prisma.user.findFirst({
-      where: { email, deletedAt: null },
+    return this.prisma.user.findUnique({
+      where: { email },
       select: {
         id: true,
-        tenantId: true,
         passwordHash: true,
+        lastTenantId: true,
         isActive: true,
+        deletedAt: true,
       },
+    });
+  }
+
+  /** System context only: global account state for refresh. */
+  findUserState(userId: string) {
+    return this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { isActive: true, deletedAt: true },
     });
   }
 
@@ -34,24 +55,37 @@ export class AuthRepository {
         userId: true,
         expiresAt: true,
         revokedAt: true,
+        replacedById: true,
       },
     });
   }
 
+  /** System context only. The deprecated users.tenant_id stays NULL. */
   createUser(
     db: PrismaTx,
-    data: { name: string; email: string; passwordHash: string },
+    data: {
+      name: string;
+      email: string;
+      passwordHash: string;
+      lastTenantId: string;
+    },
   ) {
-    return db.user.create({
-      data: { ...data, tenantId: TenantContext.requireTenantId() },
-      select: { id: true },
-    });
+    return db.user.create({ data, select: { id: true } });
   }
 
-  createRole(db: PrismaTx, data: { name: string; permissions: string[] }) {
-    return db.role.create({
-      data: { ...data, tenantId: TenantContext.requireTenantId() },
-      select: { id: true },
+  /** Creates every catalog role for the current tenant in one query. */
+  createSystemRoles(db: PrismaTx) {
+    const tenantId = TenantContext.requireTenantId();
+    return db.role.createManyAndReturn({
+      data: (Object.keys(ROLE_CATALOG) as RoleKey[]).map((key) => ({
+        tenantId,
+        key,
+        name: ROLE_CATALOG[key].name,
+        scope: ROLE_CATALOG[key].scope,
+        permissions: [...ROLE_CATALOG[key].permissions],
+        isSystem: true,
+      })),
+      select: { id: true, key: true },
     });
   }
 
@@ -61,25 +95,37 @@ export class AuthRepository {
     });
   }
 
-  findActiveUser(userId: string) {
-    return this.prisma.user.findFirst({
-      where: { id: userId, isActive: true, deletedAt: null },
-      select: { id: true, tenantId: true, name: true, email: true },
-    });
-  }
-
+  /** Union of the member's tenant role and company roles in the current tenant. */
   async findPermissions(userId: string): Promise<string[]> {
-    const rows = await this.prisma.userRole.findMany({
-      where: { userId },
-      select: { role: { select: { permissions: true } } },
-    });
-    return [...new Set(rows.flatMap((r) => r.role.permissions))];
+    const select = { role: { select: { key: true, permissions: true } } };
+    const [tenantRoles, companyRoles] = await Promise.all([
+      this.prisma.userRole.findMany({ where: { userId }, select }),
+      this.prisma.userCompanyRole.findMany({ where: { userId }, select }),
+    ]);
+    return [
+      ...new Set(
+        [...tenantRoles, ...companyRoles].flatMap((r) =>
+          rolePermissions(r.role),
+        ),
+      ),
+    ];
   }
 
-  touchLastLogin(userId: string) {
+  /** System context only: users are global. */
+  touchLastLogin(userId: string, tenantId: string) {
     return this.prisma.user.update({
       where: { id: userId },
-      data: { lastLoginAt: new Date() },
+      data: { lastLoginAt: new Date(), lastTenantId: tenantId },
+      select: { id: true },
+    });
+  }
+
+  /** System context only: the store the next login opens by default. */
+  setLastTenant(userId: string, tenantId: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { lastTenantId: tenantId },
+      select: { id: true },
     });
   }
 
@@ -113,10 +159,27 @@ export class AuthRepository {
     });
   }
 
-  revokeAllForUser(userId: string) {
-    return this.prisma.refreshToken.updateMany({
+  /**
+   * System context only (refresh token reuse): revokes every unrevoked refresh
+   * token of the user in every tenant, inside the caller's transaction. The
+   * query filters by userId itself. Returns the revoked count per tenant.
+   */
+  async revokeAllForUserEverywhere(
+    tx: PrismaTx,
+    userId: string,
+  ): Promise<{ tenantId: string; count: number }[]> {
+    if (!TenantContext.isSystem()) {
+      throw new Error('revokeAllForUserEverywhere requires system context');
+    }
+    const rows = await tx.refreshToken.updateManyAndReturn({
       where: { userId, revokedAt: null },
       data: { revokedAt: new Date() },
+      select: { tenantId: true },
     });
+    const counts = new Map<string, number>();
+    for (const { tenantId } of rows) {
+      counts.set(tenantId, (counts.get(tenantId) ?? 0) + 1);
+    }
+    return [...counts].map(([tenantId, count]) => ({ tenantId, count }));
   }
 }

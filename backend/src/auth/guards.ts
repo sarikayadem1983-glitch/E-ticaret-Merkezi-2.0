@@ -13,14 +13,22 @@ import {
   IS_PUBLIC,
   PERMISSIONS,
 } from './decorators.js';
-import { TokenService } from './token.service.js';
+import { MembershipsRepository } from '../memberships/memberships.repository.js';
+import { type AccessTokenPayload, TokenService } from './token.service.js';
 
-/** Global. Verifies the access token and binds its tenant to the request context. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Global. Verifies the access token, checks that its membership is still
+ * active in an active tenant with the same auth_version (401 SESSION_REVOKED /
+ * TOKEN_STALE), and binds its tenant to the request context.
+ */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly tokens: TokenService,
+    private readonly memberships: MembershipsRepository,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
@@ -36,12 +44,37 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Kimlik doğrulanmadı');
     }
 
+    let payload: AccessTokenPayload;
     try {
-      const payload = await this.tokens.verifyAccess(token);
-      req.user = { sub: payload.sub, tid: payload.tid, perms: payload.perms };
+      payload = await this.tokens.verifyAccess(token);
+      if (!UUID.test(payload.sub) || !UUID.test(payload.tid)) {
+        throw new Error('Geçersiz token kimliği');
+      }
     } catch {
       throw new UnauthorizedException('Geçersiz veya süresi dolmuş token');
     }
+
+    // Every request re-reads the membership, so deactivation and role
+    // changes take effect immediately instead of when the token expires.
+    const state = await this.memberships.sessionState(payload.tid, payload.sub);
+    if (!state?.usable) {
+      throw new UnauthorizedException({
+        code: 'SESSION_REVOKED',
+        message: 'Oturum sonlandırıldı',
+      });
+    }
+    if (payload.ver !== state.authVersion) {
+      throw new UnauthorizedException({
+        code: 'TOKEN_STALE',
+        message: 'Oturum bilgileri güncellenmeli',
+      });
+    }
+    req.user = {
+      sub: payload.sub,
+      tid: payload.tid,
+      perms: payload.perms,
+      ver: payload.ver,
+    };
 
     TenantContext.setTenant(req.user.tid);
     RequestContext.setUser(req.user.sub);

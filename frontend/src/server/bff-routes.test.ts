@@ -15,6 +15,7 @@ describe('matchBffRoute', () => {
     ['POST', `companies/${ID}/deactivate`, ''],
     ['POST', `companies/${ID}/activate`, ''],
     ['GET', 'auth/me', ''],
+    ['GET', 'auth/memberships', ''],
   ])('allows %s %s', (method, path, query) => {
     expect(match(method, path, query)).toMatchObject({ ok: true, path });
   });
@@ -28,6 +29,8 @@ describe('matchBffRoute', () => {
     ['endpoint not exposed', 'GET', 'audit-logs'],
     ['auth endpoint', 'POST', 'auth/refresh'],
     ['auth endpoint', 'POST', 'auth/logout'],
+    ['auth endpoint', 'POST', 'auth/switch-tenant'],
+    ['wrong method', 'POST', 'auth/memberships'],
     ['health', 'GET', 'health'],
     ['wrong method', 'DELETE', `companies/${ID}`],
     ['wrong method', 'PUT', 'companies'],

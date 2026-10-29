@@ -43,6 +43,25 @@
 - `user_company_roles` — tenant_id, user_id, company_id, role_id, created_at — PK `(user_id, company_id, role_id)`
   - Composite FK'ler: `(tenant_id, user_id)`, `(tenant_id, company_id)`, `(tenant_id, role_id)`; farklı tenant'ın kaydına bağlanamaz.
 
+### memberships (Aşama 1 yazıldı ve izole kopyada prova edildi — migration `tenant_memberships`; geliştirme veritabanına henüz uygulanmadı)
+- Tasarım: [kullanıcı yönetimi spec'i](superpowers/specs/2026-10-28-user-management-design.md).
+- `users` global kimlik olur: `last_tenant_id`, `email_verified_at` eklenir; e-posta küçük harfe normalize. `tenant_id` nullable, FK'si kaldırıldı; `tenant_id` Aşama 2'de silinir, kod okumaz. `is_active` kalır: login, refresh ve `JwtAuthGuard` pasif global kullanıcıyı onunla reddeder.
+- `tenant_memberships` — tenant_id, user_id, status (`active`|`inactive`), auth_version, joined_at, deactivated_at — PK `(tenant_id, user_id)`. Silinmez (tm_app'te DELETE yok).
+- `roles` + `key`, `scope` (`tenant`|`company`), `is_system`; kısmi tekil `(tenant_id, key) WHERE key IS NOT NULL`, tekil `(tenant_id, id, scope)`. Her tenant'ta 5 sistem rolü.
+- `user_roles`/`user_company_roles`: `role_scope` generated kolon + FK `(tenant_id, role_id, role_scope) → roles(tenant_id, id, scope)`; FK `(tenant_id, user_id) → tenant_memberships`. `refresh_tokens` da üyeliğe bağlı. `user_company_roles` tekil `(tenant_id, user_id, company_id)`.
+- `invitations` — token yalnızca SHA-256 olarak; kısmi tekil `(tenant_id, email) WHERE status='pending'`. Silinmez (tm_app'te DELETE yok).
+- Prisma şemasında gösterilemeyenler (yalnızca SQL'de): generated `role_scope` kolonları ve 3 kolonlu kapsam FK'leri, kısmi tekil indeksler, `invitations_email_lowercase` CHECK.
+  - **Bu yüzden şema yalnızca `prisma migrate deploy` ile uygulanır.** `prisma migrate dev` / `db push` bu nesneleri drift sayıp silmeye çalışır: kullanılmaz. Bu nesneleri içeren migration'lar elle yazılır; varlıkları `migration-phase1.e2e-spec.ts` içindeki "SQL-only constraints exist after migration" testiyle denetlenir.
+- Doğrulama/geri dönüş: `database/migrations-verify/20261029090000/` (`snapshot-before.sql`, `verify-after.sql`, `rollback.sql`). Test: `backend/test/migration-phase1.e2e-spec.ts` (atılabilir `tm_migration_test_*` veritabanında).
+- Aşamalar:
+  - **Aşama 1** (`20261029090000_tenant_memberships`): yalnızca ekleme; `users.tenant_id`/`is_active` korunur, `rollback.sql` ile geri alınabilir.
+  - **Aşama 2** (hazır, uygulanmadı): `database/migrations-pending/phase2_drop_legacy_user_columns/migration.sql` — `users.tenant_id` kolonunu ve `_mig_snapshot_*` tablolarını siler; `users.is_active` korunur (`src/database/pending-migrations.spec.ts` denetler). `prisma/migrations/` dışında durur; kod `tenant_id` okumayı bıraktıktan ve Aşama 1 geliştirme veritabanında doğrulandıktan sonra taşınır. Sonrasında Aşama 1 `rollback.sql` çalışmaz, geri dönüş yalnızca yedekten.
+- Yedek ve izole prova: `bash database/scripts/backup-and-rehearse.sh <out-dir>`
+  - `<out-dir>` repo dışında olmalı (dump gerçek kullanıcı verisi içerir; `*.dump` git'e girmez).
+  - Kaynak `.env`'deki `POSTGRES_DB`; ona yalnızca `pg_dump` ile okuma yapılır. Oluşturulan/silinen veritabanları `tm_` ile başlar, kaynakla aynı olamaz; yalnızca `tm-postgres` / localhost.
+  - Adımlar: `pg_dump -Fc` → `pg_restore --list` → `tm_restore_check`'e geri yükleme ve tablo satır sayısı karşılaştırması → `tm_migration_rehearsal`'a geri yükleme → `snapshot-before.sql` → `prisma migrate deploy` (prisma'ya verilen URL'nin `current_database()`'i önce doğrulanır) → `verify-after.sql` + kullanıcı sayısı/id kümesi, üyelik eşleşmesi, owner ve rol atamaları, e-posta çakışmaları (yalnızca raporlanır) → ikinci `migrate deploy` no-op, `migration.sql`'in doğrudan tekrarı veri değiştirmeden hata verir → `rollback.sql` ayrı kopyada (`tm_rollback_rehearsal`) başarılı; ikinci üyelik eklenmiş kopyada (`tm_rollback_stop_rehearsal`) ve `tenant_id`siz kullanıcı eklenmiş kopyada (`tm_rollback_null_rehearsal`) veri değiştirmeden durur.
+  - Çıktı: `<POSTGRES_DB>-<ts>.dump`, `restore-check.txt`, `rehearsal-verify.txt` (yalnızca sayılar ve kontrol adları). Prova veritabanları sonunda silinir. Çıkış 0 = tüm kontroller `ok=t`.
+
 ### catalog
 - `categories` — id, parent_id, name, slug
 - `brands` — id, name

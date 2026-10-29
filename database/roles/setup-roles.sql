@@ -5,6 +5,22 @@
 
 \set ON_ERROR_STOP on
 
+-- Guard: stop before any change when a password is missing or empty. An empty
+-- value would clear the role's password (ALTER ROLE ... PASSWORD '').
+-- Test: database/scripts/test-setup-roles-guard.sh
+\if :{?app_password}
+\else
+  DO $$ BEGIN RAISE EXCEPTION 'setup-roles durdu: app_password verilmedi, hiçbir değişiklik yapılmadı'; END $$;
+\endif
+\if :{?migrator_password}
+\else
+  DO $$ BEGIN RAISE EXCEPTION 'setup-roles durdu: migrator_password verilmedi, hiçbir değişiklik yapılmadı'; END $$;
+\endif
+SELECT btrim(:'app_password') = '' OR btrim(:'migrator_password') = '' AS setup_roles_empty_password \gset
+\if :setup_roles_empty_password
+  DO $$ BEGIN RAISE EXCEPTION 'setup-roles durdu: parola boş, hiçbir değişiklik yapılmadı'; END $$;
+\endif
+
 -- Roles ---------------------------------------------------------------------
 
 SELECT 'CREATE ROLE tm_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS'
@@ -79,5 +95,15 @@ BEGIN
   END IF;
   IF to_regclass('public.audit_logs') IS NOT NULL THEN
     REVOKE UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON public.audit_logs FROM tm_app;
+  END IF;
+  -- Memberships and invitations are deactivated / revoked, never deleted
+  -- (also enforced by migration tenant_memberships).
+  IF to_regclass('public.tenant_memberships') IS NOT NULL THEN
+    REVOKE ALL ON public.tenant_memberships FROM tm_app;
+    GRANT SELECT, INSERT, UPDATE ON public.tenant_memberships TO tm_app;
+  END IF;
+  IF to_regclass('public.invitations') IS NOT NULL THEN
+    REVOKE ALL ON public.invitations FROM tm_app;
+    GRANT SELECT, INSERT, UPDATE ON public.invitations TO tm_app;
   END IF;
 END $$;

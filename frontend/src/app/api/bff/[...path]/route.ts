@@ -11,7 +11,6 @@ import {
 import {
   clearSessionCookie,
   currentSession,
-  sessionStore,
   withSessionErrors,
 } from '@/server/session';
 
@@ -52,20 +51,25 @@ async function handle(req: Request, { params }: Context): Promise<Response> {
       return unauthenticated();
     }
 
-    const res = await backendFetch(route.path, {
-      method: req.method,
-      body,
-      accessToken: current.session.accessToken,
-      client,
-      search: route.search,
-    });
-    if (res.status === 401) {
-      // The backend no longer accepts this session (user or tenant deactivated).
-      await (await sessionStore()).destroy(current.sid);
+    // TOKEN_STALE: one refresh + one retry. SESSION_REVOKED or a second 401:
+    // the session is destroyed (membership or store deactivated).
+    const result = await current.manager.send(
+      current.sid,
+      current.session,
+      (accessToken) =>
+        backendFetch(route.path, {
+          method: req.method,
+          body,
+          accessToken,
+          client,
+          search: route.search,
+        }),
+    );
+    if (result.kind === 'signed-out') {
       await clearSessionCookie();
       return unauthenticated();
     }
-    return relay(res);
+    return relay(result.response);
   });
 }
 

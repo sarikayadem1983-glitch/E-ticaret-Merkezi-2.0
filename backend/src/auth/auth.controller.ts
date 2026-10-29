@@ -8,7 +8,12 @@ import {
   Post,
 } from '@nestjs/common';
 import { AuthRateLimitService } from './auth-rate-limit.service.js';
-import { LoginDto, RefreshTokenDto, RegisterDto } from './auth.dto.js';
+import {
+  LoginDto,
+  RefreshTokenDto,
+  RegisterDto,
+  SwitchTenantDto,
+} from './auth.dto.js';
 import { AuthService } from './auth.service.js';
 import { type AuthUser, CurrentUser, Public } from './decorators.js';
 
@@ -52,6 +57,27 @@ export class AuthController {
 
   @Get('me')
   async me(@CurrentUser() user: AuthUser) {
-    return { data: await this.auth.me(user.sub, user.perms) };
+    return { data: await this.auth.me(user.tid, user.sub, user.perms) };
+  }
+
+  /** The caller's active stores; `current` marks the one this token is for. */
+  @Get('memberships')
+  async memberships(@CurrentUser() user: AuthUser) {
+    return { data: await this.auth.listMemberships(user.sub, user.tid) };
+  }
+
+  /**
+   * Swaps the session's refresh token for a token pair of another store the
+   * user is an active member of. 404 when there is no such membership.
+   */
+  @Post('switch-tenant')
+  @HttpCode(HttpStatus.OK)
+  async switchTenant(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: SwitchTenantDto,
+  ) {
+    return {
+      data: await this.auth.switchTenant(user, dto.tenantId, dto.refreshToken),
+    };
   }
 }

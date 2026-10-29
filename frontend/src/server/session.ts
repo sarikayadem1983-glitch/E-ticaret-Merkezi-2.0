@@ -6,7 +6,7 @@ import {
   refreshTokens,
 } from './backend-client';
 import { serverEnv } from './env';
-import { errorResponse } from './http';
+import { errorResponse, unauthenticated } from './http';
 import { readyRedis } from './redis';
 import {
   SessionManager,
@@ -65,16 +65,18 @@ export async function clearSessionCookie(): Promise<void> {
 }
 
 /** The current session with a fresh access token, or null (signed out). */
-export async function currentSession(
-  client: ClientContext,
-): Promise<{ sid: string; session: SessionData } | null> {
+export async function currentSession(client: ClientContext): Promise<{
+  sid: string;
+  session: SessionData;
+  manager: SessionManager;
+} | null> {
   const sid = await readSessionId();
   if (!sid) return null;
   const manager = new SessionManager(await sessionStore(), (token) =>
     refreshTokens(token, client),
   );
   const session = await manager.resolve(sid);
-  return session ? { sid, session } : null;
+  return session ? { sid, session, manager } : null;
 }
 
 /**
@@ -101,9 +103,92 @@ export async function startSession(
   const previous = await readSessionId();
   if (previous) await store.destroy(previous);
   const sid = await store.create(
-    sessionFromTokens(tokens, { userId: data.id, tenantId: data.tenantId }, Date.now()),
+    sessionFromTokens(
+      tokens,
+      { userId: data.id, tenantId: data.tenantId },
+      Date.now(),
+    ),
   );
   await setSessionCookie(sid);
+  return null;
+}
+
+const UUID_CLAIM =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * sub/tid of an access token the backend just returned to this server. Only
+ * a fallback for identifying the session; the signature is checked by the
+ * backend on every use of the token.
+ */
+function identityFromClaims(
+  accessToken: string,
+): { userId: string; tenantId: string } | null {
+  try {
+    const payload = accessToken.split('.')[1];
+    if (!payload) return null;
+    const claims = JSON.parse(
+      Buffer.from(payload, 'base64url').toString('utf8'),
+    ) as { sub?: unknown; tid?: unknown };
+    if (
+      typeof claims.sub !== 'string' ||
+      typeof claims.tid !== 'string' ||
+      !UUID_CLAIM.test(claims.sub) ||
+      !UUID_CLAIM.test(claims.tid)
+    ) {
+      return null;
+    }
+    return { userId: claims.sub, tenantId: claims.tid };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Replaces the current session after a store switch. The backend has already
+ * revoked the old refresh token, so the old session must never stay in use:
+ * the new tokens are always persisted under a new session id and the old id
+ * is destroyed. The identity comes from auth/me, or from the token claims
+ * when auth/me fails. The selected company is reset and the absolute timeout
+ * keeps counting from the original login. When no new session can be built
+ * the old one is destroyed anyway and 401 is returned.
+ */
+export async function switchSession(
+  tokens: TokenPair,
+  client: ClientContext,
+): Promise<Response | null> {
+  let identity: { userId: string; tenantId: string } | null = null;
+  try {
+    const me = await backendFetch('auth/me', {
+      accessToken: tokens.accessToken,
+      client,
+    });
+    if (me.ok) {
+      const { data } = (await me.json()) as {
+        data: { id: string; tenantId: string };
+      };
+      identity = { userId: data.id, tenantId: data.tenantId };
+    }
+  } catch {
+    // Falls back to the token claims below.
+  }
+  identity ??= identityFromClaims(tokens.accessToken);
+
+  const store = await sessionStore();
+  const previousSid = await readSessionId();
+  const previous = previousSid ? await store.get(previousSid) : null;
+  if (!identity) {
+    if (previousSid) await store.destroy(previousSid);
+    await clearSessionCookie();
+    return unauthenticated();
+  }
+  const now = Date.now();
+  const sid = await store.create({
+    ...sessionFromTokens(tokens, identity, now),
+    createdAt: previous?.createdAt ?? now,
+  });
+  await setSessionCookie(sid);
+  if (previousSid) await store.destroy(previousSid);
   return null;
 }
 

@@ -34,6 +34,8 @@ sh docker/postgres/setup-roles.sh
 
 Script tekrar çalıştırılabilir (idempotent). Şifre değiştirmek için `.env`'deki değeri güncelleyip yeniden çalıştırın.
 
+`setup-roles.sql` doğrudan `psql` ile de çalıştırılabilir; parola değişkenlerinden biri eksik veya boşsa hiçbir değişiklik yapmadan durur (boş değer `ALTER ROLE ... PASSWORD ''` ile rolün parolasını silerdi). Test: `bash database/scripts/test-setup-roles-guard.sh` (atılabilir konteynerde, mevcut veritabanı veya `.env` kullanılmaz).
+
 ### Production bağlantı bilgileri
 
 - `DATABASE_URL` ve `MIGRATION_DATABASE_URL` ayrı gizli değerlerdir. Bir secret manager (ör. AWS Secrets Manager, GCP Secret Manager, Vault, Kubernetes Secret) ile ortam değişkeni olarak verilir. Repoya, imaja veya loglara yazılmaz.
@@ -61,7 +63,47 @@ Ayarlar açılışta `backend/src/config/security.config.ts` ile okunur ve doğr
 
 ## 3. Kimlik doğrulama koruması
 
-Mevcut katmanlar: argon2id şifre hash'i, bilinmeyen email'de sahte hash doğrulaması (yanıt süresi kullanıcı varlığını ele vermez), refresh token rotation ve tekrar kullanımda tüm oturumların kapatılması, başarısız girişlerin Audit Log'a yazılması.
+Mevcut katmanlar: argon2id şifre hash'i, bilinmeyen email'de sahte hash doğrulaması (yanıt süresi kullanıcı varlığını ele vermez), refresh token rotation ve tekrar kullanımda kullanıcının tüm mağazalardaki oturumlarının hemen kapatılması, başarısız girişlerin Audit Log'a yazılması.
+
+### Refresh token tekrar kullanımı
+
+İptal edilmiş (döndürülmüş) bir refresh token aktif bir kullanıcı tarafından tekrar gönderilirse veya aynı token'ın eş zamanlı iki rotation'ından biri yarışı kaybederse token çalınmış sayılır:
+
+- Kullanıcının **tüm mağazalardaki** iptal edilmemiş refresh token'ları iptal edilir ve **tüm üyeliklerinin** (pasifler dahil) `auth_version`'ı artırılır. İkisi tek veritabanı transaction'ında, `runAsSystem` bağlamında çalışır; sorgular `user_id` ile açıkça filtrelenir (`AuthRepository.revokeAllForUserEverywhere`, `MembershipsRepository.bumpAuthVersionForUser`). İzin listesine yeni dosya eklenmedi. Sonuç: açık access token'lar bir sonraki istekte `401 TOKEN_STALE` alır (15 dk beklenmez), refresh yapılamaz, kullanıcı tüm cihazlarda yeniden giriş yapar.
+- Yanıt `401 INVALID_REFRESH_TOKEN`, token üretilmez.
+- İptal veya `auth_version` artırımı başarısız olursa transaction geri alınır, istek `500` ile biter (token yine üretilmez), hata loglanır ve **audit yazılmaz**: gerçekleşmeyen iptal hiçbir yerde yapılmış gibi kaydedilmez.
+- Commit sonrası etkilenen her mağazaya (tespitin yapıldığı mağaza her zaman dahil) birer `TOKEN_REUSE_DETECTED` kaydı yazılır: `after: { detectedInTenantId, refreshRevokedCount (o mağazada), accessRevoked, totalRefreshRevokedCount, affectedTenantIds }`. Token veya hash içermez. Alan adları bilerek `token`/`session` kelimesini içermez; aksi halde audit sanitizer değerleri `[REDACTED]` yapar. İptal edilmiş bir token'ın sonradan tekrar sunulması da yeniden tekrar kullanım sayılır ve sayıları 0 olan yeni kayıtlar yazar. Audit yazımı başarısız olursa loglanır; iptal geri alınmaz ve yanıt değişmez.
+- Pasif/silinmiş kullanıcının token'ı tekrar kullanım sayılmaz (aşağıda).
+- Halefsiz iptal edilmiş token (çıkış, toplu iptal; `replaced_by_id` boş) tekrar kullanım sayılmaz: yalnızca `401 INVALID_REFRESH_TOKEN`, oturumlar ve audit dokunulmaz. `replaced_by_id`'yi yalnızca rotation ve mağaza değiştirme yazar (halef hedef mağazadaki yeni token); değiştirme öncesi token'ın tekrar sunulması da alarm verir.
+- **Bilinen risk (takip işi):** Eşzamanlı iki rotation'dan yarışı kaybeden, BFF kilidi dışında gelirse (ör. iki farklı istemci, kilit zaman aşımı, ağ tekrarı) meşru kullanıcının tüm oturumlarını kapatır. Şimdilik bilerek korunuyor. Çözüm seçenekleri: (a) kısa tolerans penceresi: halef token az önce üretildiyse ve henüz kullanılmadıysa alarm verme; (b) backend tarafında token başına Redis kilidi; (c) halef token'ı idempotent dönmek (aynı yanıtı tekrar ver). Seçim ayrı görevde yapılacak.
+
+### Access token sürümü (`ver`) ve eski token'lar
+
+- Her yeni access token (login, kayıt, refresh) `ver` claim'i taşır: üyeliğin `auth_version`'ı (ilk değer 1).
+- Bu değişiklikten önce üretilmiş token'larda `ver` yoktur; doğrulamada **0** kabul edilir (çökme yok). Tam sayı olmayan `ver` içeren token reddedilir.
+- Refresh, üyelik aktif değilse veya tenant pasifse reddedilir.
+
+### Her istekte oturum kontrolü (`auth_version`)
+
+- `JwtAuthGuard` imzayı doğruladıktan sonra her istekte üyeliği veritabanından okur (tek sorgu: `tenant_memberships` birincil anahtarı + `tenants` ve `users` join, `MembershipsRepository.sessionState`). Önbellek yoktur; değişiklik bir sonraki istekte etkili olur.
+  - Üyelik yok, pasif; tenant pasif/silinmiş; global kullanıcı pasif (`users.is_active = false`) veya silinmiş (`users.deleted_at`) → `401 SESSION_REVOKED`.
+  - `ver` ≠ üyeliğin `auth_version`'ı → `401 TOKEN_STALE`. Üyelik öncesi token'lar (`ver` yok → 0) da `TOKEN_STALE` olur; refresh güncel `ver` ile yeni token verir.
+  - `sub`/`tid` UUID değilse token geçersizdir (`401 UNAUTHORIZED`). Veritabanı hatasında istek reddedilir (fail-closed, `500`).
+- `MembershipsRepository.bumpAuthVersion(tx, tenantId, userId)` üyeliğin tüm access token'larını geçersiz kılar (refresh token'lara dokunmaz). Rol/firma ataması değişikliği ve pasife alma bunu çağırır (pasife alma ayrıca refresh token'ları iptal eder).
+- **Mağaza değiştirme** eski mağazadaki üyeliğin `auth_version`'ını artırır: eski mağazanın access token'ı hemen `TOKEN_STALE` olur ve refresh token'ı iptal edildiği için geri dönülemez. Kullanıcının o mağazadaki diğer cihazları bir kez refresh yapıp devam eder.
+- **Ölçülen maliyet** (yerel Docker PostgreSQL 16, 2026-10-29): kontrol sorgusu (users join ile) p50 1,05–1,18 ms, p95 1,6–2,1 ms, p99 2,9–4,2 ms (3 × 2000 çağrı); `GET /auth/me` toplam p50 ≈ 7,1 ms. Uzak veritabanında bu süreye ağ gecikmesi eklenir.
+
+### Login ve başarısız giriş
+
+- **Pasif veya silinmiş global kullanıcı** (`users.is_active = false` veya `users.deleted_at` dolu) token alamaz:
+  - Login: şifre hash'i yine doğrulanır (süre farkı yok), yanıt yanlış şifreyle birebir aynıdır (`401 INVALID_CREDENTIALS`). `LOGIN_FAILED` ilgili tenant'a arka planda yazılır; neden `user_inactive` / `user_deleted` (şifre yanlışsa `invalid_password`).
+  - Refresh: tekrar kullanım kontrolünden önce hesap durumu okunur; gönderilen refresh token iptal edilir, yanıt bilinmeyen token ile aynıdır (`401 INVALID_REFRESH_TOKEN`). Aynı token tekrar gönderilirse `TOKEN_REUSE_DETECTED` yazılmaz, diğer oturumlar kapatılmaz.
+  - Açık access token'lar bir sonraki istekte `401 SESSION_REVOKED` alır (guard, aşağıda); bu yüzden `switch-tenant` de çalışmaz.
+  - Kayıt, mevcut (silinmiş dahil) e-postada önceki gibi `409` döner ve token üretmez.
+
+- Login'de aktif üyeliği olmayan kullanıcı, bilinmeyen e-postayla birebir aynı yanıtı alır (`401 Email veya şifre hatalı`). Bilinmeyen e-postada da üyelik sorgusu çalışır, böylece sorgu sırası aynıdır.
+- **Başarısız giriş audit'i:** e-posta bir kullanıcıya aitse `LOGIN_FAILED` ilgili tenant'a yazılır: kullanılabilir mağaza varsa o tenant'a, yoksa `last_tenant_id`'nin üyeliğine, o da yoksa durumu en son değişen üyeliğe (tek satır). `after` yalnızca neden kodudur: `invalid_password`, `membership_inactive`, `tenant_inactive`. Şifre, e-posta, hash veya token yazılmaz. Kayıt her durumda (yanlış şifre, pasif üyelik/mağaza, pasif/silinmiş kullanıcı) arka planda yazılır; yanıt süresi hesabın varlığını veya durumunu ele vermez. Bilinmeyen e-posta audit'e yazılmaz.
+- Audit yazımı başarısız olursa giriş yanıtı değişmez (yine genel `401`, `500` yok); hata kimlik bilgisi içermeden loglanır.
 
 ### Hız sınırlama (rate limiting)
 
@@ -89,6 +131,7 @@ Sayaçlar Redis'te tutulur (`rl:` önekli anahtarlar). Her kontrol tek bir atomi
 - **Neden kapalı:** Açık bırakılırsa Redis kesintisi sınırsız şifre denemesine izin verir. Ayrıca CPU yoğun argon2 doğrulaması bir DoS yolu olur.
 - **Bedeli:** Kesinti süresince yeni giriş yapılamaz. Mevcut access token'lar geçerlilik süresi (15 dk) boyunca çalışmaya devam eder.
 - **Diğer uç noktalar:** Rate limiting kullanmadıkları için etkilenmez.
+- **Açılışta hazır olma:** uygulama açılışta Redis'in ilk bağlantısını (en fazla 2 sn) bekler; böylece ilk istekler bağlantı kurulmadan gönderilip `503` almaz. Redis açılışta yoksa uygulama yine açılır, hata loglanır ve kimlik doğrulama uçları Redis gelene kadar `503` döner.
 - **Hızlı hata:** Redis istemcisi komut kuyruğu tutmaz ve 1 sn zaman aşımı kullanır. Böylece istekler beklemeden hata alır. İstemci arka planda yeniden bağlanmayı dener.
 
 Production'da Redis yüksek erişilebilirlik (replika + otomatik failover) ile çalıştırılmalı ve izlenmelidir.
@@ -118,7 +161,9 @@ Tarayıcı backend'e doğrudan erişmez. Tüm API çağrıları Next.js sunucusu
 - **Token'lar sunucuda:** Access ve refresh token BFF'in Redis deposunda (`bff:sess:<sha256(oturum kimliği)>`) tutulur. Değer AES-256-GCM ile şifrelenir (anahtar `SESSION_SECRET`'tan HKDF ile türetilir) ve anahtarına bağlanır: Redis dökümü token vermez, değer başka anahtara taşınırsa çözülmez. `localStorage`/`sessionStorage` kullanılmaz; hiçbir yanıt tarayıcıya token döndürmez.
 - **Süreler:** 2 saat işlem yapılmazsa (kayan süre) veya girişten 12 saat sonra (mutlak süre) oturum biter. Mutlak süre, refresh token'ın 7 günlük ömründen bağımsız olarak uygulanır.
 - **Session fixation:** Giriş ve kayıtta her zaman yeni oturum kimliği üretilir; tarayıcının önceden taşıdığı kimlik silinir.
+- **Mağaza değiştirme:** `POST /api/session/tenant` (CSRF korumalı). Backend mevcut refresh token'ı iptal eder ve hedef üyelik için yeni çift üretir; `tid`/`perms`/`ver` yalnızca hedef üyelikten gelir, önceki mağazanın yetkisi taşınmaz. BFF eski oturum kimliğini siler, yeni kimlik verir (session fixation), seçili firmayı sıfırlar; mutlak süre ilk girişten saymaya devam eder. Hedefte aktif üyelik yoksa, üyelik/mağaza pasifse veya mağaza yoksa `404`: token üretilmez, mevcut oturum aynen kalır. İşlem token yenilemeyle aynı Redis kilidini alır (paralel rotation yok). Her iki mağazaya `TENANT_SWITCH` audit kaydı (token içermez). Arayüz geçişten sonra tam sayfa yükler.
 - **Token rotation:** Access token süresinin dolmasına 30 sn kala BFF backend'den refresh yapar ve yeni token çiftini kaydeder.
+- **`TOKEN_STALE` / `SESSION_REVOKED`:** Backend `401 TOKEN_STALE` dönerse BFF (`SessionManager.send`) aynı kilitle bir kez refresh yapar ve isteği bir kez tekrarlar; paralel istekler tek refresh paylaşır. `SESSION_REVOKED`, kodsuz başka bir `401`, başarısız refresh veya tekrar sonrası ikinci `401` → oturum silinir, cookie temizlenir, `401`. Döngü yoktur. (`/api/bff/*`, `GET /api/session`, `PUT /api/session/company`.) `POST /api/session/tenant` aynı kuralı uygular: `TOKEN_STALE` → kilit dışında bir refresh, switch bir kez tekrar; `SESSION_REVOKED` veya ikinci `TOKEN_STALE` → oturum silinir.
 - **Eşzamanlı refresh:** Backend aynı refresh token'ın ikinci kullanımını hırsızlık sayıp kullanıcının tüm oturumlarını kapatır. Bu yüzden bir oturum için aynı anda tek refresh yapılır: Redis kilidi (`SET NX PX`, sahibine özel serbest bırakma) tüm BFF örneklerinde geçerlidir. Diğer istekler sonucu en fazla 5 sn bekler, sonra `503`.
 - **Refresh reddedilirse** (iptal, süre dolumu, tekrar kullanım) oturum silinir, kullanıcı girişe yönlendirilir. Backend erişilemezse oturum korunur, `503` döner.
 - **Çıkış:** Backend'de refresh token iptal edilir, Redis'teki oturum silinir, cookie temizlenir. Backend'e ulaşılamasa da yerel temizlik yapılır.

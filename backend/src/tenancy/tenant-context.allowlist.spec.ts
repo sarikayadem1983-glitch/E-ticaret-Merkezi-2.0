@@ -9,6 +9,7 @@ const ALLOWED = new Set([
   'auth/auth.service.ts',
   'database/database-role.check.ts',
   'health/health.service.ts',
+  'memberships/memberships.repository.ts',
 ]);
 
 const SRC = join(import.meta.dirname, '..');

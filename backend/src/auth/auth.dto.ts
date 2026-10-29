@@ -2,6 +2,7 @@ import { Transform } from 'class-transformer';
 import {
   IsEmail,
   IsString,
+  IsUUID,
   Length,
   Matches,
   MaxLength,
@@ -48,6 +49,15 @@ export class LoginDto {
 }
 
 export class RefreshTokenDto {
+  @IsString()
+  @Length(20, 200)
+  refreshToken: string;
+}
+
+export class SwitchTenantDto {
+  @IsUUID()
+  tenantId: string;
+
   @IsString()
   @Length(20, 200)
   refreshToken: string;

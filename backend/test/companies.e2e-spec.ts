@@ -9,7 +9,7 @@ import {
 } from './../src/database/prisma.service.js';
 import { isValidVkn } from './../src/companies/tax-number.js';
 import { TenantContext } from './../src/tenancy/tenant-context.js';
-import { createTestApp, purgeTenants } from './helpers.js';
+import { createTestApp, purgeTenants, seedMember } from './helpers.js';
 
 const PASSWORD = 'Correct-Horse-9';
 
@@ -294,24 +294,28 @@ describe('Companies (e2e)', () => {
       const email = `co-staff-${run}@test.local`;
       const passwordHash = await hash(PASSWORD);
 
+      // Users are global and seeded with a membership; user_company_roles now
+      // only accepts company-scope roles, and user_roles only tenant-scope ones,
+      // so the same custom role is granted through the company assignment alone.
+      const userId = await seedMember({
+        email,
+        name: 'Personel',
+        passwordHash,
+        memberships: [{ tenantId: tenantA }],
+      });
       await TenantContext.run(tenantA, async () => {
         const role = await prisma.role.create({
           data: {
             tenantId: tenantA,
             name: `staff-${run}`,
+            scope: 'company',
             permissions: ['companies:read', 'companies:write'],
           },
-        });
-        const user = await prisma.user.create({
-          data: { tenantId: tenantA, name: 'Personel', email, passwordHash },
-        });
-        await prisma.userRole.create({
-          data: { tenantId: tenantA, userId: user.id, roleId: role.id },
         });
         await prisma.userCompanyRole.create({
           data: {
             tenantId: tenantA,
-            userId: user.id,
+            userId,
             companyId: assigned.id,
             roleId: role.id,
           },
