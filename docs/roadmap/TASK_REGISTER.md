@@ -1,7 +1,7 @@
 # Görev Kaydı (Task Register)
 
 Tüm görevlerin tek kaynağı. Durum güncelleme kuralları: `AGENTS.md` → "Yol haritası ve durum takibi".
-Son güncelleme: 2026-10-29 (`feature/user-management` @ `946dec0`; MVP kapsamı kullanıcı kararıyla sadeleştirildi: Trendyol-only).
+Son güncelleme: 2026-10-29 (`origin/main` @ `95b5bdb`: PR #6, #8, #9 merge edildi, deploy edilmedi; MVP kapsamı kullanıcı kararıyla sadeleştirildi: Trendyol-only).
 
 > **Onay durumu:** Yalnızca kullanıcı yönetimi planındaki görevler (`USR-T1`…`USR-T16`, plan: `docs/superpowers/plans/2026-10-28-user-management.md`) ve merge edilmiş işler (INF-01…08, USR-01, USR-02, DSH-01) **onaylı plandır**. Diğer tüm modüller, görevler, tahminler ve tarihler **öneridir, kullanıcı onayı beklemektedir**. Her görevin kaynağı `TASK_REGISTER.md`'deki "Kaynak" sütunundadır.
 
@@ -89,15 +89,15 @@ Kaynak: `docs/superpowers/plans/2026-10-28-user-management.md` (T1–T16 numaral
 
 | ID | Görev | Öncelik | Bağımlılık | Tahmin | Mod | Sürüm | Durum | Kabul kriteri | Test | Güvenlik riski | Kaynak |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| USR-T1 | Aşama 1 migration SQL'i, ön kontroller, doğrulama sorguları (`20261029090000_tenant_memberships`) | P0 | USR-01 | — | CRITICAL | A | DONE-PR (PR #6) | `verify-after.sql` tüm satırlar ok; rollback provası | M, E | Kritik (veri) | Onaylı plan |
-| USR-T2 | Yedek ve izole prova betiği (`backup-and-rehearse.sh`), Aşama 2 SQL hazırlığı (`migrations-pending/`) | P0 | USR-T1 | — | CRITICAL | A | DONE-PR (PR #6) | Betik çıkış 0, restore kontrolü ok | M | Yüksek | Onaylı plan |
-| USR-T3 | ⛔ Onay kapısı — dev DB'de Aşama 1 | P0 | USR-T2 | — | CRITICAL | A | DONE-PR (PR #6) | Görev yalnızca rapor üretti; dev DB migration'ı sonradan **kullanıcı onayıyla** uygulandı | M | Kritik | Onaylı plan |
-| USR-T4 | Global kullanıcı modeli + üyelikle login/register | P0 | USR-T3 | — | CRITICAL | A | DONE-PR (PR #6) | Plan T4 testleri | U, E | Yüksek | Onaylı plan |
-| USR-T5 | Mağaza değiştirme ve üyelik listesi (backend + BFF + seçici) | P0 | USR-T4 | — | CRITICAL | A | DONE-PR (PR #6) | Plan T5 testleri | U, E, F | Yüksek | Onaylı plan |
-| USR-T6 | `auth_version` ile anında oturum geçersizleştirme | P0 | USR-T5 | — | CRITICAL | A | DONE-PR (PR #6) | Plan T6 testleri | U, E | Yüksek | Onaylı plan |
-| USR-17 | Güvenlik düzeltmesi: pasif / soft-delete kullanıcıya login ve refresh'te token verilmemesi, yanlış şifre audit'i arka planda | P0 | USR-T6 | — | CRITICAL | A | DONE-PR (PR #6, `140d348`, `946dec0`) | Pasif/silinmiş kullanıcı login/refresh → 401, oturumları iptal | U, E | Yüksek | PR #6 güvenlik düzeltmesi (uygulandı) |
-| USR-T7 | Rol kataloğu, erişim servisi ve kurallar (`ROLE_CATALOG`, `AccessService`, `canGrant`, son owner koruması) | P0 | PR #6 merge, kullanıcı onayı | 2 | CRITICAL | A | BLOCKED (kullanıcı: "Task 7'ye başlama") | Plan T7 testleri | U | Yüksek (yetki yükseltme) | Onaylı plan |
-| USR-T8 | Companies modülünü firma başına role bağla; `auth/me` yetenek bayrakları | P0 | USR-T7 | 2 | CRITICAL | A | PLANNED | Plan T8 testleri (A rolü B'ye erişemez, okuma/yazma ayrımı, eski token `TOKEN_STALE`) | E, S | Yüksek | Onaylı plan |
+| USR-T1 | Aşama 1 migration SQL'i, ön kontroller, doğrulama sorguları (`20261029090000_tenant_memberships`) | P0 | USR-01 | — | CRITICAL | A | DONE-NOT-DEPLOYED (PR #6; merge `f1be19a`) | `verify-after.sql` tüm satırlar ok; rollback provası | M, E | Kritik (veri) | Onaylı plan |
+| USR-T2 | Yedek ve izole prova betiği (`backup-and-rehearse.sh`), Aşama 2 SQL hazırlığı (`migrations-pending/`) | P0 | USR-T1 | — | CRITICAL | A | DONE-NOT-DEPLOYED (PR #6; merge `f1be19a`) | Betik çıkış 0, restore kontrolü ok | M | Yüksek | Onaylı plan |
+| USR-T3 | ⛔ Onay kapısı — dev DB'de Aşama 1 | P0 | USR-T2 | — | CRITICAL | A | DONE-NOT-DEPLOYED (PR #6; merge `f1be19a`) | Görev yalnızca rapor üretti; dev DB migration'ı sonradan **kullanıcı onayıyla** uygulandı | M | Kritik | Onaylı plan |
+| USR-T4 | Global kullanıcı modeli + üyelikle login/register | P0 | USR-T3 | — | CRITICAL | A | DONE-NOT-DEPLOYED (PR #6; merge `f1be19a`) | Plan T4 testleri | U, E | Yüksek | Onaylı plan |
+| USR-T5 | Mağaza değiştirme ve üyelik listesi (backend + BFF + seçici) | P0 | USR-T4 | — | CRITICAL | A | DONE-NOT-DEPLOYED (PR #6; merge `f1be19a`) | Plan T5 testleri | U, E, F | Yüksek | Onaylı plan |
+| USR-T6 | `auth_version` ile anında oturum geçersizleştirme | P0 | USR-T5 | — | CRITICAL | A | DONE-NOT-DEPLOYED (PR #6; merge `f1be19a`) | Plan T6 testleri | U, E | Yüksek | Onaylı plan |
+| USR-17 | Güvenlik düzeltmesi: pasif / soft-delete kullanıcıya login ve refresh'te token verilmemesi, yanlış şifre audit'i arka planda | P0 | USR-T6 | — | CRITICAL | A | DONE-NOT-DEPLOYED (PR #6, `140d348`, `946dec0`; merge `f1be19a`) | Pasif/silinmiş kullanıcı login/refresh → 401, oturumları iptal | U, E | Yüksek | PR #6 güvenlik düzeltmesi (uygulandı) |
+| USR-T7 | Rol kataloğu, erişim servisi ve kurallar (`ROLE_CATALOG`, `AccessService`, `canGrant`, son owner koruması) | P0 | PR #6 merge, kullanıcı onayı | 2 | CRITICAL | A | DONE-NOT-DEPLOYED (PR #8, merge `cc8b72a`) | Plan T7 testleri | U | Yüksek (yetki yükseltme) | Onaylı plan |
+| USR-T8 | Companies modülünü firma başına role bağla; `auth/me` yetenek bayrakları | P0 | USR-T7 | 2 | CRITICAL | A | DONE-NOT-DEPLOYED (PR #9, merge `95b5bdb`) | Plan T8 testleri (A rolü B'ye erişemez, okuma/yazma ayrımı, eski token `TOKEN_STALE`) | E, S | Yüksek | Onaylı plan |
 | USR-T9 | Mail modülü ve Mailpit | P0 | PR #6 merge | 0,5 | STANDARD | B | PLANNED | Plan T9 testlerinin kalan kısmı. Kalan (USR-T9b): davet e-posta şablonu `renderInvitation` ve testleri. MVP dilimi: USR-T9a | U | Orta | Onaylı plan |
 | USR-T9a | Mail modülü çekirdeği: `MailService.send`, SMTP/log transport, `mail.config` (prod'da `log` yasak, TLS zorunlu), Mailpit (docker), URL/token loglanmaz | P0 | PR #6 merge | 1,5 | STANDARD | A | PLANNED | Plan T9 testleri (şablon testi hariç); USR-19 ve USR-T10a bunu kullanır | U | Orta | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
 | USR-T10 | Davet servisi (oluştur, yeniden gönder, iptal, lookup, kabul) | P0 | USR-T7, USR-T9 | 1 | CRITICAL | B | PLANNED | Plan T10 testlerinin kalan kısmı. Kalan (USR-T10b): `GET /invitations?status=` filtresi, `accept-as-current`, pasif üyeliği davetle yeniden açma (`replacesInactiveMembership`), resend hız sınırları. MVP dilimi: USR-T10a | E, S | Yüksek | Onaylı plan |
@@ -393,7 +393,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 
 ## Sürümlere göre görev listeleri
 
-### Sürüm A — MVP: Trendyol-only (57 görev: 18 tamamlandı + 39 kalan; kalan tahmin 110,5 iş günü; 18 EPIC)
+### Sürüm A — MVP: Trendyol-only (57 görev: 20 tamamlandı + 37 kalan; kalan tahmin 106,5 iş günü; 18 EPIC)
 
 | ID | Görev | Durum | Tahmin | Mod | Kaynak |
 |---|---|---|---|---|---|
@@ -411,15 +411,15 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | INF-18 | Mağaza değiştirmede Redis hatası: sahte "token hırsızlığı" audit'i ve tüm cihazlardan çıkışın önlenmesi | PLANNED | 2 | CRITICAL | Öneri (onay bekliyor) |
 | USR-01 | Tenant-scoped firma (company) API | DONE-MERGED (PR #3) | — | CRITICAL | Onaylı plan |
 | USR-02 | Firma ekranları (liste, detay, oluştur, düzenle) | DONE-MERGED (PR #4) | — | STANDARD | Onaylı plan |
-| USR-T1 | Aşama 1 migration SQL'i, ön kontroller, doğrulama sorguları (`20261029090000_tenant_memberships`) | DONE-PR (PR #6) | — | CRITICAL | Onaylı plan |
-| USR-T2 | Yedek ve izole prova betiği (`backup-and-rehearse.sh`), Aşama 2 SQL hazırlığı (`migrations-pending/`) | DONE-PR (PR #6) | — | CRITICAL | Onaylı plan |
-| USR-T3 | ⛔ Onay kapısı — dev DB'de Aşama 1 | DONE-PR (PR #6) | — | CRITICAL | Onaylı plan |
-| USR-T4 | Global kullanıcı modeli + üyelikle login/register | DONE-PR (PR #6) | — | CRITICAL | Onaylı plan |
-| USR-T5 | Mağaza değiştirme ve üyelik listesi (backend + BFF + seçici) | DONE-PR (PR #6) | — | CRITICAL | Onaylı plan |
-| USR-T6 | `auth_version` ile anında oturum geçersizleştirme | DONE-PR (PR #6) | — | CRITICAL | Onaylı plan |
-| USR-17 | Güvenlik düzeltmesi: pasif / soft-delete kullanıcıya login ve refresh'te token verilmemesi, yanlış şifre audit'i arka planda | DONE-PR (PR #6, `140d348`, `946dec0`) | — | CRITICAL | PR #6 güvenlik düzeltmesi (uygulandı) |
-| USR-T7 | Rol kataloğu, erişim servisi ve kurallar (`ROLE_CATALOG`, `AccessService`, `canGrant`, son owner koruması) | BLOCKED (kullanıcı: "Task 7'ye başlama") | 2 | CRITICAL | Onaylı plan |
-| USR-T8 | Companies modülünü firma başına role bağla; `auth/me` yetenek bayrakları | PLANNED | 2 | CRITICAL | Onaylı plan |
+| USR-T1 | Aşama 1 migration SQL'i, ön kontroller, doğrulama sorguları (`20261029090000_tenant_memberships`) | DONE-NOT-DEPLOYED (PR #6; merge `f1be19a`) | — | CRITICAL | Onaylı plan |
+| USR-T2 | Yedek ve izole prova betiği (`backup-and-rehearse.sh`), Aşama 2 SQL hazırlığı (`migrations-pending/`) | DONE-NOT-DEPLOYED (PR #6; merge `f1be19a`) | — | CRITICAL | Onaylı plan |
+| USR-T3 | ⛔ Onay kapısı — dev DB'de Aşama 1 | DONE-NOT-DEPLOYED (PR #6; merge `f1be19a`) | — | CRITICAL | Onaylı plan |
+| USR-T4 | Global kullanıcı modeli + üyelikle login/register | DONE-NOT-DEPLOYED (PR #6; merge `f1be19a`) | — | CRITICAL | Onaylı plan |
+| USR-T5 | Mağaza değiştirme ve üyelik listesi (backend + BFF + seçici) | DONE-NOT-DEPLOYED (PR #6; merge `f1be19a`) | — | CRITICAL | Onaylı plan |
+| USR-T6 | `auth_version` ile anında oturum geçersizleştirme | DONE-NOT-DEPLOYED (PR #6; merge `f1be19a`) | — | CRITICAL | Onaylı plan |
+| USR-17 | Güvenlik düzeltmesi: pasif / soft-delete kullanıcıya login ve refresh'te token verilmemesi, yanlış şifre audit'i arka planda | DONE-NOT-DEPLOYED (PR #6, `140d348`, `946dec0`; merge `f1be19a`) | — | CRITICAL | PR #6 güvenlik düzeltmesi (uygulandı) |
+| USR-T7 | Rol kataloğu, erişim servisi ve kurallar (`ROLE_CATALOG`, `AccessService`, `canGrant`, son owner koruması) | DONE-NOT-DEPLOYED (PR #8, merge `cc8b72a`) | 2 | CRITICAL | Onaylı plan |
+| USR-T8 | Companies modülünü firma başına role bağla; `auth/me` yetenek bayrakları | DONE-NOT-DEPLOYED (PR #9, merge `95b5bdb`) | 2 | CRITICAL | Onaylı plan |
 | USR-T9a | Mail modülü çekirdeği: `MailService.send`, SMTP/log transport, `mail.config` (prod'da `log` yasak, TLS zorunlu), Mailpit (docker), URL/token loglanmaz | PLANNED | 1,5 | STANDARD | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
 | USR-T10a | Davet servisi çekirdeği: oluştur (Admin / firma rolleri), iptal, yeniden gönder (yeni token), lookup, kabul (yeni hesap; mevcut hesap şifreyle) | PLANNED | 3 | CRITICAL | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
 | USR-T11a | Users modülü çekirdeği: `GET /users`, `PUT /users/:userId/access`, `POST /users/:userId/deactivate` / `activate` (T6 `bumpAuthVersion` + refresh iptali), audit | PLANNED | 2,5 | CRITICAL | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
@@ -557,12 +557,12 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | EPIC | 33 |
 | Görev | 139 (133 + 6 MVP dilimi: USR-T9a, T10a, T11a, T12a, T13a, T15a) |
 | DONE-MERGED | 11 |
-| DONE-PR (PR #6, merge ve deploy yok) | 7 |
-| DONE-NOT-DEPLOYED | 0 |
+| DONE-PR | 0 |
+| DONE-NOT-DEPLOYED | 9 (USR-T1…T8, USR-17; PR #6, #8, #9) |
 | IN-PROGRESS | 0 |
-| BLOCKED | 2 (USR-T7, USR-18) |
-| PLANNED | 119 |
-| Sürüm A | 57 görev (18 tamamlandı + 39 kalan), 18 EPIC, kalan 110,5 iş günü |
+| BLOCKED | 1 (USR-18) |
+| PLANNED | 118 |
+| Sürüm A | 57 görev (20 tamamlandı + 37 kalan), 18 EPIC, kalan 106,5 iş günü |
 | Sürüm B | 61 görev (0 tamamlandı + 61 kalan), 23 EPIC, kalan 188,5 iş günü |
 | Sürüm C | 21 görev (0 tamamlandı + 21 kalan), 9 EPIC, kalan 87 iş günü |
 | Mod: CRITICAL / STANDARD / FAST | 54 / 78 / 7 |

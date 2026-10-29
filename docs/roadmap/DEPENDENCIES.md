@@ -6,8 +6,8 @@ Görev ayrıntıları: `TASK_REGISTER.md`. Bu dosya yalnızca sıralamayı göst
 
 | Kapı | Neyi açar | Kim |
 |---|---|---|
-| G1 PR #6 merge (M0, dev deploy dahil) | USR-T7, USR-T9a, CAT-01, INF-09, INF-18 (A); INF-19, SUB-01 (B) | Kullanıcının sohbette açık onayı |
-| G2 Task 7 başlatma onayı | USR-T7 | Kullanıcı ("Task 7'ye başlama" talimatı geçerli) |
+| G1 PR #6 merge (M0) — **açıldı 2026-10-29** (`f1be19a`); dev deploy ayrı onay | USR-T9a, CAT-01, INF-09, INF-18 (A); INF-19, SUB-01 (B) | Kullanıcının sohbette açık onayı |
+| G2 Task 7 başlatma onayı — **açıldı**; USR-T7/T8 merge edildi (#8 `cc8b72a`, #9 `95b5bdb`) | — | Kullanıcı |
 | G3 Her yeni migration'ın dev DB'ye uygulanması | CAT-01, ORD-01, INV-01, INT-01, ... | Kullanıcı onayı + prova çıktısı |
 | G4 Aşama 2 migration onayı | USR-18 | Kullanıcı |
 | G5 Dış erişim — **MVP'nin ana dış kapısı: Trendyol API + stage erişimi** (IP whitelist, stage ortamı doğrulanmadı) | INT-TY-01…03, SHP-02 (A); diğer INT-* (sandbox/anahtar), EFT-01 (entegratör), SUB-02 (ödeme), INF-11 (barındırma) | Kullanıcı |
@@ -17,9 +17,7 @@ Görev ayrıntıları: `TASK_REGISTER.md`. Bu dosya yalnızca sıralamayı göst
 En uzun bağımlılık zinciri (iş günü):
 
 ```
-G1 PR #6 merge + dev deploy (M0)
- → USR-T7 Rol kataloğu (2)
- → USR-T8 Firma başına rol (2)
+G1 PR #6 merge (M0, tamam; USR-T7/T8 de merge edildi)
  → INT-01 Adapter + kimlik bilgisi şifreleme (4)
  → INT-02 Senkron motoru (5)              [INF-09 de gerekir]
  → INT-TY-01 Trendyol listeleme (5)        [CAT-06, CAT-03, IMG-01 de gerekir; G5 Trendyol stage erişimi]
@@ -30,24 +28,24 @@ G1 PR #6 merge + dev deploy (M0)
 
 Toplam ≈ 27 iş günü sıralı iş (+5 kabul). Paralel kısaltmalar (kullanıcı kararı):
 
-- **CAT-01 → CAT-02, USR-T7 → USR-T8 ile paralel** (akış 1 / akış 2). CAT-01 yalnızca G1'i bekler; CAT-02'nin firma izin kontrolü merge öncesi USR-T8'e bağlanır.
+- **CAT-01 → CAT-02** (akış 1). CAT-01'in G1 kapısı açık; USR-T8 merge edildiğinden CAT-02'nin firma izin kontrolü merge öncesi USR-T8'e bağlanır.
 - **CAT-03, CAT-06 ile paralel.** CAT-06 artık CAT-02 + INT-01'i bekler; varyant özellik eşlemesi INT-TY-01'de birleşir.
 - Katalog zinciri G1 → CAT-01 (3) → CAT-02 (3) → CAT-06 (4) = 10 gün; INT-01 G1'den 8. günde biter, bu yüzden CAT-06 ≈ 12. günde, INT-02 ≈ 13. günde biter ve INT-TY-01'i ≈ 13. günde açar.
 
-Takvim süresini kritik yol değil kapasite belirler: 110,5 iş günü / 2 akış ≈ 55 gün > 27 gün. Kritik yoldaki asıl risk **G5 Trendyol stage erişimi**dir: INT-TY-01 başlangıcına (≈ 2026-12-28) kadar gelmezse INT-TY-01…03 ve SHP-02 `BLOCKED` olur.
+Takvim süresini kritik yol değil kapasite belirler: 106,5 iş günü / 2 akış ≈ 53 gün > 23 gün. Kritik yoldaki asıl risk **G5 Trendyol stage erişimi**dir: INT-TY-01 başlangıcına (≈ 2026-12-14) kadar gelmezse INT-TY-01…03 ve SHP-02 `BLOCKED` olur.
 
-Kullanıcı yönetimi zinciri (USR-T9a → T10a → T11a → T12a → T13a → T15a → T16 ≈ 11,5 gün) akış 2'de; USR-T11a USR-T8'i de bekler.
+Kullanıcı yönetimi zinciri (USR-T9a → T10a → T11a → T12a → T13a → T15a → T16 ≈ 11,5 gün) akış 2'de; USR-T11a'nın USR-T8 önkoşulu karşılandı.
 
 ## 3. Grafik (MVP)
 
 ```mermaid
 graph LR
-  G1[PR #6 merge + dev deploy] --> T7[USR-T7]
+  G1[PR #6/#8/#9 merge — tamam] --> T7[USR-T7 ✓]
   G1 --> T9a[USR-T9a Mail]
   G1 --> INF09[INF-09 Kuyruk]
   G1 --> INF18[INF-18 Redis switch]
   G1 --> CAT01[CAT-01 Şema]
-  T7 --> T8[USR-T8]
+  T7 --> T8[USR-T8 ✓]
   T7 --> T10a[USR-T10a Davet]
   T9a --> T10a
   T9a --> USR19[USR-19 Şifre sıfırlama]

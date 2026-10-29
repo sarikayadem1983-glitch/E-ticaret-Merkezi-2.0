@@ -6,8 +6,8 @@
 
 Amaç: pilot satıcının ürünlerini tek yerden yönetip **Trendyol**'da satabildiği; siparişlerini, stoklarını, Trendyol iptal ve iadelerini işleyebildiği ilk çalışan e-ticaret operasyon platformu. Çıkış kriterleri: `RELEASE_PLAN.md`.
 
-**Kapsam:** 57 görev — 18 tamamlandı (11 `DONE-MERGED`, 7 `DONE-PR`), 39 kalan.
-Kalan 39 = kullanıcının listelediği 33 görev + kullanıcı yönetimi planından ayrılan 6 MVP dilimi (USR-T9a, T10a, T11a, T12a, T13a, T15a).
+**Kapsam:** 57 görev — 20 tamamlandı (11 `DONE-MERGED`, 9 `DONE-NOT-DEPLOYED`), 37 kalan.
+Kalan 37 = kullanıcının listelediği 33 görev − USR-T7, USR-T8 (merge edildi, PR #8/#9) + kullanıcı yönetimi planından ayrılan 6 MVP dilimi (USR-T9a, T10a, T11a, T12a, T13a, T15a).
 
 **Kapsam dışı (Sürüm B'ye taşındı):** Hepsiburada (INT-HB-01…03), genel iptal/iade iş akışı ve iade UI (SHP-01; Trendyol iptal/iade senkronu MVP'de INT-TY-03 içinde), webhook alıcısı (INT-04; Trendyol siparişleri polling ile çekilir), asenkron içe aktarma (IMP-02; MVP'de IMP-01 senkron, satır sınırı ile), görsel türev/uygunluk (IMG-02), KPI dashboard (DSH-02), müşteri modeli ve UI (CRM-01, CRM-02), stok raporları (RPT-02), BFF `forceRefresh` yarışı (INF-19), USR-T9…T13, T15'in kalan kısımları. Ayrıca e-Fatura, abonelik/ödeme, diğer pazaryerleri, kârlılık, hakediş, prod ortamı, AI.
 
@@ -19,8 +19,6 @@ Kalan 39 = kullanıcının listelediği 33 görev + kullanıcı yönetimi planı
 | INF-10 | CI pipeline | 2 | STANDARD | Öneri |
 | INF-12 | Nesne depolama (S3/MinIO) | 2 | STANDARD | Öneri |
 | INF-18 | Mağaza değiştirmede Redis hatası düzeltmesi | 2 | CRITICAL | Öneri |
-| USR-T7 | Rol kataloğu, erişim servisi, kurallar | 2 | CRITICAL | Onaylı plan |
-| USR-T8 | Companies modülünü firma başına role bağla | 2 | CRITICAL | Onaylı plan |
 | USR-T9a | Mail modülü çekirdeği + Mailpit | 1,5 | STANDARD | Onaylı plan — MVP dilimi |
 | USR-T10a | Davet servisi çekirdeği | 3 | CRITICAL | Onaylı plan — MVP dilimi |
 | USR-T11a | Users modülü çekirdeği (liste, erişim, pasife al/aktifleştir) | 2,5 | CRITICAL | Onaylı plan — MVP dilimi |
@@ -54,27 +52,27 @@ Kalan 39 = kullanıcının listelediği 33 görev + kullanıcı yönetimi planı
 | RPT-01 | Satış raporları | 3 | STANDARD | Öneri |
 | OPS-01 | Yapılandırılmış log + hata izleme | 2 | STANDARD | Öneri |
 | OPS-03 | Otomatik yedek ve geri yükleme tatbikatı | 3 | CRITICAL | Öneri |
-| **Toplam** | **39 görev** | **110,5** | | |
+| **Toplam** | **37 görev** | **106,5** | | |
 
-Toplamın dökümü: kullanıcının listelediği 33 görev 99 iş günü + 6 MVP dilimi 10,5 iş günü + INT-TY-03'e eklenen yerel stok iadesi 1 iş günü = **110,5 iş günü**.
+Toplamın dökümü: kullanıcının listelediği 33 görev 99 iş günü + 6 MVP dilimi 10,5 iş günü + INT-TY-03'e eklenen yerel stok iadesi 1 iş günü = 110,5; merge edilen USR-T7 ve USR-T8 (2 + 2) düşülünce **106,5 iş günü**.
 
 ## 3. İş yükü ve takvim (ayrı ayrı)
 
-**İş yükü (effort):** 110,5 iş günü. Bu, görev tahminlerinin toplamıdır; takvim süresi değildir.
+**İş yükü (effort):** 106,5 iş günü. Bu, görev tahminlerinin toplamıdır; takvim süresi değildir.
 
 **Takvim süresi (calendar):**
 
 | Adım | Değer |
 |---|---|
-| M0 (başlangıç kapısı) | PR #6'nın kullanıcı onayıyla merge'ü + dev deploy. Tahmini 2026-11-06; M1 düzeltmesi PR #6'da sürüyor, bu tarih kayarsa her şey kayar |
-| Başlangıç | 2026-11-09 (M0'dan sonraki pazartesi) |
-| 2 paralel akış | 110,5 / 2 ≈ 55,3 iş günü (kritik yol 27 iş günü olduğundan süreyi kapasite belirler) |
-| %15 tampon (onay gecikmesi dahil: her onay kapısı 0,5–1 iş günü; migration, merge, deploy) | ≈ 64 iş günü → 2027-02-05 |
+| M0 (başlangıç kapısı) | PR #6, #8, #9 kullanıcı onayıyla merge edildi (2026-10-29). Dev deploy ayrı onay bekler |
+| Başlangıç | 2026-11-02 (M0'dan sonraki pazartesi) |
+| 2 paralel akış | 106,5 / 2 ≈ 53,3 iş günü (kritik yol 23 iş günü olduğundan süreyi kapasite belirler) |
+| %15 tampon (onay gecikmesi dahil: her onay kapısı 0,5–1 iş günü; migration, merge, deploy) | ≈ 62 iş günü → 2027-01-27 |
 | Resmî tatil | 2027-01-01 düşüldü (aralıkta başka resmî tatil yok) |
 | Kabul fazı | 5 iş günü (uçtan uca stage senaryosu, kullanıcı kabulü) |
-| **Tahmini hedef** | **2027-02-12** |
+| **Tahmini hedef** | **2027-02-03** |
 
-> **2027-02-12 tahmini bir hedeftir, taahhüt edilmiş teslim tarihi değildir.** Varsayımlar: M0 2026-11-06'da gerçekleşir; Trendyol stage erişimi en geç INT-TY-01 başlangıcına (≈ 2026-12-28) kadar gelir; 2 akış kesintisiz yürür; onay kapıları ortalama 0,5–1 iş günü sürer. Bunlardan biri tutmazsa tarih kayar. İlk 3–4 modülden sonra tahminler yeniden kalibre edilir.
+> **2027-02-03 tahmini bir hedeftir, taahhüt edilmiş teslim tarihi değildir.** Varsayımlar: M0 merge'leri 2026-10-29'da tamamlandı; Trendyol stage erişimi en geç INT-TY-01 başlangıcına (≈ 2026-12-14) kadar gelir; 2 akış kesintisiz yürür; onay kapıları ortalama 0,5–1 iş günü sürer. Bunlardan biri tutmazsa tarih kayar. İlk 3–4 modülden sonra tahminler yeniden kalibre edilir.
 
 ## 4. USR-T9…T13, T15: ayrıntılı değerlendirme
 
@@ -119,19 +117,20 @@ Soru: ilk müşteri ekibini nasıl ekler, ve hangi parça ertelenebilir?
 
 | Faz | Akış 1 | Akış 2 | İş günü | Tahmini bitiş |
 |---|---|---|---|---|
-| 0 — M0 | PR #6 merge + dev deploy (kapı) | | — | 2026-11-06 |
-| 1 — M1 | CAT-01 → CAT-02 → CAT-03 → CAT-05 → INF-12 → IMG-01 (17) | USR-T7 → USR-T8 → INF-18 → INF-10 → USR-T9a → USR-T10a → USR-T11a → INF-09 (18) | 35 | 2026-12-04 |
-| 2 — M2 | INT-01 → CAT-06 → INT-02 → CAT-04 → IMP-01 (20) | USR-T12a → USR-T13a → USR-T14 → USR-T15a → USR-T16 → USR-19 → ORD-01 → INV-01 → ORD-02 (18,5) | 38,5 | 2027-01-06 |
-| 3 — M3 | INT-TY-01 → INT-TY-03 → INT-TY-02 → SHP-02 (17) | INV-02 → INT-03 → ORD-03 → INV-03 → RPT-01 → OPS-01 → OPS-03 (20) | 37 | 2027-02-05 |
-| 4 — A | Kabul: uçtan uca stage senaryosu, izolasyon paketleri, yedek tatbikatı, kullanıcı kabulü | | 5 | **2027-02-12 (tahmini hedef)** |
+| 0 — M0 | PR #6, #8, #9 merge (tamam); dev deploy onay bekliyor | | — | 2026-10-29 |
+| 1 — M1 | CAT-01 → CAT-02 → CAT-03 → CAT-05 → INF-12 → IMG-01 (17) | INF-18 → INF-10 → USR-T9a → USR-T10a → USR-T11a → INF-09 (14) | 31 | 2026-11-25 |
+| 2 — M2 | INT-01 → CAT-06 → INT-02 → CAT-04 → IMP-01 (20) | USR-T12a → USR-T13a → USR-T14 → USR-T15a → USR-T16 → USR-19 → ORD-01 → INV-01 → ORD-02 (18,5) | 38,5 | 2026-12-25 |
+| 3 — M3 | INT-TY-01 → INT-TY-03 → INT-TY-02 → SHP-02 (17) | INV-02 → INT-03 → ORD-03 → INV-03 → RPT-01 → OPS-01 → OPS-03 (20) | 37 | 2027-01-27 |
+| 4 — A | Kabul: uçtan uca stage senaryosu, izolasyon paketleri, yedek tatbikatı, kullanıcı kabulü | | 5 | **2027-02-03 (tahmini hedef)** |
 
-CAT-01/CAT-02 akış 1'de, USR-T7/T8 akış 2'de paralel yürür (CAT-02'nin firma izin kontrolü merge öncesi T8'e bağlanır). CAT-03 ve CAT-06 paraleldir (CAT-06 CAT-02 + INT-01'i bekler). INT-01, USR-T8'den sonra başlar.
+CAT-01/CAT-02 akış 1'de yürür; USR-T8 `main`'de olduğundan CAT-02'nin firma izin kontrolü doğrudan bağlanır. CAT-03 ve CAT-06 paraleldir (CAT-06 CAT-02 + INT-01'i bekler). INT-01'in USR-T8 önkoşulu karşılandı.
 
 ## 7. MVP riskleri
 
-- **Ana dış kapı: Trendyol API ve stage erişimi.** Satıcı hesabı, API anahtarı/secret, satıcı ID ve stage IP whitelist'i gerekli. Stage taban URL'i ve başvuru süreci doğrulanmadı; whitelist yalnızca IPv4 ve süreli. Erişim INT-TY-01 başlangıcına (≈ 2026-12-28) kadar gelmezse INT-TY-01…03 ve SHP-02 `BLOCKED` olur ve hedef kayar. Kullanıcı başvuruyu M1'den önce başlatmalı.
-- M0 (PR #6 merge) kayarsa tüm takvim kayar; M1 düzeltmesi PR #6'da sürüyor.
-- USR-T7 kullanıcının "Task 7'ye başlama" talimatıyla bloklu.
+- **Ana dış kapı: Trendyol API ve stage erişimi.** Satıcı hesabı, API anahtarı/secret, satıcı ID ve stage IP whitelist'i gerekli. Stage taban URL'i ve başvuru süreci doğrulanmadı; whitelist yalnızca IPv4 ve süreli. Erişim INT-TY-01 başlangıcına (≈ 2026-12-14) kadar gelmezse INT-TY-01…03 ve SHP-02 `BLOCKED` olur ve hedef kayar. Kullanıcı başvuruyu M1'den önce başlatmalı.
+- `main` dev'e deploy edilmedi; dev'de elle doğrulama deploy onayını bekler.
+- INT-01 INF-13'e (B, KMS) bağlı: A'da yerel anahtarla şifreleme; prod öncesi KMS gerekir (R-25).
+- Playwright prod modunda (`next start`) koşmuyor; kabulde yerel TLS ile koşturulacak (R-24).
 - Her yeni şema görevi (CAT-01, ORD-01, INV-01, INT-01) ayrı migration onayı gerektirir (G3).
 - INF-19 (BFF `forceRefresh` yarışı) B'ye ertelendi: pilotta eşzamanlı isteklerde nadiren oturum kapanabilir (kabul edilmiş risk, prod öncesi zorunlu).
 - IMG-02 ertelendi: Trendyol görselleri URL'den çeker; INT-TY-01 kalıcı HTTPS URL vermelidir (INF-12 imzalı URL'lerinin süresi dolmamalı).

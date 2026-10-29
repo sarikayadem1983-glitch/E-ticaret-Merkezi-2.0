@@ -1,7 +1,7 @@
 # Ana Geliştirme Yol Haritası (Master Development Roadmap)
 
 Ticaret Merkezi 2.0 — çok kiracılı (multi-tenant) e-ticaret yönetim SaaS'ı.
-Hazırlanma: 2026-10-29, kaynak kod `feature/user-management` @ `946dec0` incelenerek.
+Hazırlanma: 2026-10-29, kaynak kod `feature/user-management` @ `946dec0` incelenerek; durum `origin/main` @ `95b5bdb`'ye göre güncellendi (2026-10-29).
 
 > **Onay durumu:** Yalnızca kullanıcı yönetimi planındaki görevler (`USR-T1`…`USR-T16`, plan: `docs/superpowers/plans/2026-10-28-user-management.md`) ve merge edilmiş işler (INF-01…08, USR-01, USR-02, DSH-01) **onaylı plandır**. Diğer tüm modüller, görevler, tahminler ve tarihler **öneridir, kullanıcı onayı beklemektedir**. Her görevin kaynağı `TASK_REGISTER.md`'deki "Kaynak" sütunundadır.
 
@@ -19,14 +19,14 @@ Görev numaraları kalıcıdır; kullanıcı yönetimi planının Task 1–16's�
 
 ## 1. Mevcut durum (doğrulanmış)
 
-**Merge edilmiş (PR #1–#5, `origin/main` @ `78e5f8d`):** Docker dev ortamı; NestJS + Prisma iskeleti ve Prisma tenant izolasyon eklentisi; append-only audit log; en az yetkili DB rolü `tm_app`; HTTP sertleştirme; Redis tabanlı rate limiting; firma (company) API'si; Next.js BFF (Redis oturumu, CSRF, açık proxy koruması, güvenlik başlıkları); firma ekranları; dashboard iskeleti; yetkisiz erişim/oturum e2e testleri.
+**Merge edilmiş ve dev'de (PR #1–#5):** Docker dev ortamı; NestJS + Prisma iskeleti ve Prisma tenant izolasyon eklentisi; append-only audit log; en az yetkili DB rolü `tm_app`; HTTP sertleştirme; Redis tabanlı rate limiting; firma (company) API'si; Next.js BFF (Redis oturumu, CSRF, açık proxy koruması, güvenlik başlıkları); firma ekranları; dashboard iskeleti; yetkisiz erişim/oturum e2e testleri.
 
-**PR #6'da, merge edilmemiş, deploy edilmemiş (`feature/user-management` → `main`):** kullanıcı yönetimi planının Task 1, 2, 3, 4, 5, 6'sı ve pasif/silinmiş kullanıcı güvenlik düzeltmesi (`946dec0`'a kadar). Ayrıntı: `PROJECT_STATUS.md` §2.
+**Merge edilmiş, dev'e deploy edilmemiş (`origin/main` @ `95b5bdb`):** PR #6 (kullanıcı yönetimi Task 1–6 ve pasif/silinmiş kullanıcı düzeltmesi, `f1be19a`), PR #8 (Task 7, `cc8b72a`), PR #9 (Task 8, `95b5bdb`). Ayrıntı: `PROJECT_STATUS.md` §2.
 
 - Task 3 yalnızca rapor üretti (onay kapısı); Aşama 1 migration'ı dev DB'ye sonradan kullanıcı onayıyla uygulandı.
-- Dev DB'de Aşama 1 şeması var; son deploy edilen kod `eda38da` (Task 4). **Dev backend şu an çalışmıyor** (2026-10-29 kontrolünde `:3000` ve `:4000` portları boştu). Task 5–6 ve güvenlik düzeltmesi dev'de değildir.
-- **M1 düzeltmesi PR #6'da sürüyor** (tamamlanmadı); M0 (PR #6 merge + dev deploy) bunu bekler.
-- Son test sonuçları: backend unit 184/184, backend e2e 165/165, frontend 81/81.
+- Dev DB'de Aşama 1 şeması var; son deploy edilen kod `eda38da` (Task 4). Task 5–8 ve güvenlik düzeltmesi dev'de değildir; deploy kullanıcı onayı bekler.
+- M0'ın merge kısmı tamam (2026-10-29); dev deploy ayrı onay bekler.
+- Son test sonuçları (`main` @ `95b5bdb`): backend unit 211/211, e2e 173/173; frontend 81/81; Playwright 13/13 yalnızca `next dev` ile (`next start` 11/13, bkz. `PROJECT_STATUS.md` R-24).
 
 **Kodda henüz olmayanlar:** katalog, stok, sipariş, kanal entegrasyonları, fatura, rapor, ai-engine, abonelik, kuyruk altyapısı, CI, staging. Prisma şemasında 10 model var (`Tenant, User, Role, UserRole, RefreshToken, Company, TenantMembership, Invitation, UserCompanyRole, AuditLog`), 6 uygulanmış migration ve 1 bekleyen (`migrations-pending/phase2_drop_legacy_user_columns`).
 
@@ -62,17 +62,17 @@ Mimari kurallar her modül için geçerlidir: tenant'a ait her sorgu `tenant_id`
 
 | Sürüm | Amaç | Görev | EPIC (görevi olan) | İş yükü (kalan iş günü) | Takvim: tahmini hedef (taahhüt değil) |
 |---|---|---|---|---|---|
-| A — MVP | Trendyol-only e-ticaret operasyon platformu (katalog, stok, sipariş, Trendyol iptal/iade, kargo etiketi) | 57 (18 tamam + 39 kalan) | 18 | 110,5 | 2027-02-12 |
+| A — MVP | Trendyol-only e-ticaret operasyon platformu (katalog, stok, sipariş, Trendyol iptal/iade, kargo etiketi) | 57 (20 tamam + 37 kalan) | 18 | 106,5 | 2027-02-03 |
 | B — Ticari SaaS | Ücretli müşteriye satılabilir: abonelik, e-Fatura, kârlılık, hakediş, Hepsiburada + Amazon TR + n11, prod güvenliği | 61 | 23 | 188,5 | 2027-07-27 |
 | C — Gelişmiş SaaS | AI otomasyonları, kampanya optimizasyonu, gelişmiş analitik, 7 pazaryeri | 21 | 9 | 87 | 2027-10-06 |
 
-İş yükü görev tahminlerinin toplamıdır; takvim süresi ayrıca hesaplanır (2 paralel akış, %15 tampon, resmî tatiller, onay gecikmesi, başlangıç M0 = PR #6 merge + dev deploy). Bir EPIC birden fazla sürümde görev içerebilir; EPIC sayıları bu yüzden toplanmaz (toplam 33).
+İş yükü görev tahminlerinin toplamıdır; takvim süresi ayrıca hesaplanır (2 paralel akış, %15 tampon, resmî tatiller, onay gecikmesi, başlangıç M0 = PR #6 merge, 2026-10-29 tamamlandı). Bir EPIC birden fazla sürümde görev içerebilir; EPIC sayıları bu yüzden toplanmaz (toplam 33).
 
 Ayrıntı ve çıkış kriterleri: `RELEASE_PLAN.md`.
 
 ## 4. Kritik yol
 
-PR #6 merge + dev deploy (M0) → USR-T7 → USR-T8 → INT-01 → INT-02 → INT-TY-01 → INT-TY-03 → SHP-02 → MVP kabul (≈ 27 + 5 iş günü). Paralel: CAT-01/CAT-02, USR-T7/T8 ile; CAT-03, CAT-06 ile; INF-09 → INT-02; ORD-01 → ORD-02; INV-01 → INV-02. **Ana dış kapı: Trendyol API ve stage erişimi** (IP whitelist ve stage ortamı doğrulanmadı). Ayrıntı: `DEPENDENCIES.md`.
+M0 (merge tamam) → INT-01 → INT-02 → INT-TY-01 → INT-TY-03 → SHP-02 → MVP kabul (≈ 23 + 5 iş günü). Paralel: CAT-01 → CAT-02; CAT-03, CAT-06 ile; INF-09 → INT-02; ORD-01 → ORD-02; INV-01 → INV-02. **Ana dış kapı: Trendyol API ve stage erişimi** (IP whitelist ve stage ortamı doğrulanmadı). Ayrıntı: `DEPENDENCIES.md`.
 
 ## 5. Çalışma modları
 
