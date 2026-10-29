@@ -42,6 +42,7 @@ Hata:
 | 401 | Kimlik doğrulanmadı |
 | 403 | Yetki yok |
 | 404 | Bulunamadı |
+| 409 | Çakışma (tekil alan, kullanımda olan kayıt, eşzamanlı değişiklik) |
 | 422 | Doğrulama hatası |
 | 500 | Sunucu hatası |
 
@@ -185,6 +186,110 @@ Yetki: Bearer token + `companies:write`
 Yanıt: `200` `{ "data": Company }`
 Hatalar: `404`
 
+### Katalog (CAT-02)
+Kategori ve marka tenant geneli, ürün ve varyant bir firmaya aittir. Silme her zaman soft-delete'tir (`deleted_at`); silinen kayıt listelenmez ve `404` döner. Tüm yazmalar Audit Log'a `module: "catalog"` ile yazılır (`entityType`: `Category`, `Brand`, `Product`, `ProductVariant`; `CREATE` / `UPDATE` (değişen alanlar) / `DELETE`). Yazmalar `SERIALIZABLE` transaction'da çalışır; eşzamanlı çakışan bir yazma `409 CONCURRENT_UPDATE` alır, istemci tekrar dener.
+
+Yetki kararı: kategori ve marka **okuma** `products:read` (Owner, Admin, Operasyon, Muhasebe, Görüntüleyici). **Yazma** `products:write` + `companies:all` (yalnızca mağaza rolü: Owner, Admin), çünkü tüm firmalar bu listeyi paylaşır; firma rolü (Operasyon) kategori/marka değiştiremez (`403`). Bu izin servis tarafında veritabanından da yeniden okunur. Ürün işlemlerinde guard JWT'deki modül iznini (`products:read` / `products:write`) kontrol eder; servis kullanıcının **ürünün firmasındaki** rolünü veritabanından okur: rol yoksa `404` (ürünün varlığı açığa çıkmaz), rol iznin dışındaysa `403`. `companies:all` olan mağaza rolü tüm firmaların ürünlerini görür; diğerleri yalnızca `products:read` veren rolün olduğu firmaları.
+
+`Category`: `{ "id", "parentId", "name", "slug", "createdAt", "updatedAt" }`
+`Brand`: `{ "id", "name", "createdAt", "updatedAt" }`
+`Variant`: `{ "id", "productId", "sku", "barcode", "createdAt", "updatedAt" }`
+`Product`: `{ "id", "companyId", "categoryId", "brandId", "name", "description", "status" ("draft" | "active" | "archived"), "createdAt", "updatedAt", "variants": [Variant] }` (yalnızca silinmemiş varyantlar, oluşturulma sırasına göre)
+
+### GET /api/v1/categories · GET /api/v1/brands
+Açıklama: Silinmemiş kategoriler / markalar, ada göre sıralı.
+Yetki: Bearer token + `products:read`
+İstek (sorgu): `page` (varsayılan 1), `per_page` (varsayılan 20, en çok 100), `search` (kategori: ad içinde veya slug başında; marka: ad içinde, büyük/küçük harf duyarsız)
+Yanıt: `200` `{ "data": [Category | Brand], "meta": { "page", "per_page", "total" } }`
+Hatalar: `401`, `403`, `422`
+
+### GET /api/v1/categories/:id · GET /api/v1/brands/:id
+Yetki: Bearer token + `products:read`
+Yanıt: `200` `{ "data": Category | Brand }`
+Hatalar: `404` yok, silinmiş veya başka tenant'a ait (ayrım yapılmaz)
+
+### POST /api/v1/categories
+Açıklama: Kategori oluşturur. Audit `CREATE`.
+Yetki: Bearer token + `products:write` + `companies:all`
+İstek: `{ "name" (1–150), "slug" (en çok 160, `^[a-z0-9]+(-[a-z0-9]+)*$`), "parentId"? (UUID veya `null` = kök) }`
+Yanıt: `201` `{ "data": Category }`
+Hatalar: `403`, `409 CATEGORY_SLUG_TAKEN` (slug silinmemiş bir kategoride kullanılıyor; silinen kategorinin slug'ı yeniden kullanılabilir), `422 CATEGORY_UNAVAILABLE` (üst kategori yok veya silinmiş), `422`
+
+### PATCH /api/v1/categories/:id
+Açıklama: Ad, slug veya üst kategoriyi değiştirir (yalnızca gönderilen alanlar; `parentId: null` köke taşır). Audit `UPDATE`.
+Yetki: Bearer token + `products:write` + `companies:all`
+Yanıt: `200` `{ "data": Category }`
+Hatalar: `403`, `404`, `409 CATEGORY_SLUG_TAKEN`, `422 CATEGORY_CYCLE` (kategori kendisinin veya bir alt kategorisinin altına taşınamaz; A→B→A dahil), `422 CATEGORY_UNAVAILABLE`, `422`
+
+### DELETE /api/v1/categories/:id
+Açıklama: Soft-delete. Audit `DELETE`.
+Yetki: Bearer token + `products:write` + `companies:all`
+Yanıt: `204`
+Hatalar: `403`, `404`, `409 CATEGORY_IN_USE` (silinmemiş alt kategori veya ürün var)
+
+### POST /api/v1/brands · PATCH /api/v1/brands/:id
+Açıklama: Marka oluşturur / adını değiştirir. Audit `CREATE` / `UPDATE`.
+Yetki: Bearer token + `products:write` + `companies:all`
+İstek: `{ "name" (1–150, baş/son boşluk kırpılır) }`
+Yanıt: `201` / `200` `{ "data": Brand }`
+Hatalar: `403`, `404` (PATCH), `409 BRAND_NAME_TAKEN` (aynı ad büyük/küçük harf duyarsız silinmemiş bir markada var), `422`
+
+### DELETE /api/v1/brands/:id
+Açıklama: Soft-delete. Audit `DELETE`.
+Yetki: Bearer token + `products:write` + `companies:all`
+Yanıt: `204`
+Hatalar: `403`, `404`, `409 BRAND_IN_USE` (silinmemiş ürün bağlı)
+
+### GET /api/v1/products
+Açıklama: Erişilebilen firmaların silinmemiş ürünleri, yeniden eskiye.
+Yetki: Bearer token + `products:read`
+İstek (sorgu): `page` (varsayılan 1), `per_page` (varsayılan 20, en çok 100), `company_id`, `status` (`draft` | `active` | `archived`; yoksa hepsi), `category_id`, `brand_id`, `search` (ürün adı içinde (büyük/küçük harf duyarsız) veya silinmemiş bir varyantın SKU'su / barkodu başında (duyarlı))
+Yanıt: `200` `{ "data": [Product], "meta": { "page", "per_page", "total" } }`. Erişimi olmayan bir `company_id` boş liste döner.
+Hatalar: `401`, `403`, `422`
+
+### GET /api/v1/products/:id
+Yetki: Bearer token + `products:read` + ürünün firmasında `products:read` veren rol
+Yanıt: `200` `{ "data": Product }`
+Hatalar: `404` yok, silinmiş, başka tenant'a ait veya firmada rol yok (ayrım yapılmaz)
+
+### POST /api/v1/products
+Açıklama: Ürünü en az bir varyantla oluşturur. Audit: ürün ve her varyant için `CREATE`.
+Yetki: Bearer token + `products:write` + firmada `products:write` veren rol
+İstek: `{ "companyId", "name" (1–250), "description"?, "status"? (varsayılan `draft`), "categoryId"?, "brandId"?, "variants": [ { "sku" (1–100), "barcode"? (en çok 50) } ] (1–100 adet) }`. Baş/son boşluk kırpılır; boş barkod `null` sayılır.
+Yanıt: `201` `{ "data": Product }`
+Hatalar: `403`, `404` (firma yok veya firmada rol yok), `409 SKU_TAKEN` / `409 BARCODE_TAKEN` (tenant içinde, tüm firmalarda ve **silinen varyantlar dahil** kullanılmış; aynı istekte tekrar eden SKU/barkod da), `422 CATEGORY_UNAVAILABLE` / `422 BRAND_UNAVAILABLE` (yok veya silinmiş), `422`
+
+### PATCH /api/v1/products/:id
+Açıklama: `name`, `description`, `status`, `categoryId`, `brandId` (yalnızca gönderilenler; `null` bağlantıyı kaldırır). Firma değiştirilemez. Arşivleme: `{ "status": "archived" }`. Audit `UPDATE`.
+Yetki: Bearer token + `products:write` + firmada `products:write`
+Yanıt: `200` `{ "data": Product }`
+Hatalar: `403`, `404`, `422 CATEGORY_UNAVAILABLE` / `BRAND_UNAVAILABLE`, `422`
+
+### DELETE /api/v1/products/:id
+Açıklama: Ürünü ve silinmemiş varyantlarını soft-delete eder. SKU ve barkodlar yeniden kullanılamaz. Audit: her varyant ve ürün için `DELETE`.
+Yetki: Bearer token + `products:write` + firmada `products:write`
+Yanıt: `204`
+Hatalar: `403`, `404`
+
+### POST /api/v1/products/:id/variants
+Açıklama: Varyant ekler. Audit `CREATE`.
+Yetki: Bearer token + `products:write` + firmada `products:write`
+İstek: `{ "sku", "barcode"? }`
+Yanıt: `201` `{ "data": Variant }`
+Hatalar: `403`, `404`, `409 SKU_TAKEN` / `BARCODE_TAKEN`, `422`
+
+### PATCH /api/v1/products/:id/variants/:variantId
+Açıklama: SKU veya barkodu değiştirir (`barcode: null` kaldırır). Eski değer silinen varyantlarınki gibi rezerve kalmaz. Audit `UPDATE`.
+Yetki: Bearer token + `products:write` + firmada `products:write`
+Yanıt: `200` `{ "data": Variant }`
+Hatalar: `403`, `404` (ürün veya varyant), `409 SKU_TAKEN` / `BARCODE_TAKEN`, `422`
+
+### DELETE /api/v1/products/:id/variants/:variantId
+Açıklama: Varyantı soft-delete eder. Audit `DELETE`.
+Yetki: Bearer token + `products:write` + firmada `products:write`
+Yanıt: `204`
+Hatalar: `403`, `404`, `409 LAST_VARIANT` (ürünün son varyantı; ürünü silin veya arşivleyin)
+
 ### GET /api/v1/audit-logs
 Açıklama: Tenant'ın işlem geçmişi, yeniden eskiye.
 Yetki: Bearer token + `audit:read`
@@ -209,5 +314,8 @@ Audit log kayıtlarını değiştiren veya silen endpoint yoktur.
 | `TOKEN_STALE` | 401 | Token'ın `ver`'i üyeliğin `auth_version`'ından farklı (rol/mağaza değişti); refresh yapıp isteği tekrarlayın |
 | `FORBIDDEN` | 403 | İzin yok |
 | `CONFLICT` | 409 | Tekil alan çakışması |
+| `SKU_TAKEN`, `BARCODE_TAKEN`, `CATEGORY_SLUG_TAKEN`, `BRAND_NAME_TAKEN` | 409 | Katalogda tekil alan çakışması (bkz. Katalog) |
+| `CATEGORY_IN_USE`, `BRAND_IN_USE`, `LAST_VARIANT`, `CONCURRENT_UPDATE` | 409 | Katalog kaydı silinemez veya aynı anda değiştirildi |
+| `CATEGORY_CYCLE`, `CATEGORY_UNAVAILABLE`, `BRAND_UNAVAILABLE` | 422 | Kategori döngüsü; bağlanan kategori/marka yok veya silinmiş |
 | `TENANT_CONTEXT_MISSING` | 500 | Sorgu tenant bağlamı olmadan çalıştırıldı (geliştirici hatası) |
 | `TENANT_VIOLATION` | 500 | Sorgu başka tenant'ın verisine dokunmaya çalıştı (geliştirici hatası) |

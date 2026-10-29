@@ -137,6 +137,10 @@ Sayaçlar Redis'te tutulur (`rl:` önekli anahtarlar). Her kontrol tek bir atomi
 
 Production'da Redis yüksek erişilebilirlik (replika + otomatik failover) ile çalıştırılmalı ve izlenmelidir.
 
+### Katalog yetkileri (CAT-02)
+- Ürün ve varyant işlemleri her istekte kullanıcının ürünün firmasındaki rolünü veritabanından okur (`AccessService.assertCompanyPermission`): rol yoksa `404`, `products:write` yoksa `403`. Liste `AccessService.companyScope(user, 'products:read')` ile yalnızca erişilebilen firmalara daraltılır; `companies:all` olan mağaza rolü tüm firmaları görür.
+- Kategori ve marka tüm firmalarca paylaşıldığı için yalnızca mağaza rolü (Owner, Admin: `products:write` + `companies:all`) yazar; Operasyon yalnızca okur. JWT kontrolüne ek olarak servis izni veritabanından yeniden okur.
+
 ## 4. Canlıya çıkış öncesi kontrol listesi
 
 Production'a çıkmadan önce her madde tamamlanmış ve doğrulanmış olmalıdır.

@@ -128,3 +128,35 @@ describe('AccessService.capabilities', () => {
     });
   });
 });
+
+describe('AccessService.companyScope', () => {
+  it('null (every company) for a tenant role with companies:all and the permission', async () => {
+    const { service } = setup({ tenant: role('admin') });
+    await expect(service.companyScope(USER, 'products:read')).resolves.toBe(
+      null,
+    );
+  });
+
+  it('only companies whose role grants the permission', async () => {
+    const { service } = setup({
+      companies: [
+        { companyId: 'c1', ...role('operations') },
+        { companyId: 'c2', ...role('viewer') },
+      ],
+    });
+    await expect(service.companyScope(USER, 'products:read')).resolves.toEqual([
+      'c1',
+      'c2',
+    ]);
+    await expect(service.companyScope(USER, 'products:write')).resolves.toEqual(
+      ['c1'],
+    );
+  });
+
+  it('empty without any role, whatever the JWT says', async () => {
+    const { service } = setup({});
+    await expect(service.companyScope(USER, 'products:read')).resolves.toEqual(
+      [],
+    );
+  });
+});

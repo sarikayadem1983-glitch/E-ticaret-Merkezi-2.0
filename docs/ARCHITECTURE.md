@@ -102,7 +102,7 @@ Tenant filtresi geliştiriciye bırakılmaz; Prisma seviyesinde zorunludur ve **
 | `companies` | Tenant altındaki işletmeler: unvan, vergi, adres, e-Fatura bilgileri |
 | `audit` | Değiştirilemez işlem geçmişi |
 | `auth` | Kullanıcı, rol, yetki, oturum |
-| `catalog` | Ürün, kategori, marka, varyant |
+| `catalog` | Ürün, kategori, marka, varyant (CAT-02: `/categories`, `/brands`, `/products` REST API; firmalar `CompaniesService`, izinler `AccessService.companyScope` / `assertCompanyPermission` üzerinden) |
 | `inventory` | Stok, depo, stok hareketleri |
 | `orders` | Sipariş, sipariş kalemi, durum akışı |
 | `channels` | Pazaryeri ve satış kanalı entegrasyonları |
