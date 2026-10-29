@@ -31,7 +31,6 @@ function setup() {
     revokeRefreshToken: vi.fn().mockResolvedValue(true),
     revokeAllForUserEverywhere: vi.fn(),
     createRefreshToken: vi.fn().mockResolvedValue({ id: 'new-rt' }),
-    findPermissions: vi.fn().mockResolvedValue(['companies:read']),
     touchLastLogin: vi.fn(),
   };
   const memberships = {
@@ -60,12 +59,16 @@ function setup() {
       .mockResolvedValue({ token: 'access-new', expiresIn: 900 }),
   };
   const audit = { record: vi.fn().mockResolvedValue(undefined) };
+  const access = {
+    tenantPermissions: vi.fn().mockResolvedValue(['companies:read']),
+  };
   const service = new AuthService(
     repository as never,
     tenants as never,
     tokens as never,
     audit as never,
     memberships as never,
+    access as never,
   );
   return { service, repository, memberships, tokens, audit, tx };
 }

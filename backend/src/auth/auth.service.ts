@@ -6,6 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { hash, verify } from '@node-rs/argon2';
+import { AccessService } from '../access/access.service.js';
 import { ROLE_CATALOG } from '../access/roles.catalog.js';
 import { type AuditEvent, AuditService } from '../audit/audit.service.js';
 import {
@@ -100,6 +101,7 @@ export class AuthService {
     private readonly tokens: TokenService,
     private readonly audit: AuditService,
     private readonly memberships: MembershipsRepository,
+    private readonly access: AccessService,
   ) {}
 
   async register(dto: RegisterDto): Promise<TokenPair> {
@@ -328,7 +330,10 @@ export class AuthService {
         throw invalidRefreshToken();
       }
 
-      const perms = await this.repository.findPermissions(stored.userId);
+      const perms = await this.access.tenantPermissions(
+        stored.tenantId,
+        stored.userId,
+      );
       return this.issueAccess(
         {
           tenantId: stored.tenantId,
@@ -553,7 +558,10 @@ export class AuthService {
       await TenantContext.runAsSystem(() =>
         this.repository.setLastTenant(current.sub, targetTenantId),
       );
-      const perms = await this.repository.findPermissions(current.sub);
+      const perms = await this.access.tenantPermissions(
+        targetTenantId,
+        current.sub,
+      );
       return this.issueAccess(
         {
           tenantId: targetTenantId,
@@ -583,7 +591,10 @@ export class AuthService {
       tokenHash: refresh.hash,
       expiresAt: refresh.expiresAt,
     });
-    const perms = await this.repository.findPermissions(session.userId);
+    const perms = await this.access.tenantPermissions(
+      session.tenantId,
+      session.userId,
+    );
     return this.issueAccess(session, perms, refresh.token);
   }
 

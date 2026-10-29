@@ -4,11 +4,7 @@ import {
   type TenantPrismaClient,
 } from '../database/prisma.service.js';
 import type { PrismaTx } from '../database/prisma.types.js';
-import {
-  ROLE_CATALOG,
-  type RoleKey,
-  rolePermissions,
-} from '../access/roles.catalog.js';
+import { ROLE_CATALOG, type RoleKey } from '../access/roles.catalog.js';
 import { TenantContext } from '../tenancy/tenant-context.js';
 
 /**
@@ -93,22 +89,6 @@ export class AuthRepository {
     return db.userRole.create({
       data: { userId, roleId, tenantId: TenantContext.requireTenantId() },
     });
-  }
-
-  /** Union of the member's tenant role and company roles in the current tenant. */
-  async findPermissions(userId: string): Promise<string[]> {
-    const select = { role: { select: { key: true, permissions: true } } };
-    const [tenantRoles, companyRoles] = await Promise.all([
-      this.prisma.userRole.findMany({ where: { userId }, select }),
-      this.prisma.userCompanyRole.findMany({ where: { userId }, select }),
-    ]);
-    return [
-      ...new Set(
-        [...tenantRoles, ...companyRoles].flatMap((r) =>
-          rolePermissions(r.role),
-        ),
-      ),
-    ];
   }
 
   /** System context only: users are global. */
