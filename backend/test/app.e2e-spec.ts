@@ -654,7 +654,7 @@ describe('API (e2e)', () => {
       try {
         const server = () => request(failing.getHttpServer());
         for (const res of [
-          // Background path (no usable membership) and awaited path (wrong password).
+          // Background paths: no usable membership and wrong password.
           await server()
             .post('/api/v1/auth/login')
             .send({ email, password: PASSWORD }),

@@ -88,7 +88,7 @@ Mevcut katmanlar: argon2id şifre hash'i, bilinmeyen email'de sahte hash doğrul
   - Kayıt, mevcut (silinmiş dahil) e-postada önceki gibi `409` döner ve token üretmez.
 
 - Login'de aktif üyeliği olmayan kullanıcı, bilinmeyen e-postayla birebir aynı yanıtı alır (`401 Email veya şifre hatalı`). Bilinmeyen e-postada da üyelik sorgusu çalışır, böylece sorgu sırası aynıdır.
-- **Başarısız giriş audit'i:** e-posta bir kullanıcıya aitse `LOGIN_FAILED` ilgili tenant'a yazılır: kullanılabilir mağaza varsa o tenant'a, yoksa `last_tenant_id`'nin üyeliğine, o da yoksa durumu en son değişen üyeliğe (tek satır). `after` yalnızca neden kodudur: `invalid_password`, `membership_inactive`, `tenant_inactive`. Şifre, e-posta, hash veya token yazılmaz. Kullanılabilir mağaza yoksa kayıt arka planda yazılır (yanıt süresi hesabın varlığını ele vermez). Bilinmeyen e-posta audit'e yazılmaz.
+- **Başarısız giriş audit'i:** e-posta bir kullanıcıya aitse `LOGIN_FAILED` ilgili tenant'a yazılır: kullanılabilir mağaza varsa o tenant'a, yoksa `last_tenant_id`'nin üyeliğine, o da yoksa durumu en son değişen üyeliğe (tek satır). `after` yalnızca neden kodudur: `invalid_password`, `membership_inactive`, `tenant_inactive`. Şifre, e-posta, hash veya token yazılmaz. Kayıt her durumda (yanlış şifre, pasif üyelik/mağaza, pasif/silinmiş kullanıcı) arka planda yazılır; yanıt süresi hesabın varlığını veya durumunu ele vermez. Bilinmeyen e-posta audit'e yazılmaz.
 - Audit yazımı başarısız olursa giriş yanıtı değişmez (yine genel `401`, `500` yok); hata kimlik bilgisi içermeden loglanır.
 
 ### Hız sınırlama (rate limiting)

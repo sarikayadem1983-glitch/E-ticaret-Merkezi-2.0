@@ -161,7 +161,12 @@ describe('Audit log (e2e)', () => {
         .post('/api/v1/auth/login')
         .send({ email: a.email, password: 'yanlis-sifre-123' })
         .expect(401);
-      const { data } = await listAll(ownerA, '&action=LOGIN_FAILED');
+      // Written in the background: poll briefly.
+      let data: AuditRow[] = [];
+      for (let i = 0; i < 50 && data.length === 0; i++) {
+        data = (await listAll(ownerA, '&action=LOGIN_FAILED')).data;
+        if (data.length === 0) await new Promise((r) => setTimeout(r, 50));
+      }
       expect(data[0]).toMatchObject({
         entityId: userA,
         actorUserId: null,

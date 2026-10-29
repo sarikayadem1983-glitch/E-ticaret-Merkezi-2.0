@@ -215,7 +215,9 @@ export class AuthService {
 
     return TenantContext.run(target.tenantId, async () => {
       if (!passwordOk) {
-        await this.recordLoginFailed(user.id, 'invalid_password');
+        // Background, like the unknown/disabled paths: the response time must
+        // not reveal whether the account is active.
+        void this.recordLoginFailed(user.id, 'invalid_password');
         throw invalidCredentials();
       }
 
