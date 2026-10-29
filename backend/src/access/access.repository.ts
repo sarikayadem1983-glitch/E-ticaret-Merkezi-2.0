@@ -3,6 +3,7 @@ import {
   InjectPrisma,
   type TenantPrismaClient,
 } from '../database/prisma.service.js';
+import type { PrismaTx } from '../database/prisma.types.js';
 import { TenantContext } from '../tenancy/tenant-context.js';
 import { ROLE_CATALOG, rolePermissions } from './roles.catalog.js';
 
@@ -65,8 +66,11 @@ export class AccessRepository {
   }
 
   /** The member's tenant role (owner/admin), if any. */
-  async findTenantRole(userId: string): Promise<AssignedRole | null> {
-    const row = await this.prisma.userRole.findFirst({
+  async findTenantRole(
+    userId: string,
+    db: PrismaTx = this.prisma,
+  ): Promise<AssignedRole | null> {
+    const row = await db.userRole.findFirst({
       where: { userId },
       select: roleSelect,
     });
@@ -82,6 +86,44 @@ export class AccessRepository {
       select: { companyId: true, ...roleSelect },
     });
     return rows.map((r) => ({ companyId: r.companyId, ...resolve(r) }));
+  }
+
+  /** The current tenant's catalog (system) roles. */
+  findSystemRoles(
+    db: PrismaTx = this.prisma,
+  ): Promise<{ id: string; key: string | null }[]> {
+    return db.role.findMany({
+      where: { key: { in: Object.keys(ROLE_CATALOG) } },
+      select: { id: true, key: true },
+    });
+  }
+
+  /** Keys of the given role ids in the current tenant; unknown ids are absent. */
+  findRolesByIds(
+    ids: string[],
+    db: PrismaTx = this.prisma,
+  ): Promise<{ id: string; key: string | null }[]> {
+    return db.role.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, key: true },
+    });
+  }
+
+  async insertTenantRole(tx: PrismaTx, userId: string, roleId: string) {
+    await tx.userRole.create({
+      data: { userId, roleId, tenantId: TenantContext.requireTenantId() },
+    });
+  }
+
+  async insertCompanyRoles(
+    tx: PrismaTx,
+    userId: string,
+    roles: { companyId: string; roleId: string }[],
+  ) {
+    const tenantId = TenantContext.requireTenantId();
+    await tx.userCompanyRole.createMany({
+      data: roles.map((r) => ({ ...r, userId, tenantId })),
+    });
   }
 
   /** System context: catalog roles missing from a live tenant. */

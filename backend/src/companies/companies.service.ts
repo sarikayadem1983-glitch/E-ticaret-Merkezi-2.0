@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { AccessService } from '../access/access.service.js';
 import { AuditService } from '../audit/audit.service.js';
 import type { AuthUser } from '../auth/decorators.js';
+import type { PrismaTx } from '../database/prisma.types.js';
 import type {
   CreateCompanyDto,
   ListCompaniesQuery,
@@ -42,6 +43,18 @@ export class CompaniesService {
     return (await this.access.seesAllCompanies(user.sub))
       ? {}
       : { assignedTo: user.sub };
+  }
+
+  /**
+   * The active companies of the current tenant among `ids` (others, inactive
+   * ones and ids of other tenants are left out). For other modules, e.g.
+   * invitations, that must not read the companies table.
+   */
+  activeByIds(
+    ids: string[],
+    db?: PrismaTx,
+  ): Promise<{ id: string; legalName: string }[]> {
+    return this.repository.findActiveByIds(ids, db);
   }
 
   async list(user: AuthUser, q: ListCompaniesQuery) {

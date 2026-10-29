@@ -200,6 +200,44 @@ Hatalar: `401`, `403`, `404` (yok veya başka tenant'a ait — ayrım yapılmaz)
 
 Audit log kayıtlarını değiştiren veya silen endpoint yoktur.
 
+### POST /api/v1/invitations
+Açıklama: E-posta daveti oluşturur ve bağlantıyı gönderir. Tam olarak biri: `tenantRole: "admin"` (yalnızca Owner verebilir) veya `companyRoles` (Owner/Admin; en az bir firma, her firma bir kez, firmalar bu tenant'ın aktif firmaları). Davet edenin rolü veritabanından okunur (`canGrant`); Owner'a davet yoktur. Davet transaction'da kaydedilir (audit `INVITATION_CREATED`), e-posta commit'ten sonra gönderilir; gönderim başarısızsa davet `pending` kalır, `delivery: "failed"` döner (`send_attempts`, `last_send_error` güncellenir). Yanıt, e-postanın başka bir tenant'ta hesabı olup olmadığına göre değişmez.
+Yetki: Bearer token + `users:invite`
+İstek: `{ "email": "...", "tenantRole": "admin" }` veya `{ "email": "...", "companyRoles": [ { "companyId": "<uuid>", "roleKey": "operations" | "accounting" | "viewer" } ] }`
+Yanıt: `201` `{ "data": { "id", "status": "pending", "delivery": "sent" | "failed", "replacesInactiveMembership": false } }`
+Hatalar: `400` `ROLE_REQUIRED` (ikisi birden veya hiçbiri), `COMPANY_REQUIRED`, `DUPLICATE_COMPANY`; `403` `FORBIDDEN` (izin yok), `ROLE_NOT_GRANTABLE` (rolü veremez, ör. Admin → Admin); `404` `NOT_FOUND` (firma yok, pasif veya başka tenant'ın); `409` `ALREADY_MEMBER` (bu tenant'ta aktif üye), `MEMBERSHIP_INACTIVE` (bu tenant'ta pasif üyelik — MVP'de davetle yeniden açılmaz, USR-T10b), `INVITATION_PENDING` (bekleyen davet var, süresi dolmuş olsa da; yeniden gönder kullanılır); `422`
+
+### GET /api/v1/invitations
+Açıklama: Tenant'ın bekleyen davetleri (en yeni önce, en çok 500). Süresi dolmuşlar `status: "expired"` ile döner. Token veya hash dönmez. `?status=` filtresi USR-T10b'de.
+Yetki: Bearer token + `users:read`
+Yanıt: `200` `{ "data": [ { "id", "email", "status": "pending" | "expired", "tenantRole", "companyRoles": [ { "companyId", "roleKey" } ], "invitedByUserId", "expiresAt", "lastSentAt", "sendAttempts", "lastSendError", "createdAt" } ] }`
+
+### POST /api/v1/invitations/:id/resend
+Açıklama: Yeni token üretir (eski bağlantı geçersiz olur), süreyi yeniden başlatır, e-postayı yeniden gönderir. Süresi dolmuş bekleyen bir daveti de canlandırır: yeni token ve şimdiden itibaren yeni `expiresAt` (`INVITATION_TTL_HOURS`). Audit `INVITATION_RESENT`. Çağıranın davetteki rolleri verebilmesi gerekir. Hız sınırları (davet başına 1/dk, tenant başına 50/saat) USR-T10b'de.
+Yetki: Bearer token + `users:invite`
+Yanıt: `200` `{ "data": { "id", "status": "pending", "delivery": "sent" | "failed" } }`
+Hatalar: `403` `ROLE_NOT_GRANTABLE`, `404` `NOT_FOUND` (yok veya başka tenant'ın), `409` `INVITATION_NOT_PENDING`, `422` (geçersiz UUID)
+
+### POST /api/v1/invitations/:id/revoke
+Açıklama: Daveti `revoked` yapar; bağlantı geçersiz olur. Audit `INVITATION_REVOKED`.
+Yetki: Bearer token + `users:invite`
+Yanıt: `200` `{ "data": { "id", "status": "revoked" } }`
+Hatalar: `403` `ROLE_NOT_GRANTABLE`, `404` `NOT_FOUND`, `409` `INVITATION_NOT_PENDING`, `422`
+
+### POST /api/v1/invitations/lookup
+Açıklama: Herkese açık. Davet bağlantısının bilgileri. Token yalnızca gövdede gelir (`/invite/<token>` sayfası BFF üzerinden gönderir). `accountExists` yalnızca geçerli token sahibine (davet edilen e-posta kutusuna) gösterilir. Pasif firmalar özetten çıkar; hiç aktif firma kalmadıysa, davet eden artık aktif üye değilse veya mağaza pasifse davet geçersizdir (accept ile aynı karar).
+Yetki: yok; IP başına 10/dk
+İstek: `{ "token": "<43 karakter base64url>" }`
+Yanıt: `200` `{ "data": { "tenantName", "inviterName", "roleSummary", "maskedEmail": "a***@ornek.com", "accountExists": false, "replacesInactiveMembership": false } }`
+Hatalar: `404` `INVITATION_INVALID` (bilinmeyen, iptal, süresi dolmuş, kullanılmış; ayrım yapılmaz), `422`, `429`, `503` (hız sınırı Redis'i yok)
+
+### POST /api/v1/invitations/accept
+Açıklama: Herkese açık. Daveti kabul eder. Hesap yoksa `name` (2–100) ve `password` (8–128) ile global hesap açılır; hesap varsa `password` o hesabın şifresidir (yalnızca token yetmez). Tek transaction: davet koşullu olarak `accepted` yapılır (eş zamanlı ikinci kabul `404`), mağaza aktif mi, davet eden hâlâ aktif üye ve rolü verebiliyor mu, firmalar aktif mi (pasifler atlanır) yeniden kontrol edilir, üyelik ve rol/firma atamaları yazılır, `email_verified_at` doldurulur. Bir adım başarısız olursa hiçbiri yazılmaz ve davet `pending` kalır. Audit: `INVITATION_ACCEPTED`, `MEMBERSHIP_CREATED`, `ROLE_CHANGED` (Admin) veya `COMPANY_ACCESS_CHANGED` (firma rolleri). **Token çifti dönmez, mağaza değiştirilmez**; kullanıcı normal login/switch-tenant akışını kullanır.
+Yetki: yok; IP başına 10/dk
+İstek: `{ "token": "...", "name"?: "...", "password": "..." }`
+Yanıt: `200` `{ "data": { "tenantId", "tenantName" } }`
+Hatalar: `401` `INVALID_CREDENTIALS` (mevcut hesabın şifresi yanlış veya hesap pasif; davet `pending` kalır; `/auth/login` ile aynı hesap/IP kilidine sayılır), `404` `INVITATION_INVALID`, `409` `ALREADY_MEMBER` / `MEMBERSHIP_INACTIVE` / `ACCOUNT_EXISTS` (bu e-postayla az önce hesap açıldı; davet `pending`, mevcut hesap şifresiyle tekrar deneyin), `422`, `429` (IP sınırı veya login kilidi), `503`
+
 ### Genel hata kodları
 | Kod | HTTP | Anlam |
 |---|---|---|

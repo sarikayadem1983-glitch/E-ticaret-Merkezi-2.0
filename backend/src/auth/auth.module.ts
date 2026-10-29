@@ -4,6 +4,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import type { StringValue } from 'ms';
 import { AccessModule } from '../access/access.module.js';
+import { AccountsService } from './accounts.service.js';
 import { MembershipsModule } from '../memberships/memberships.module.js';
 import { RateLimitModule } from '../rate-limit/rate-limit.module.js';
 import { TenantsModule } from '../tenants/tenants.module.js';
@@ -41,6 +42,7 @@ import { TokenService } from './token.service.js';
   ],
   controllers: [AuthController],
   providers: [
+    AccountsService,
     AuthRateLimitService,
     AuthRepository,
     AuthService,
@@ -49,5 +51,6 @@ import { TokenService } from './token.service.js';
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
+  exports: [AccountsService, AuthRateLimitService],
 })
 export class AuthModule {}
