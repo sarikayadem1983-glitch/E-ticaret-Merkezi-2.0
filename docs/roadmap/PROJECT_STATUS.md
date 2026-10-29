@@ -11,7 +11,7 @@ Son güncelleme: 2026-10-29 (PR #6, #8, #9 merge edildi) · Kaynak: `origin/main
 | BLOCKED | 1 — USR-18 (T16 + Aşama 2 migration onayı) |
 | Sürüm A (Trendyol-only MVP) ilerleme | 20 / 57 görev; kalan 37 görev, 106,5 iş günü; tahmini hedef 2027-02-03 (taahhüt değil) |
 | Sürüm B / C | 61 / 21 görev |
-| Açık PR | #7 `docs/master-roadmap` (draft, doküman) · #10 INF-18 (`fix/inf-18-switch-redis`, güvenlik incelemesi temiz) · #11 INF-10 CI (`chore/inf-10-ci`, CI yeşil) — hiçbiri merge edilmedi |
+| Açık PR | #7 `docs/master-roadmap` (draft, doküman) · #11 INF-10 CI → `main` (`1016837`, CI ✓) · #10 INF-18 → `chore/inf-10-ci` (`740be6c`, CI ✓, güvenlik incelemesi temiz, deterministik yarış testi) · CAT-01, USR-T9a/T10a, INF-09 geliştiriliyor — hiçbiri merge edilmedi; önerilen merge sırası #11 → #10 |
 | `origin/main` | `95b5bdb` (PR #9 merge; #6 `f1be19a`, #8 `cc8b72a`) |
 | Dev ortamı | Son deploy edilen kod `eda38da` (Task 4). `main` dev'e deploy edilmedi (kullanıcı onayı gerekir) |
 | Dev DB şeması | Aşama 1 migration `20261029090000_tenant_memberships` uygulanmış (kullanıcı onayıyla); PR #6/#8/#9 yeni migration getirmez |
@@ -64,6 +64,12 @@ Aşama 2 SQL'i (`migrations-pending/`) uygulanmadı (USR-18).
 | 10 | ORD-01 / INV-01 | Sipariş ve stok şemaları | CAT-01 sonrası |
 
 **Dış iş (kullanıcı, hemen):** Trendyol satıcı hesabı, API anahtarı ve stage erişimi / IP whitelist başvurusu — MVP'nin ana dış kapısı, en geç ≈ 2026-12-14 (INT-TY-01 başlangıcı).
+
+## 4a. Dış blokajlar
+
+| ID | Blokaj | Durum (2026-10-29) | Etkilenen görevler | Kim |
+|---|---|---|---|---|
+| BLK-01 | Trendyol satıcı hesabı, API key/secret, satıcı ID; stage ortamı ve IP whitelist | `apigw.trendyol.com` 401 (erişilebilir, kimlik yok) · `stageapigw.trendyol.com` 403 (IP whitelist yok) · projede Trendyol kimlik bilgisi yok. Sırlar sohbette paylaşılmaz; `.env`'e kullanıcı yazar | INT-TY-01…03, SHP-02, kabul senaryosu | Kullanıcı |
 
 ## 5. Riskler
 
