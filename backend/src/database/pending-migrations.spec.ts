@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const PHASE2 = join(
-  __dirname,
+  import.meta.dirname,
   '../../../database/migrations-pending/phase2_drop_legacy_user_columns/migration.sql',
 );
 
