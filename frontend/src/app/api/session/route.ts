@@ -15,10 +15,16 @@ export async function GET(req: Request) {
       await clearSessionCookie();
       return unauthenticated();
     }
-    const res = await backendFetch('auth/me', {
-      accessToken: current.session.accessToken,
-      client,
-    });
+    const result = await current.manager.send(
+      current.sid,
+      current.session,
+      (accessToken) => backendFetch('auth/me', { accessToken, client }),
+    );
+    if (result.kind === 'signed-out') {
+      await clearSessionCookie();
+      return unauthenticated();
+    }
+    const res = result.response;
     if (!res.ok) return relay(res);
     const { data } = (await res.json()) as { data: Record<string, unknown> };
     return Response.json(

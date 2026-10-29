@@ -404,6 +404,9 @@ export class AuthService {
           ) {
             return false;
           }
+          // The old store's access tokens die with the switch (TOKEN_STALE);
+          // the user's other devices there refresh once and continue.
+          await this.memberships.bumpAuthVersion(tx, current.tid, current.sub);
           await this.audit.record(event, tx);
           return true;
         });

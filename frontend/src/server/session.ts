@@ -65,16 +65,18 @@ export async function clearSessionCookie(): Promise<void> {
 }
 
 /** The current session with a fresh access token, or null (signed out). */
-export async function currentSession(
-  client: ClientContext,
-): Promise<{ sid: string; session: SessionData } | null> {
+export async function currentSession(client: ClientContext): Promise<{
+  sid: string;
+  session: SessionData;
+  manager: SessionManager;
+} | null> {
   const sid = await readSessionId();
   if (!sid) return null;
   const manager = new SessionManager(await sessionStore(), (token) =>
     refreshTokens(token, client),
   );
   const session = await manager.resolve(sid);
-  return session ? { sid, session } : null;
+  return session ? { sid, session, manager } : null;
 }
 
 /**

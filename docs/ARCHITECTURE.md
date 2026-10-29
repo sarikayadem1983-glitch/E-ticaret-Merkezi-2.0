@@ -82,7 +82,7 @@ Tenant filtresi geliştiriciye bırakılmaz; Prisma seviyesinde zorunludur ve **
 - **Kayıt:** tek transaction'da tenant, global kullanıcı (`last_tenant_id` = yeni tenant), aktif owner üyeliği, beş sistem rolü (tek `INSERT`, `createManyAndReturn`) ve owner ataması. Şifre hash'i ve refresh token üretimi transaction dışında yapılır; transaction 8 sorgudur (ölçülen en kötü 0,72 sn); `timeout: 10_000` yalnızca güvenlik sınırıdır.
 - **Sistem rolleri:** `backend/src/access/roles.catalog.ts` izinlerin tek kaynağıdır. `key`'i olan rollerin izinleri katalogdan, `key`'i olmayan (eski/özel) rollerin izinleri `roles.permissions` kolonundan okunur.
 - Tüm endpoint'ler varsayılan olarak kimlik doğrulama ister; açık olanlar `@Public()` ile işaretlenir.
-- **RBAC:** roller ve izinler tenant bazındadır. İzinler `kaynak:eylem` biçiminde metindir (örn. `products:read`); `*` tüm izinleri verir. Kullanıcının izinleri access token'a yazılır, `@RequirePermissions()` ve `PermissionsGuard` ile kontrol edilir.
+- **RBAC:** roller ve izinler tenant bazındadır. İzinler `kaynak:eylem` biçiminde metindir (örn. `products:read`); `*` tüm izinleri verir. Kullanıcının izinleri access token'a yazılır, `@RequirePermissions()` ve `PermissionsGuard` ile kontrol edilir. `JwtAuthGuard` her istekte üyeliğin durumunu ve `auth_version`'ını okur (`401 SESSION_REVOKED` / `TOKEN_STALE`, bkz. SECURITY.md §3); token'daki izinler bu sayede bayat kalamaz.
 
 ## Frontend ve BFF
 

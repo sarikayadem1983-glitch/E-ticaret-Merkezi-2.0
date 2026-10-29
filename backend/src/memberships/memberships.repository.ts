@@ -123,6 +123,49 @@ export class MembershipsRepository {
     return rows[0]?.auth_version ?? null;
   }
 
+  /**
+   * Per-request session check (JwtAuthGuard): the membership's status, its
+   * auth_version and whether its tenant is active, in one primary-key lookup
+   * joined to tenants. Null when the user has no membership in the tenant.
+   * Raw SQL runs only in system context; the query filters by the given
+   * tenant itself.
+   */
+  async sessionState(
+    tenantId: string,
+    userId: string,
+  ): Promise<{ usable: boolean; authVersion: number } | null> {
+    const rows = await TenantContext.runAsSystem(
+      () => this.prisma.$queryRaw<{ usable: boolean; auth_version: number }[]>`
+      SELECT (m.status = 'active' AND t.is_active AND t.deleted_at IS NULL) AS usable,
+             m.auth_version
+      FROM tenant_memberships m
+      JOIN tenants t ON t.id = m.tenant_id
+      WHERE m.tenant_id = ${tenantId}::uuid AND m.user_id = ${userId}::uuid`,
+    );
+    const row = rows[0];
+    return row ? { usable: row.usable, authVersion: row.auth_version } : null;
+  }
+
+  /**
+   * Tenant context, inside the caller's transaction: invalidates every access
+   * token of this membership (the guard answers TOKEN_STALE or, when the
+   * membership is no longer active, SESSION_REVOKED). Refresh tokens are not
+   * touched; callers that end sessions revoke them separately.
+   */
+  async bumpAuthVersion(
+    tx: PrismaTx,
+    tenantId: string,
+    userId: string,
+  ): Promise<void> {
+    const { count } = await tx.tenantMembership.updateMany({
+      where: { tenantId, userId },
+      data: { authVersion: { increment: 1 } },
+    });
+    if (count !== 1) {
+      throw new Error('Üyelik bulunamadı: auth_version artırılamadı');
+    }
+  }
+
   /** Tenant context: adds the user to the current tenant as an active member. */
   create(db: PrismaTx, userId: string) {
     return db.tenantMembership.create({

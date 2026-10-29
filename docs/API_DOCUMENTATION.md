@@ -127,7 +127,7 @@ Hatalar: `401`
 BFF: `GET /api/bff/auth/memberships`
 
 ### POST /api/v1/auth/switch-tenant
-Açıklama: Oturumu başka bir mağazaya taşır. Gönderilen refresh token çağıranın, mevcut mağazadaki aktif token'ı olmalıdır; iptal edilir ve hedef üyelik için yeni token çifti üretilir. `tid`, `perms`, `ver` yalnızca hedef üyelikten hesaplanır. `last_tenant_id` hedef mağaza olur. Her iki mağazaya `TENANT_SWITCH` audit kaydı yazılır (`after: { fromTenantId, toTenantId }`, token içermez).
+Açıklama: Oturumu başka bir mağazaya taşır. Gönderilen refresh token çağıranın, mevcut mağazadaki aktif token'ı olmalıdır; iptal edilir ve hedef üyelik için yeni token çifti üretilir. `tid`, `perms`, `ver` yalnızca hedef üyelikten hesaplanır. `last_tenant_id` hedef mağaza olur. Eski mağazadaki üyeliğin `auth_version`'ı artırılır: eski mağazanın access token'ı sonraki istekte `401 TOKEN_STALE` alır. Her iki mağazaya `TENANT_SWITCH` audit kaydı yazılır (`after: { fromTenantId, toTenantId }`, token içermez).
 Yetki: Bearer token
 İstek: `{ "tenantId": "<uuid>", "refreshToken": "..." }`
 Yanıt: `200` register ile aynı (`TokenPair`)
@@ -197,6 +197,8 @@ Audit log kayıtlarını değiştiren veya silen endpoint yoktur.
 |---|---|---|
 | `VALIDATION_ERROR` | 422 | Girdi doğrulanamadı; `details` alan hatalarını içerir |
 | `UNAUTHORIZED` | 401 | Token yok veya geçersiz |
+| `SESSION_REVOKED` | 401 | Token geçerli ama üyelik pasif/yok veya mağaza pasif; yeniden giriş gerekir |
+| `TOKEN_STALE` | 401 | Token'ın `ver`'i üyeliğin `auth_version`'ından farklı (rol/mağaza değişti); refresh yapıp isteği tekrarlayın |
 | `FORBIDDEN` | 403 | İzin yok |
 | `CONFLICT` | 409 | Tekil alan çakışması |
 | `TENANT_CONTEXT_MISSING` | 500 | Sorgu tenant bağlamı olmadan çalıştırıldı (geliştirici hatası) |

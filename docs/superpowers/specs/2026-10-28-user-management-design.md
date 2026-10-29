@@ -127,7 +127,7 @@ Uzun vadeli hedef: **bir kişi tek e-posta ve tek şifreyle birden fazla mağaza
 
 **Mağaza değiştirme**
 - Backend: `POST /auth/switch-tenant { tenantId }` (oturum açık kullanıcı). Hedef üyelik aktif değilse `404`. Mevcut refresh token iptal edilir, hedef tenant için yeni çift üretilir, `last_tenant_id` güncellenir. Her iki tenant'a audit: `TENANT_SWITCH`.
-- BFF: `POST /api/session/tenant`. Yeni token'larla **yeni session id** oluşturur, eskisini siler (fixation koruması), seçili firma sıfırlanır, istemci tam sayfa yenileme yapar (bellekte başka mağaza verisi kalmaz). Yeni access token'ın `tid`, `perms` ve `ver` değerleri hedef üyelikten sıfırdan hesaplanır; eski tenant'tan hiçbir yetki taşınmaz.
+- BFF: `POST /api/session/tenant`. Yeni token'larla **yeni session id** oluşturur, eskisini siler (fixation koruması), seçili firma sıfırlanır, istemci tam sayfa yenileme yapar (bellekte başka mağaza verisi kalmaz). Yeni access token'ın `tid`, `perms` ve `ver` değerleri hedef üyelikten sıfırdan hesaplanır; eski tenant'tan hiçbir yetki taşınmaz. Eski tenant'taki üyeliğin `auth_version`'ı artırılır; eski tenant'ın access token'ı bir sonraki istekte `TOKEN_STALE` alır (refresh token'ı iptal edildiği için geri dönemez), kullanıcının oradaki diğer cihazları bir kez refresh yapar.
 - `GET /auth/memberships`: kullanıcının aktif mağazaları (id, ad, slug). Üst bardaki mağaza seçicide gösterilir; tek mağaza varsa seçici gizlenir.
 
 **Oturum geçersizleştirme (`auth_version`)**

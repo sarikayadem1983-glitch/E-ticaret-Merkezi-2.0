@@ -1,9 +1,5 @@
 import { Redis } from 'ioredis';
-import {
-  type RefreshResult,
-  SessionManager,
-  SessionUnavailableError,
-} from './session-manager';
+import { type RefreshResult, SessionManager, SessionUnavailableError } from './session-manager';
 import { type SessionData, SessionStore } from './session-store';
 
 const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379');
@@ -27,7 +23,11 @@ function expired(overrides: Partial<SessionData> = {}): SessionData {
 
 const ok = (n: number): RefreshResult => ({
   kind: 'ok',
-  tokens: { accessToken: `access-${n}`, refreshToken: `refresh-${n}`, expiresIn: 900 },
+  tokens: {
+    accessToken: `access-${n}`,
+    refreshToken: `refresh-${n}`,
+    expiresIn: 900,
+  },
 });
 
 describe('SessionManager', () => {
@@ -69,7 +69,9 @@ describe('SessionManager', () => {
     // Separate managers model separate requests, possibly on separate BFF instances.
     const results = await Promise.all(
       Array.from({ length: 8 }, () =>
-        new SessionManager(store, refresh, { sleep: (ms) => new Promise((r) => setTimeout(r, ms / 4)) }).resolve(sid),
+        new SessionManager(store, refresh, {
+          sleep: (ms) => new Promise((r) => setTimeout(r, ms / 4)),
+        }).resolve(sid),
       ),
     );
     expect(refresh).toHaveBeenCalledTimes(1);
@@ -109,5 +111,124 @@ describe('SessionManager', () => {
       waitMs: 1000,
     });
     await expect(manager.resolve(sid)).rejects.toBeInstanceOf(SessionUnavailableError);
+  });
+
+  describe('send (per-request revocation)', () => {
+    const fresh = () => expired({ accessExpiresAt: Date.now() + 600_000 });
+    const json = (status: number, body: unknown) =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'content-type': 'application/json' },
+      });
+    const stale = () => json(401, { error: { code: 'TOKEN_STALE', message: 'x', details: [] } });
+    const revoked = () =>
+      json(401, {
+        error: { code: 'SESSION_REVOKED', message: 'x', details: [] },
+      });
+
+    it('retries once after TOKEN_STALE and keeps the session', async () => {
+      const refresh = vi.fn().mockResolvedValue(ok(7));
+      const sid = await store.create(fresh());
+      const manager = new SessionManager(store, refresh);
+      const session = (await manager.resolve(sid))!;
+      const call = vi
+        .fn<(token: string) => Promise<Response>>()
+        .mockResolvedValueOnce(stale())
+        .mockResolvedValueOnce(json(200, { data: 1 }));
+
+      const result = await manager.send(sid, session, call);
+
+      expect(result.kind).toBe('ok');
+      if (result.kind === 'ok') expect(result.response.status).toBe(200);
+      expect(call.mock.calls.map((c) => c[0])).toEqual(['old-access', 'access-7']);
+      expect(refresh).toHaveBeenCalledTimes(1);
+      expect(refresh).toHaveBeenCalledWith('old-refresh');
+      expect(await store.get(sid)).toMatchObject({
+        accessToken: 'access-7',
+        refreshToken: 'refresh-7',
+        selectedCompanyId: 'c1',
+      });
+    });
+
+    it('destroys the session on SESSION_REVOKED', async () => {
+      const refresh = vi.fn();
+      const sid = await store.create(fresh());
+      const manager = new SessionManager(store, refresh);
+      const session = (await manager.resolve(sid))!;
+      const call = vi.fn().mockResolvedValue(revoked());
+
+      expect(await manager.send(sid, session, call)).toEqual({
+        kind: 'signed-out',
+      });
+      expect(call).toHaveBeenCalledTimes(1);
+      expect(refresh).not.toHaveBeenCalled();
+      expect(await store.get(sid)).toBeNull();
+    });
+
+    it('destroys the session when the retry is rejected again (no loop)', async () => {
+      const refresh = vi.fn().mockResolvedValue(ok(8));
+      const sid = await store.create(fresh());
+      const manager = new SessionManager(store, refresh);
+      const session = (await manager.resolve(sid))!;
+      const call = vi.fn().mockImplementation(async () => stale());
+
+      expect(await manager.send(sid, session, call)).toEqual({
+        kind: 'signed-out',
+      });
+      expect(call).toHaveBeenCalledTimes(2);
+      expect(refresh).toHaveBeenCalledTimes(1);
+      expect(await store.get(sid)).toBeNull();
+    });
+
+    it('destroys the session when the refresh after TOKEN_STALE is rejected', async () => {
+      const sid = await store.create(fresh());
+      const manager = new SessionManager(store, vi.fn().mockResolvedValue({ kind: 'invalid' }));
+      const session = (await manager.resolve(sid))!;
+      const call = vi.fn().mockResolvedValue(stale());
+
+      expect(await manager.send(sid, session, call)).toEqual({
+        kind: 'signed-out',
+      });
+      expect(call).toHaveBeenCalledTimes(1);
+      expect(await store.get(sid)).toBeNull();
+    });
+
+    it('destroys the session on any other 401', async () => {
+      const sid = await store.create(fresh());
+      const manager = new SessionManager(store, vi.fn());
+      const session = (await manager.resolve(sid))!;
+      const call = vi.fn().mockResolvedValue(new Response('nope', { status: 401 }));
+
+      expect(await manager.send(sid, session, call)).toEqual({
+        kind: 'signed-out',
+      });
+      expect(await store.get(sid)).toBeNull();
+    });
+
+    it('passes non-401 responses through untouched', async () => {
+      const refresh = vi.fn();
+      const sid = await store.create(fresh());
+      const manager = new SessionManager(store, refresh);
+      const session = (await manager.resolve(sid))!;
+      const call = vi.fn().mockResolvedValue(json(403, { error: { code: 'FORBIDDEN' } }));
+
+      const result = await manager.send(sid, session, call);
+      expect(result.kind === 'ok' && result.response.status).toBe(403);
+      expect(refresh).not.toHaveBeenCalled();
+      expect(await store.get(sid)).not.toBeNull();
+    });
+
+    it('concurrent TOKEN_STALE requests refresh only once', async () => {
+      const refresh = vi.fn().mockResolvedValue(ok(9));
+      const sid = await store.create(fresh());
+      const manager = new SessionManager(store, refresh);
+      const session = (await manager.resolve(sid))!;
+      const call = async (token: string) => (token === 'old-access' ? stale() : json(200, { data: token }));
+
+      const results = await Promise.all(Array.from({ length: 5 }, () => manager.send(sid, session, call)));
+      expect(results.every((r) => r.kind === 'ok')).toBe(true);
+      expect(refresh).toHaveBeenCalledTimes(1);
+      expect((await store.get(sid))?.accessToken).toBe('access-9');
+    });
   });
 });
