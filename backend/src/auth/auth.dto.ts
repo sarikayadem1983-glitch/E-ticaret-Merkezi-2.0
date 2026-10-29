@@ -62,3 +62,15 @@ export class SwitchTenantDto {
   @Length(20, 200)
   refreshToken: string;
 }
+
+export class AbortSwitchTenantDto {
+  /** The token pair's refresh token returned by switch-tenant. */
+  @IsString()
+  @Length(20, 200)
+  refreshToken: string;
+
+  /** The refresh token that was sent to switch-tenant. */
+  @IsString()
+  @Length(20, 200)
+  previousRefreshToken: string;
+}

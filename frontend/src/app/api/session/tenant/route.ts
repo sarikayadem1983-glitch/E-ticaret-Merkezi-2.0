@@ -25,7 +25,8 @@ const LOCK_TTL_MS = 10_000;
  * and swaps the refresh token; on success the browser gets a new session id
  * (the old one is destroyed). On 404 (no active membership) or another error
  * the current session is left untouched. 401 TOKEN_STALE: one refresh and one
- * retry; SESSION_REVOKED or a second TOKEN_STALE destroys the session.
+ * retry; SESSION_REVOKED or a second TOKEN_STALE destroys the session. If the
+ * new session cannot be stored the switch is undone and the answer is 503.
  */
 export async function POST(req: Request) {
   return withSessionErrors(async () => {
@@ -106,7 +107,25 @@ async function switchOnce(
     if (!res.ok) return { kind: 'done', response: await relay(res) };
 
     const { data } = (await res.json()) as { data: TokenPair };
-    const failed = await switchSession(data, client);
+    let failed: Response | null;
+    try {
+      failed = await switchSession(data, client);
+    } catch (error) {
+      // The backend already swapped the refresh token but the new session was
+      // not stored (INF-18). Undo the swap so the old session keeps working
+      // instead of raising the reuse alarm on its next refresh.
+      if (
+        !(await abortSwitch(data.refreshToken, session.refreshToken, client))
+      ) {
+        // Not undone: the old session holds a revoked token whose next refresh
+        // would raise the reuse alarm. Drop the cookie (no Redis needed) so
+        // the user signs in again instead.
+        await clearSessionCookie().catch((error: unknown) => {
+          console.error('[bff] oturum cookie silinemedi:', error);
+        });
+      }
+      throw error;
+    }
     return {
       kind: 'done',
       response:
@@ -119,6 +138,26 @@ async function switchOnce(
   } finally {
     await store.unlock(sid, owner);
   }
+}
+
+/** Never throws: the caller answers 503 either way. True when undone. */
+async function abortSwitch(
+  refreshToken: string,
+  previousRefreshToken: string,
+  client: ClientContext,
+): Promise<boolean> {
+  try {
+    const res = await backendFetch('auth/switch-tenant/abort', {
+      method: 'POST',
+      body: { refreshToken, previousRefreshToken },
+      client,
+    });
+    if (res.ok) return true;
+    console.error(`[bff] mağaza değişikliği geri alınamadı: ${res.status}`);
+  } catch (error) {
+    console.error('[bff] mağaza değişikliği geri alınamadı:', error);
+  }
+  return false;
 }
 
 async function revoke(store: SessionStore, sid: string): Promise<Response> {
