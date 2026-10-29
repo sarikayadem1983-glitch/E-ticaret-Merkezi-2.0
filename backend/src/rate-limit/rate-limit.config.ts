@@ -27,6 +27,9 @@ export interface AuthRateLimits {
   trustedIpTtlMs: number;
   registerPerIp: FixedWindowPolicy;
   refreshPerIp: FixedWindowPolicy;
+  /** Public invitation endpoints: token guessing and account probing. */
+  invitationLookupPerIp: FixedWindowPolicy;
+  invitationAcceptPerIp: FixedWindowPolicy;
 }
 
 export const AUTH_RATE_LIMITS = Symbol('AUTH_RATE_LIMITS');
@@ -52,4 +55,6 @@ export const DEFAULT_AUTH_RATE_LIMITS: AuthRateLimits = {
   trustedIpTtlMs: 30 * 24 * HOUR,
   registerPerIp: { limit: 5, windowMs: HOUR },
   refreshPerIp: { limit: 30, windowMs: MINUTE },
+  invitationLookupPerIp: { limit: 10, windowMs: MINUTE },
+  invitationAcceptPerIp: { limit: 10, windowMs: MINUTE },
 };

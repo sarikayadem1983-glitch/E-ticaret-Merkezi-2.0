@@ -162,6 +162,7 @@ Production'a çıkmadan önce her madde tamamlanmış ve doğrulanmış olmalıd
 - [ ] **`SESSION_SECRET`:** Secret manager'dan verilir, en az 32 karakter. Değiştirildiğinde tüm oturumlar düşer (kullanıcılar yeniden giriş yapar).
 - [ ] **Backend'e ağ erişimi:** Backend yalnızca BFF sunucularından erişilebilir olmalı (internal network / güvenlik grubu); internete açık olmamalı.
 - [ ] **Rate limit değerleri:** Mevcut varsayılanlar (§3) korunur. Canlı trafik izlendikten sonra (ör. ortak NAT arkasındaki ofisler) gözden geçirilmeli.
+- [ ] **SMTP:** `MAIL_TRANSPORT=smtp`, `MAIL_FROM` ve TLS (`SMTP_SECURE=true` veya STARTTLS zorunlu) ayarlı; SMTP kullanıcı/şifresi secret manager'dan. Gönderen alan adı için SPF, DKIM ve DMARC kayıtları yapılmalı (§6).
 - [ ] **Nonce tabanlı CSP:** `script-src 'unsafe-inline'` yerine `proxy.ts`'te istek başına nonce üretilmeli (§5 Güvenlik başlıkları).
 
 ## 5. Frontend (BFF) oturum güvenliği
@@ -226,3 +227,30 @@ Production'da (`NODE_ENV=production`) HTTP istekleri reddedilir: `GET/HEAD` → 
 - `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` (kamera, mikrofon, konum, ödeme kapalı), `Cross-Origin-Opener-Policy: same-origin`. `X-Powered-By` gönderilmez.
 
 Bilinen sınır: Next.js satır içi başlatma script'leri kullandığı için `script-src` şu an `'unsafe-inline'` içerir (geliştirmede ek olarak `'unsafe-eval'` ve HMR için `ws:`). Canlıya çıkmadan önce `proxy.ts`'te istek başına nonce üreten CSP'ye geçilmeli (§4 kontrol listesi).
+
+## 6. E-posta
+
+Kod: `backend/src/mail/`. Diğer modüller yalnızca `MailService.send({ to, subject, html, text })` kullanır.
+
+- **Taşıyıcı:** `MAIL_TRANSPORT=smtp` (nodemailer) veya `log`. `log` mesaj içeriğini yazmaz, yalnızca maskeli alıcı (`a***@ornek.com`) ve konuyu loglar; davet bağlantısı ve token hiçbir logda yer almaz. **Production'da `log` reddedilir** (uygulama açılmaz).
+- **TLS:** Production'da düz SMTP reddedilir: `SMTP_SECURE=true` (doğrudan TLS) ya da STARTTLS zorunlu (`SMTP_REQUIRE_TLS`, production'da varsayılan `true`; `false` verilirse uygulama açılmaz). Sertifika doğrulaması her zaman açıktır. Production'da `MAIL_FROM` zorunlu.
+- **Zaman aşımı:** Bağlantı, karşılama ve soket için 10 sn; tek gönderim en fazla 10 sn sürer. Hata `MailDeliveryError` olarak döner ve yalnızca kısa kod taşır: `SMTP_TIMEOUT`, `SMTP_REJECTED` (5xx / zarf reddi), `SMTP_UNAVAILABLE` (bağlantı, TLS, kimlik doğrulama). Ham SMTP yanıtı hata mesajına ve veritabanına girmez.
+- **Başlık enjeksiyonu:** Alıcı tek düz adres olmalı (liste, görünen ad, satır sonu yok); konu satır sonu içeremez.
+- **Yapılandırma hataları:** Mesajlarda `SMTP_PASSWORD` değeri yer almaz.
+- **Geliştirme:** Mailpit (`docker/docker-compose.yml`, `axllent/mailpit:v1.21`, yalnızca `127.0.0.1`: SMTP `1025`, arayüz/API `8025`). Hiçbir e-posta dışarı çıkmaz. Testler log taşıyıcısını veya yerel sahte SMTP sunucusunu kullanır; gerçek SMTP bilgisi kullanılmaz.
+
+## 7. Davetler
+
+Kod: `backend/src/invitations/`. Tasarım: [kullanıcı yönetimi spec'i](superpowers/specs/2026-10-28-user-management-design.md) "Davet akışı".
+
+- **Token:** 32 bayt rastgele (base64url), veritabanında yalnızca SHA-256 hash'i (`token_hash`). Düz token yalnızca e-postadaki bağlantıda (`APP_ORIGIN/invite/<token>`) bulunur; log, audit ve API yanıtlarında yoktur. Yeniden gönderme yeni token üretir, eski bağlantı geçersiz olur. Süre `INVITATION_TTL_HOURS` (varsayılan 168, en çok 720). Production'da `APP_ORIGIN` https olmalı.
+- **Tek kullanım:** kabul `UPDATE ... WHERE status='pending' AND expires_at > now() AND token_hash = ...` ile koşullu geçiş yapar; eş zamanlı istekler satır kilidinde bekler ve 0 satır görür. İptal edilmiş, süresi dolmuş, kullanılmış ve bilinmeyen token tek tip `404 INVITATION_INVALID` alır.
+- **Yetki yükseltme:** davet edenin rolü veritabanından okunur ve `canGrant` ile kontrol edilir (JWT `perms`'e güvenilmez): Owner'a davet yok, Admin'i yalnızca Owner davet eder, Admin firma rollerini verir. Yeniden gönderme ve iptal de aynı kontrolden geçer (Admin, Owner'ın Admin davetine dokunamaz). Kabulde davet edenin hâlâ aktif üye olduğu (`FOR SHARE` kilidiyle) ve rolü hâlâ verebildiği (rol aynı transaction içinden okunur) yeniden doğrulanır; lookup da davet eden aktif değilse aynı tek tip `INVITATION_INVALID`'i döner; mağaza ve firmalar yeniden okunur (pasif firmalar atlanır, hiç kalmazsa geçersiz).
+- **Tenant izolasyonu:** tenant içi uç noktalar Prisma tenant eklentisiyle süzülür; başka tenant'ın daveti veya firma kimliği `404`. Herkese açık lookup/accept token hash'iyle tek satırı sistem bağlamında bulur (`invitations.repository.ts`, izin listesinde); sonraki her şey davetin tenant bağlamında çalışır.
+- **Hesap varlığı sızmaz:** davet oluşturma yanıtı, e-postanın başka tenant'ta hesabı olup olmadığına göre değişmez (yalnızca bu tenant'taki üyelik `409 ALREADY_MEMBER` / `MEMBERSHIP_INACTIVE` döner; tenant içi bilgi). `accountExists` yalnızca geçerli token sahibine gösterilir. Hız sınırı anahtarları yalnızca IP'ye bağlıdır.
+- **Mevcut hesapla kabul:** geçerli token **ve** hesabın şifresi gerekir; yanlış şifre `401`, davet `pending` kalır. Yanlış şifreler `/auth/login` ile **aynı** hesap/IP kilidine sayılır (`AuthRateLimitService.beforeLogin`, anahtarlar yalnızca e-posta ve IP; Redis yoksa fail-closed): davet, mevcut bir hesabın şifresini denemek için kullanılamaz ve kilit her iki uç noktada birlikte geçerlidir. Hesap kontrolü ile kabul transaction'ı arasında aynı e-postayla hesap açılırsa (ör. başka tenant'ın daveti aynı anda kabul edildi) transaction geri alınır, `409 ACCOUNT_EXISTS` döner, davet `pending` kalır; istemci mevcut hesap akışıyla (şifreyle) tekrar dener. Kabul `email_verified_at`'i doldurur. Pasif veya silinmiş global hesap kabul edemez.
+- **Atomiklik:** üyelik, roller, firma atamaları, `email_verified_at`, davet durumu ve audit tek transaction'dadır; hata olursa hiçbiri yazılmaz.
+- **Oturum:** kabul token çifti döndürmez ve mağaza değiştirmez.
+- **Hız sınırı:** `lookup` ve `accept` IP başına 10/dk (Redis, fail-closed). Yeniden gönderme sınırları USR-T10b'de.
+- **Kabul edilen risk — e-posta gaspı:** kayıtta e-posta doğrulaması olmadığından biri başkasının e-postasıyla önceden hesap açmışsa gerçek sahip daveti kabul **edemez**: lookup "hesap var" der, kabul o hesabın şifresini ister. Saldırgan token'ı görmediği için yetki sızıntısı yoktur, yalnızca engelleme vardır. **USR-19 (şifre sıfırlama / e-posta doğrulama) gelene kadar gerçek sahip için kurtarma yolu yoktur**; destek elle müdahale etmelidir.
+- **Kalan risk:** gönderim istek içinde (outbox yok).

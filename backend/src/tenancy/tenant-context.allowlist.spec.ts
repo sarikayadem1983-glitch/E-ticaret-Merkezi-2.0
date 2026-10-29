@@ -7,9 +7,11 @@ import { join, relative } from 'node:path';
  */
 const ALLOWED = new Set([
   'access/access.repository.ts',
+  'auth/accounts.service.ts',
   'auth/auth.service.ts',
   'database/database-role.check.ts',
   'health/health.service.ts',
+  'invitations/invitations.repository.ts',
   'memberships/memberships.repository.ts',
 ]);
 

@@ -175,7 +175,10 @@ export class MembershipsRepository {
    * or not, so every access token of the user is refused on its next request.
    * The query filters by userId itself. Returns the affected tenant ids.
    */
-  async bumpAuthVersionForUser(tx: PrismaTx, userId: string): Promise<string[]> {
+  async bumpAuthVersionForUser(
+    tx: PrismaTx,
+    userId: string,
+  ): Promise<string[]> {
     const rows = await TenantContext.runAsSystem(() =>
       tx.tenantMembership.updateManyAndReturn({
         where: { userId },
@@ -184,6 +187,17 @@ export class MembershipsRepository {
       }),
     );
     return rows.map((r) => r.tenantId);
+  }
+
+  /**
+   * Tenant context: the current tenant's membership of the account with this
+   * e-mail, or null. Members of other tenants are never visible here.
+   */
+  findByEmail(email: string, db: PrismaTx = this.prisma) {
+    return db.tenantMembership.findFirst({
+      where: { user: { email } },
+      select: { userId: true, status: true },
+    });
   }
 
   /** Tenant context: adds the user to the current tenant as an active member. */

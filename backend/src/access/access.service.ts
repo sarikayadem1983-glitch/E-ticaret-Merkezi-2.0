@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { AuthUser } from '../auth/decorators.js';
+import type { PrismaTx } from '../database/prisma.types.js';
 import { TenantContext } from '../tenancy/tenant-context.js';
 import { AccessRepository, type AssignedRole } from './access.repository.js';
 import { isRoleKey, type RoleKey } from './roles.catalog.js';
@@ -60,6 +61,45 @@ export class AccessService {
       });
     }
     if (!allows(role, permission)) throw new ForbiddenException('Yetki yok');
+  }
+
+  /** Tenant context. The member's tenant role key (owner/admin), read from the database. */
+  async tenantRoleKey(userId: string, db?: PrismaTx): Promise<RoleKey | null> {
+    const role = await this.repository.findTenantRole(userId, db);
+    return isRoleKey(role?.key) ? role.key : null;
+  }
+
+  /** Tenant context. Catalog role key → role id in the current tenant. */
+  async systemRoleIds(db?: PrismaTx): Promise<Map<RoleKey, string>> {
+    const rows = await this.repository.findSystemRoles(db);
+    return new Map(
+      rows.flatMap((r) => (isRoleKey(r.key) ? [[r.key, r.id] as const] : [])),
+    );
+  }
+
+  /** Tenant context. Role id → catalog key; ids of other tenants or custom roles are absent. */
+  async roleKeysByIds(
+    ids: string[],
+    db?: PrismaTx,
+  ): Promise<Map<string, RoleKey>> {
+    const rows = await this.repository.findRolesByIds(ids, db);
+    return new Map(
+      rows.flatMap((r) => (isRoleKey(r.key) ? [[r.id, r.key] as const] : [])),
+    );
+  }
+
+  /** Tenant context, inside the caller's transaction. Writes user_roles. */
+  assignTenantRole(tx: PrismaTx, userId: string, roleId: string) {
+    return this.repository.insertTenantRole(tx, userId, roleId);
+  }
+
+  /** Tenant context, inside the caller's transaction. Writes user_company_roles. */
+  assignCompanyRoles(
+    tx: PrismaTx,
+    userId: string,
+    roles: { companyId: string; roleId: string }[],
+  ) {
+    return this.repository.insertCompanyRoles(tx, userId, roles);
   }
 
   /** Tenant context. True when the tenant role covers every company. */

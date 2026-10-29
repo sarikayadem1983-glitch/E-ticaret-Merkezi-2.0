@@ -99,6 +99,7 @@ Tenant filtresi geliştiriciye bırakılmaz; Prisma seviyesinde zorunludur ve **
 - **Login:** e-posta global kullanıcıda doğrulanır; aktif tenant'lardaki aktif üyelikler alınır. Üyelik yoksa genel `Email veya şifre hatalı`; birden fazlaysa `last_tenant_id` aktifse o, değilse tenant adına göre ilki seçilir. Access token: `sub`, `tid`, `perms` (o üyeliğin mağaza + firma rollerinin birleşimi), `ver` (üyeliğin `auth_version`'ı).
 - **Kayıt:** tek transaction'da tenant, global kullanıcı (`last_tenant_id` = yeni tenant), aktif owner üyeliği, beş sistem rolü (tek `INSERT`, `createManyAndReturn`) ve owner ataması. Şifre hash'i ve refresh token üretimi transaction dışında yapılır; transaction 8 sorgudur (ölçülen en kötü 0,72 sn); `timeout: 10_000` yalnızca güvenlik sınırıdır.
 - **Sistem rolleri:** `backend/src/access/roles.catalog.ts` izinlerin tek kaynağıdır. `key`'i olan rollerin izinleri katalogdan, `key`'i olmayan (eski/özel) rollerin izinleri `roles.permissions` kolonundan okunur.
+- **Davetler (`invitations`):** token 32 bayt rastgele, yalnızca SHA-256'sı saklanır, tek kullanımlık ve süreli (`INVITATION_TTL_HOURS`, varsayılan 168). Davet beklerken hiçbir atama yoktur; kabul tek transaction'da yetkiyi yeniden doğrular. Global hesap işlemleri (`users`) `auth` modülünün `AccountsService`'iyle yapılır (sistem bağlamı, `runAsSystem` izin listesinde). Kabul oturum açmaz ve mağaza değiştirmez. Ayrıntı: SECURITY.md §7.
 - Tüm endpoint'ler varsayılan olarak kimlik doğrulama ister; açık olanlar `@Public()` ile işaretlenir.
 - **RBAC:** roller ve izinler tenant bazındadır. İzinler `kaynak:eylem` biçiminde metindir (örn. `products:read`); `*` tüm izinleri verir. Kullanıcının izinleri access token'a yazılır, `@RequirePermissions()` ve `PermissionsGuard` ile kontrol edilir. `JwtAuthGuard` her istekte üyeliğin durumunu ve `auth_version`'ını okur (`401 SESSION_REVOKED` / `TOKEN_STALE`, bkz. SECURITY.md §3); token'daki izinler bu sayede bayat kalamaz.
 
@@ -118,6 +119,8 @@ Tenant filtresi geliştiriciye bırakılmaz; Prisma seviyesinde zorunludur ve **
 | `companies` | Tenant altındaki işletmeler: unvan, vergi, adres, e-Fatura bilgileri |
 | `audit` | Değiştirilemez işlem geçmişi |
 | `auth` | Kullanıcı, rol, yetki, oturum |
+| `invitations` | E-posta davetleri: oluşturma, yeniden gönderme, iptal, lookup, kabul. Rol/firma atamalarını `AccessService`, üyeliği `MembershipsRepository`, global hesabı `AccountsService` (auth), firmaları `CompaniesService` üzerinden yazar/okur |
+| `mail` | E-posta gönderimi: `MailService.send({ to, subject, html, text })`, SMTP veya log taşıyıcısı. Diğer modüller içeriği kendisi üretir, taşıyıcıya dokunmaz |
 | `catalog` | Ürün, kategori, marka, varyant |
 | `inventory` | Stok, depo, stok hareketleri |
 | `orders` | Sipariş, sipariş kalemi, durum akışı |
