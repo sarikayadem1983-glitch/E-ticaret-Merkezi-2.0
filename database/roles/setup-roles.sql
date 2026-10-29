@@ -106,4 +106,9 @@ BEGIN
     REVOKE ALL ON public.invitations FROM tm_app;
     GRANT SELECT, INSERT, UPDATE ON public.invitations TO tm_app;
   END IF;
+  -- Catalog rows are soft-deleted (also enforced by migration catalog_schema).
+  IF to_regclass('public.products') IS NOT NULL THEN
+    REVOKE ALL ON public.categories, public.brands, public.products, public.product_variants FROM tm_app;
+    GRANT SELECT, INSERT, UPDATE ON public.categories, public.brands, public.products, public.product_variants TO tm_app;
+  END IF;
 END $$;

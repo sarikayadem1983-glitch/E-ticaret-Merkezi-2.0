@@ -134,6 +134,33 @@ describe('Database privileges (e2e)', () => {
     });
   });
 
+  describe('catalog tables (soft delete only)', () => {
+    const tables = ['categories', 'brands', 'products', 'product_variants'];
+
+    it('app role has SELECT, INSERT, UPDATE and nothing else', async () => {
+      const { rows } = await app.query<{ t: string; privs: string[] }>(
+        `SELECT t, array(
+           SELECT p FROM unnest(array['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) p
+           WHERE has_table_privilege(current_user, t, p) ORDER BY p) AS privs
+         FROM unnest($1::text[]) t ORDER BY t`,
+        [tables],
+      );
+      expect(rows).toEqual(
+        [...tables].sort().map((t) => ({
+          t,
+          privs: ['INSERT', 'SELECT', 'UPDATE'],
+        })),
+      );
+    });
+
+    it.each(tables)('app role cannot DELETE or TRUNCATE %s', async (t) => {
+      await expect(
+        app.query(`DELETE FROM ${t} WHERE tenant_id = $1`, [tenantId]),
+      ).rejects.toThrow(denied);
+      await expect(app.query(`TRUNCATE ${t}`)).rejects.toThrow(denied);
+    });
+  });
+
   describe('schema and migrations', () => {
     it.each([
       'CREATE TABLE evil (id int)',
