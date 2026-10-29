@@ -19,11 +19,29 @@ import { TenantContext } from '../tenancy/tenant-context.js';
 export class AuthRepository {
   constructor(@InjectPrisma() readonly prisma: TenantPrismaClient) {}
 
-  /** System context only: users are global (one identity across tenants). */
+  /**
+   * System context only: users are global (one identity across tenants).
+   * Deactivated and soft-deleted users are returned too, so login runs the
+   * same path for them and can audit the attempt; the caller refuses them.
+   */
   findUserForLogin(email: string) {
-    return this.prisma.user.findFirst({
-      where: { email, deletedAt: null },
-      select: { id: true, passwordHash: true, lastTenantId: true },
+    return this.prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        passwordHash: true,
+        lastTenantId: true,
+        isActive: true,
+        deletedAt: true,
+      },
+    });
+  }
+
+  /** System context only: global account state for refresh. */
+  findUserState(userId: string) {
+    return this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { isActive: true, deletedAt: true },
     });
   }
 

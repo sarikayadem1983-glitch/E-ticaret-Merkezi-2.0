@@ -81,6 +81,12 @@ Mevcut katmanlar: argon2id şifre hash'i, bilinmeyen email'de sahte hash doğrul
 
 ### Login ve başarısız giriş
 
+- **Pasif veya silinmiş global kullanıcı** (`users.is_active = false` veya `users.deleted_at` dolu) token alamaz:
+  - Login: şifre hash'i yine doğrulanır (süre farkı yok), yanıt yanlış şifreyle birebir aynıdır (`401 INVALID_CREDENTIALS`). `LOGIN_FAILED` ilgili tenant'a arka planda yazılır; neden `user_inactive` / `user_deleted` (şifre yanlışsa `invalid_password`).
+  - Refresh: tekrar kullanım kontrolünden önce hesap durumu okunur; gönderilen refresh token iptal edilir, yanıt bilinmeyen token ile aynıdır (`401 INVALID_REFRESH_TOKEN`). Aynı token tekrar gönderilirse `TOKEN_REUSE_DETECTED` yazılmaz, diğer oturumlar kapatılmaz.
+  - Açık access token'lar bir sonraki istekte `401 SESSION_REVOKED` alır (guard, aşağıda); bu yüzden `switch-tenant` de çalışmaz.
+  - Kayıt, mevcut (silinmiş dahil) e-postada önceki gibi `409` döner ve token üretmez.
+
 - Login'de aktif üyeliği olmayan kullanıcı, bilinmeyen e-postayla birebir aynı yanıtı alır (`401 Email veya şifre hatalı`). Bilinmeyen e-postada da üyelik sorgusu çalışır, böylece sorgu sırası aynıdır.
 - **Başarısız giriş audit'i:** e-posta bir kullanıcıya aitse `LOGIN_FAILED` ilgili tenant'a yazılır: kullanılabilir mağaza varsa o tenant'a, yoksa `last_tenant_id`'nin üyeliğine, o da yoksa durumu en son değişen üyeliğe (tek satır). `after` yalnızca neden kodudur: `invalid_password`, `membership_inactive`, `tenant_inactive`. Şifre, e-posta, hash veya token yazılmaz. Kullanılabilir mağaza yoksa kayıt arka planda yazılır (yanıt süresi hesabın varlığını ele vermez). Bilinmeyen e-posta audit'e yazılmaz.
 - Audit yazımı başarısız olursa giriş yanıtı değişmez (yine genel `401`, `500` yok); hata kimlik bilgisi içermeden loglanır.

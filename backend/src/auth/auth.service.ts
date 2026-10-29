@@ -18,6 +18,7 @@ import { TenantsService } from '../tenants/tenants.service.js';
 import type { LoginDto, RegisterDto } from './auth.dto.js';
 import type { AuthUser } from './decorators.js';
 import { AuthRepository } from './auth.repository.js';
+import { type DisabledReason, disabledReason } from './user-state.js';
 import { TokenService, type TokenPair } from './token.service.js';
 
 const MODULE = 'auth';
@@ -178,6 +179,21 @@ export class AuthService {
     // Unknown email: no tenant to attribute the event to, so it is not audited.
     if (!user) throw invalidCredentials();
 
+    // Deactivated or soft-deleted account: same response as a wrong password
+    // (the hash was still verified above, so timing matches). Audited in the
+    // background in the most relevant tenant, reason code only.
+    const disabled = disabledReason(user);
+    if (disabled) {
+      const relevant = relevantMembership(memberships, user.lastTenantId);
+      if (relevant) {
+        const reason = passwordOk ? disabled : 'invalid_password';
+        void TenantContext.run(relevant.tenantId, () =>
+          this.recordLoginFailed(user.id, reason),
+        );
+      }
+      throw invalidCredentials();
+    }
+
     const active = memberships.filter((m) => m.active && m.tenantActive);
     const target = pickTenant(active, user.lastTenantId);
     if (!target) {
@@ -236,6 +252,21 @@ export class AuthService {
     if (!stored) throw invalidRefreshToken();
 
     return TenantContext.run(stored.tenantId, async () => {
+      // Checked before reuse detection: a deactivated or deleted user's token
+      // is revoked and refused, and presenting it again is not treated as theft.
+      const account = await TenantContext.runAsSystem(() =>
+        this.repository.findUserState(stored.userId),
+      );
+      if (!account || disabledReason(account)) {
+        if (!stored.revokedAt) {
+          await this.repository.revokeRefreshToken(
+            this.repository.prisma,
+            stored.id,
+            null,
+          );
+        }
+        throw invalidRefreshToken();
+      }
       if (stored.revokedAt) {
         // Reuse of a rotated token: assume it leaked and end every session.
         await this.repository.revokeAllForUser(stored.userId);
@@ -303,7 +334,11 @@ export class AuthService {
    */
   private async recordLoginFailed(
     userId: string,
-    reason: 'invalid_password' | 'membership_inactive' | 'tenant_inactive',
+    reason:
+      | 'invalid_password'
+      | 'membership_inactive'
+      | 'tenant_inactive'
+      | DisabledReason,
   ): Promise<void> {
     try {
       await this.audit.record({
