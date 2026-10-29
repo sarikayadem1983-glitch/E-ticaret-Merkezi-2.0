@@ -68,6 +68,14 @@ function invalidCredentials() {
   });
 }
 
+/** Another request revoked the token first; thrown to roll back the transaction. */
+class LostRotationRace extends Error {}
+
+function nullOnLostRace(error: unknown): null {
+  if (error instanceof LostRotationRace) return null;
+  throw error;
+}
+
 function tenantNotFound() {
   return new NotFoundException({
     code: 'TENANT_NOT_FOUND',
@@ -486,35 +494,47 @@ export class AuthService {
       };
       const next = this.tokens.newRefreshToken();
       // Throws 404 inside the transaction so nothing is revoked or issued.
-      const switched = await this.repository.prisma.$transaction(async (tx) => {
-        const ver = await this.memberships.lockActive(
-          tx,
-          targetTenantId,
-          current.sub,
-        );
-        if (ver === null) throw tenantNotFound();
-        const revoked = await TenantContext.run(current.tid, async () => {
-          if (
-            !(await this.repository.revokeRefreshToken(tx, stored.id, null))
-          ) {
-            return false;
-          }
-          // The old store's access tokens die with the switch (TOKEN_STALE);
-          // the user's other devices there refresh once and continue.
-          await this.memberships.bumpAuthVersion(tx, current.tid, current.sub);
+      const switched = await this.repository.prisma
+        .$transaction(async (tx) => {
+          const ver = await this.memberships.lockActive(
+            tx,
+            targetTenantId,
+            current.sub,
+          );
+          if (ver === null) throw tenantNotFound();
+          const created = await this.repository.createRefreshToken(tx, {
+            userId: current.sub,
+            tokenHash: next.hash,
+            expiresAt: next.expiresAt,
+          });
+          const revoked = await TenantContext.run(current.tid, async () => {
+            // The successor marks this as a rotation: replaying the old token
+            // raises the reuse alarm.
+            if (
+              !(await this.repository.revokeRefreshToken(
+                tx,
+                stored.id,
+                created.id,
+              ))
+            ) {
+              return false;
+            }
+            // The old store's access tokens die with the switch (TOKEN_STALE);
+            // the user's other devices there refresh once and continue.
+            await this.memberships.bumpAuthVersion(
+              tx,
+              current.tid,
+              current.sub,
+            );
+            await this.audit.record(event, tx);
+            return true;
+          });
+          // Used concurrently by another request: roll back so nothing is issued.
+          if (!revoked) throw new LostRotationRace();
           await this.audit.record(event, tx);
-          return true;
-        });
-        // Used concurrently by another request: nothing is issued.
-        if (!revoked) return null;
-        await this.repository.createRefreshToken(tx, {
-          userId: current.sub,
-          tokenHash: next.hash,
-          expiresAt: next.expiresAt,
-        });
-        await this.audit.record(event, tx);
-        return { ver };
-      });
+          return { ver };
+        })
+        .catch(nullOnLostRace);
       if (!switched) throw invalidRefreshToken();
 
       await TenantContext.runAsSystem(() =>

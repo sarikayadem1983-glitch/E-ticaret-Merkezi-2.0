@@ -3,6 +3,7 @@ import { INestApplication } from '@nestjs/common';
 import { hash } from '@node-rs/argon2';
 import { ROLE_CATALOG } from './../src/access/roles.catalog.js';
 import { AuditService } from './../src/audit/audit.service.js';
+import { TokenService } from './../src/auth/token.service.js';
 import { isValidVkn } from './../src/companies/tax-number.js';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
@@ -978,6 +979,36 @@ describe('API (e2e)', () => {
         .post('/api/v1/auth/refresh')
         .send({ refreshToken: session.refreshToken })
         .expect(401);
+    });
+
+    it('replaying the pre-switch refresh token raises the reuse alarm', async () => {
+      const session = await loginA();
+      const switched = (await switchTo(session, tenantB).expect(200)).body.data;
+      const [old] = await sql<{ replaced_by_id: string | null }>(
+        'SELECT replaced_by_id FROM refresh_tokens WHERE token_hash = $1',
+        [TokenService.hash(session.refreshToken)],
+      );
+      const [successor] = await sql<{ id: string; tenant_id: string }>(
+        'SELECT id, tenant_id FROM refresh_tokens WHERE token_hash = $1',
+        [TokenService.hash(switched.refreshToken)],
+      );
+      expect(successor.tenant_id).toBe(tenantB);
+      expect(old.replaced_by_id).toBe(successor.id);
+
+      await http()
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: session.refreshToken })
+        .expect(401);
+      // Reuse revoked the session issued by the switch as well.
+      await http()
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: switched.refreshToken })
+        .expect(401);
+      const alarms = await sql(
+        `SELECT 1 FROM audit_logs WHERE entity_id = $1 AND action = 'TOKEN_REUSE_DETECTED'`,
+        [userId],
+      );
+      expect(alarms.length).toBeGreaterThan(0);
     });
 
     it.each([
