@@ -64,6 +64,26 @@ export class AccessRepository {
     };
   }
 
+  /** The member's tenant role (owner/admin), if any. */
+  async findTenantRole(userId: string): Promise<AssignedRole | null> {
+    const row = await this.prisma.userRole.findFirst({
+      where: { userId },
+      select: roleSelect,
+    });
+    return row && resolve(row);
+  }
+
+  /** The member's company roles in the current tenant. */
+  async findCompanyRoles(
+    userId: string,
+  ): Promise<(AssignedRole & { companyId: string })[]> {
+    const rows = await this.prisma.userCompanyRole.findMany({
+      where: { userId },
+      select: { companyId: true, ...roleSelect },
+    });
+    return rows.map((r) => ({ companyId: r.companyId, ...resolve(r) }));
+  }
+
   /** System context: catalog roles missing from a live tenant. */
   findMissingSystemRoles(): Promise<{ tenantId: string; key: string }[]> {
     const keys = Object.keys(ROLE_CATALOG);

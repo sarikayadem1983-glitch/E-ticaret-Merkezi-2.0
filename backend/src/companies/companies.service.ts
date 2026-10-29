@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { AccessService } from '../access/access.service.js';
 import { AuditService } from '../audit/audit.service.js';
 import type { AuthUser } from '../auth/decorators.js';
 import type {
@@ -13,9 +14,6 @@ import {
 
 const MODULE = 'companies';
 const ENTITY = 'Company';
-
-/** Tenant-wide access to every company; without it a user sees only assigned companies. */
-export const ALL_COMPANIES = 'companies:all';
 
 function notFound() {
   return new NotFoundException({
@@ -33,18 +31,23 @@ export class CompaniesService {
   constructor(
     private readonly repository: CompaniesRepository,
     private readonly audit: AuditService,
+    private readonly access: AccessService,
   ) {}
 
-  /** Users without tenant-wide access only see companies they are assigned to. */
-  private scope(user: AuthUser): CompanyFilter {
-    const all = user.perms.includes('*') || user.perms.includes(ALL_COMPANIES);
-    return all ? {} : { assignedTo: user.sub };
+  /**
+   * Users without a tenant role only see companies they are assigned to. Read
+   * from the database on every request, not from the JWT `perms`.
+   */
+  private async scope(user: AuthUser): Promise<CompanyFilter> {
+    return (await this.access.seesAllCompanies(user.sub))
+      ? {}
+      : { assignedTo: user.sub };
   }
 
   async list(user: AuthUser, q: ListCompaniesQuery) {
     const { items, total } = await this.repository.findPage(
       {
-        ...this.scope(user),
+        ...(await this.scope(user)),
         search: q.search || undefined,
         isActive: q.status === 'all' ? undefined : q.status === 'active',
       },
@@ -55,7 +58,7 @@ export class CompaniesService {
   }
 
   async summary(user: AuthUser) {
-    const scope = this.scope(user);
+    const scope = await this.scope(user);
     const [active, inactive] = await Promise.all([
       this.repository.count({ ...scope, isActive: true }),
       this.repository.count({ ...scope, isActive: false }),
@@ -65,7 +68,7 @@ export class CompaniesService {
 
   /** Inaccessible and missing companies both answer 404, so ids reveal nothing. */
   async get(user: AuthUser, id: string) {
-    const company = await this.repository.findById(id, this.scope(user));
+    const company = await this.repository.findById(id, await this.scope(user));
     if (!company) throw notFound();
     return { data: company };
   }
@@ -101,8 +104,11 @@ export class CompaniesService {
     id: string,
     data: UpdateCompanyDto & { isActive?: boolean },
   ) {
+    // The member's role in this company, from the database: none → 404,
+    // read-only → 403. Stale JWT perms cannot bypass it.
+    await this.access.assertCompanyPermission(user, id, 'companies:write');
     const company = await this.repository.prisma.$transaction(async (tx) => {
-      const before = await this.repository.findById(id, this.scope(user), tx);
+      const before = await this.repository.findById(id, {}, tx);
       if (!before) throw notFound();
       const after = await this.repository.update(tx, id, data);
       await this.audit.record(

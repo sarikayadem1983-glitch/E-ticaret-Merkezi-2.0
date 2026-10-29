@@ -580,8 +580,17 @@ export class AuthService {
     if (membership?.status !== 'active') {
       throw new NotFoundException('Kullanıcı bulunamadı');
     }
-    const tenant = await this.tenants.profile(this.repository.prisma, tenantId);
-    return { ...membership.user, tenantId, tenant, permissions };
+    const [tenant, capabilities] = await Promise.all([
+      this.tenants.profile(this.repository.prisma, tenantId),
+      this.access.capabilities(userId),
+    ]);
+    return {
+      ...membership.user,
+      tenantId,
+      tenant,
+      permissions,
+      ...capabilities,
+    };
   }
 
   private async startSession(session: Session): Promise<TokenPair> {

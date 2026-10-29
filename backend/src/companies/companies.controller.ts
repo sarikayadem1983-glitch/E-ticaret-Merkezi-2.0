@@ -55,8 +55,11 @@ export class CompaniesController {
     return this.companies.create(dto);
   }
 
+  // Writes on one company: the guard only checks membership in the module
+  // (companies:read). The service decides from the role in that company:
+  // no role → 404, read-only role → 403.
   @Patch(':id')
-  @RequirePermissions('companies:write')
+  @RequirePermissions('companies:read')
   update(
     @CurrentUser() user: AuthUser,
     @Param('id', uuid) id: string,
@@ -67,14 +70,14 @@ export class CompaniesController {
 
   @Post(':id/deactivate')
   @HttpCode(HttpStatus.OK)
-  @RequirePermissions('companies:write')
+  @RequirePermissions('companies:read')
   deactivate(@CurrentUser() user: AuthUser, @Param('id', uuid) id: string) {
     return this.companies.setActive(user, id, false);
   }
 
   @Post(':id/activate')
   @HttpCode(HttpStatus.OK)
-  @RequirePermissions('companies:write')
+  @RequirePermissions('companies:read')
   activate(@CurrentUser() user: AuthUser, @Param('id', uuid) id: string) {
     return this.companies.setActive(user, id, true);
   }

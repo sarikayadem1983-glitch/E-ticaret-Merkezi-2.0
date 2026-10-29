@@ -15,12 +15,15 @@ const USER = { sub: 'u1', tid: 't1', perms: ['*'], ver: 1 } as AuthUser;
 function setup(roles: {
   tenant?: AssignedRole | null;
   company?: AssignedRole | null;
+  companies?: (AssignedRole & { companyId: string })[];
 }) {
   const repository = {
     findRoles: vi.fn().mockResolvedValue({
       tenant: roles.tenant ?? null,
       company: roles.company ?? null,
     }),
+    findTenantRole: vi.fn().mockResolvedValue(roles.tenant ?? null),
+    findCompanyRoles: vi.fn().mockResolvedValue(roles.companies ?? []),
   };
   return {
     service: new AccessService(repository as unknown as AccessRepository),
@@ -85,5 +88,43 @@ describe('AccessService.companyRole', () => {
       company: { key: null, permissions: ['companies:read'] },
     });
     expect(await service.companyRole('u1', 'c1')).toBeNull();
+  });
+});
+
+describe('AccessService.seesAllCompanies', () => {
+  it('is true only for a tenant role with companies:all', async () => {
+    expect(
+      await setup({ tenant: role('owner') }).service.seesAllCompanies('u1'),
+    ).toBe(true);
+    expect(
+      await setup({ tenant: role('admin') }).service.seesAllCompanies('u1'),
+    ).toBe(true);
+    expect(await setup({}).service.seesAllCompanies('u1')).toBe(false);
+  });
+});
+
+describe('AccessService.capabilities', () => {
+  it('admin manages users and writes every company', async () => {
+    expect(
+      await setup({ tenant: role('admin') }).service.capabilities('u1'),
+    ).toEqual({
+      canManageUsers: true,
+      canWriteAllCompanies: true,
+      companyCapabilities: {},
+    });
+  });
+
+  it('company roles are listed per company, read-only', async () => {
+    const { service } = setup({
+      companies: [
+        { companyId: 'c1', ...role('operations') },
+        { companyId: 'c2', ...role('viewer') },
+      ],
+    });
+    expect(await service.capabilities('u1')).toEqual({
+      canManageUsers: false,
+      canWriteAllCompanies: false,
+      companyCapabilities: { c1: { canWrite: false }, c2: { canWrite: false } },
+    });
   });
 });
