@@ -97,11 +97,14 @@ describe('Catalog schema (e2e)', () => {
     // Tenant A's catalog, written through the tenant-scoped client.
     await asA(async () => {
       const category = await prisma.category.create({
-        data: { name: 'Giyim', slug: 'giyim' },
+        data: { tenantId: tenantA, name: 'Giyim', slug: 'giyim' },
       });
-      const brand = await prisma.brand.create({ data: { name: 'Marka' } });
+      const brand = await prisma.brand.create({
+        data: { tenantId: tenantA, name: 'Marka' },
+      });
       const product = await prisma.product.create({
         data: {
+          tenantId: tenantA,
           companyId: companyA,
           categoryId: category.id,
           brandId: brand.id,
@@ -110,6 +113,7 @@ describe('Catalog schema (e2e)', () => {
       });
       const variant = await prisma.productVariant.create({
         data: {
+          tenantId: tenantA,
           companyId: companyA,
           productId: product.id,
           sku: 'TS-001',
