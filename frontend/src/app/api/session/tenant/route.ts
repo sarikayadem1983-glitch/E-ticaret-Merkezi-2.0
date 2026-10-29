@@ -120,7 +120,9 @@ async function switchOnce(
         // Not undone: the old session holds a revoked token whose next refresh
         // would raise the reuse alarm. Drop the cookie (no Redis needed) so
         // the user signs in again instead.
-        await clearSessionCookie().catch(() => {});
+        await clearSessionCookie().catch((error: unknown) => {
+          console.error('[bff] oturum cookie silinemedi:', error);
+        });
       }
       throw error;
     }

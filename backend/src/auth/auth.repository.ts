@@ -101,6 +101,19 @@ export class AuthRepository {
     });
   }
 
+  /**
+   * System context only. Row-locks the user until the transaction ends, so
+   * reuse handling and a switch abort of the same user never interleave
+   * (otherwise the bulk revoke could miss a token the abort reactivates).
+   */
+  lockUser(db: PrismaTx, userId: string) {
+    return db.user.update({
+      where: { id: userId },
+      data: { updatedAt: new Date() },
+      select: { id: true },
+    });
+  }
+
   /** System context only: the store the next login opens by default. */
   setLastTenant(userId: string, tenantId: string) {
     return this.prisma.user.update({

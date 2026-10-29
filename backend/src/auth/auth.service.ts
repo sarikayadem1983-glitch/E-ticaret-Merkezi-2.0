@@ -408,6 +408,9 @@ export class AuthService {
     try {
       ({ revoked, bumped } = await TenantContext.runAsSystem(() =>
         this.repository.prisma.$transaction(async (tx) => {
+          // Before the bulk revoke: waits for an in-flight switch abort, then
+          // sees the token it reactivated.
+          await this.repository.lockUser(tx, userId);
           const revoked = await TenantContext.runAsSystem(() =>
             this.repository.revokeAllForUserEverywhere(tx, userId),
           );
@@ -630,6 +633,11 @@ export class AuthService {
     };
     const aborted = await this.repository.prisma
       .$transaction(async (tx) => {
+        // Serializes with handleTokenReuse; if reuse ran first, the new token
+        // is revoked and the conditional revoke below rolls the abort back.
+        await TenantContext.runAsSystem(() =>
+          this.repository.lockUser(tx, next.userId),
+        );
         const revoked = await TenantContext.run(next.tenantId, async () => {
           if (!(await this.repository.revokeRefreshToken(tx, next.id, null))) {
             return false;
