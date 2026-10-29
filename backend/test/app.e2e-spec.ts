@@ -1169,6 +1169,120 @@ describe('API (e2e)', () => {
         }
       });
 
+      /**
+       * Deterministic interleaving of an abort and reuse handling of the same
+       * user (a stolen pre-switch token presented while the abort runs). A
+       * blocker transaction holds a row the first request needs, so it stops
+       * mid-transaction (after locking the user row); the second request then
+       * queues on the user row. Releasing the blocker lets them finish in that
+       * order. Without the user-row lock the bulk revoke would skip the old
+       * token (revoked in its snapshot) and the abort would leave it active.
+       */
+      const interleave = async (
+        holdRow: { sql: string; params: unknown[] },
+        first: () => Promise<{ status: number }>,
+        second: () => Promise<{ status: number }>,
+      ) => {
+        const pool = ownerPool();
+        const blocker = await pool.connect();
+        const waiting = async () =>
+          Number(
+            (
+              await pool.query<{ n: string }>(
+                `SELECT count(*)::text AS n FROM pg_locks WHERE NOT granted`,
+              )
+            ).rows[0].n,
+          );
+        const until = async (n: number, what: string) => {
+          for (let polls = 0; (await waiting()) < n; polls++) {
+            if (polls > 2000) throw new Error(`${what} never waited`);
+          }
+        };
+        try {
+          await blocker.query('BEGIN');
+          await blocker.query(holdRow.sql, holdRow.params);
+          await blocker.query('SELECT pg_current_xact_id()');
+          const base = await waiting();
+          const a = first();
+          await until(base + 1, 'first request');
+          const b = second();
+          await until(base + 2, 'second request');
+          await blocker.query('COMMIT');
+          return { first: await a, second: await b };
+        } finally {
+          await blocker.query('ROLLBACK').catch(() => undefined);
+          blocker.release();
+          await pool.end();
+        }
+      };
+
+      const activeTokens = async () =>
+        (
+          await sql(
+            'SELECT 1 FROM refresh_tokens WHERE user_id = $1 AND revoked_at IS NULL',
+            [userId],
+          )
+        ).length;
+
+      it('race: reuse detected while an abort runs still ends every session', async () => {
+        const session = await loginA();
+        const switched = (await switchTo(session, tenantB).expect(200)).body
+          .data;
+        const alarmsBefore = await alarmCount();
+        // The abort holds the user row and waits on the new token's row.
+        const { first, second } = await interleave(
+          {
+            sql: 'SELECT 1 FROM refresh_tokens WHERE token_hash = $1 FOR UPDATE',
+            params: [TokenService.hash(switched.refreshToken)],
+          },
+          () =>
+            abort(switched.refreshToken, session.refreshToken).then((r) => r),
+          () =>
+            http()
+              .post('/api/v1/auth/refresh')
+              .send({ refreshToken: session.refreshToken })
+              .then((r) => r),
+        );
+        expect(first.status).toBe(204);
+        expect(second.status).toBe(401);
+        // Reuse ran after the abort committed and revoked the reactivated token.
+        expect(await activeTokens()).toBe(0);
+        await http()
+          .post('/api/v1/auth/refresh')
+          .send({ refreshToken: session.refreshToken })
+          .expect(401);
+        expect(await alarmCount()).toBeGreaterThan(alarmsBefore);
+      });
+
+      it('race: an abort queued behind reuse handling rolls back', async () => {
+        const session = await loginA();
+        const switched = (await switchTo(session, tenantB).expect(200)).body
+          .data;
+        // Reuse holds the user row, has revoked every token and waits to bump
+        // the membership the blocker holds.
+        const { first, second } = await interleave(
+          {
+            sql: `SELECT 1 FROM tenant_memberships
+                  WHERE tenant_id = $1 AND user_id = $2 FOR UPDATE`,
+            params: [tenantA, userId],
+          },
+          () =>
+            http()
+              .post('/api/v1/auth/refresh')
+              .send({ refreshToken: session.refreshToken })
+              .then((r) => r),
+          () =>
+            abort(switched.refreshToken, session.refreshToken).then((r) => r),
+        );
+        expect(first.status).toBe(401);
+        expect(second.status).toBe(401);
+        expect(await activeTokens()).toBe(0);
+        await http()
+          .post('/api/v1/auth/refresh')
+          .send({ refreshToken: session.refreshToken })
+          .expect(401);
+      });
+
       it('refuses after the 60 s window', async () => {
         const session = await loginA();
         const switched = (await switchTo(session, tenantB).expect(200)).body
