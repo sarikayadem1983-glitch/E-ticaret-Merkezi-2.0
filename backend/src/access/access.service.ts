@@ -53,7 +53,44 @@ export class AccessService {
       companyId,
     );
     const role = tenant ?? company;
-    if (!role) throw new NotFoundException('Firma bulunamadı');
+    if (!role) {
+      throw new NotFoundException({
+        code: 'NOT_FOUND',
+        message: 'Firma bulunamadı',
+      });
+    }
     if (!allows(role, permission)) throw new ForbiddenException('Yetki yok');
+  }
+
+  /** Tenant context. True when the tenant role covers every company. */
+  async seesAllCompanies(userId: string): Promise<boolean> {
+    const role = await this.repository.findTenantRole(userId);
+    return !!role && allows(role, 'companies:all');
+  }
+
+  /**
+   * Tenant context. UI flags for `auth/me`, read from the database. A tenant
+   * role writes every company (`canWriteAllCompanies`); company roles are
+   * listed per company.
+   */
+  async capabilities(userId: string): Promise<{
+    canManageUsers: boolean;
+    canWriteAllCompanies: boolean;
+    companyCapabilities: Record<string, { canWrite: boolean }>;
+  }> {
+    const [tenant, companies] = await Promise.all([
+      this.repository.findTenantRole(userId),
+      this.repository.findCompanyRoles(userId),
+    ]);
+    return {
+      canManageUsers: !!tenant && allows(tenant, 'users:manage'),
+      canWriteAllCompanies: !!tenant && allows(tenant, 'companies:write'),
+      companyCapabilities: Object.fromEntries(
+        companies.map((c) => [
+          c.companyId,
+          { canWrite: allows(c, 'companies:write') },
+        ]),
+      ),
+    };
   }
 }

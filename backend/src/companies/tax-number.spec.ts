@@ -5,9 +5,9 @@ describe('isValidVkn', () => {
     'checks the check digit of %s against the official algorithm',
     (vkn) => {
       // Exactly one final digit is valid for every 9-digit prefix.
-      const valid = '0123456789'.split('').filter((d) =>
-        isValidVkn(vkn.slice(0, 9) + d),
-      );
+      const valid = '0123456789'
+        .split('')
+        .filter((d) => isValidVkn(vkn.slice(0, 9) + d));
       expect(valid).toHaveLength(1);
     },
   );

@@ -9,7 +9,12 @@ import {
 } from './../src/database/prisma.service.js';
 import { isValidVkn } from './../src/companies/tax-number.js';
 import { TenantContext } from './../src/tenancy/tenant-context.js';
-import { createTestApp, purgeTenants, seedMember } from './helpers.js';
+import {
+  createTestApp,
+  purgeTenants,
+  seedMember,
+  systemRoleId,
+} from './helpers.js';
 
 const PASSWORD = 'Correct-Horse-9';
 
@@ -354,6 +359,151 @@ describe('Companies (e2e)', () => {
         .set(bearer(staff))
         .send(companyBody())
         .expect(403);
+    });
+
+    /** A member with catalog role `role`: tenant-wide, or in the given companies. */
+    const memberWith = async (
+      label: string,
+      role: 'admin' | 'operations' | 'accounting' | 'viewer',
+      companyIds: string[] = [],
+    ) => {
+      const email = `co-${label}-${run}@test.local`;
+      const tenantRole = role === 'admin';
+      const roleId = await systemRoleId(tenantA, role);
+      const userId = await seedMember({
+        email,
+        name: label,
+        passwordHash: await hash(PASSWORD),
+        memberships: [{ tenantId: tenantA, ...(tenantRole ? { roleId } : {}) }],
+      });
+      await TenantContext.run(tenantA, () =>
+        prisma.userCompanyRole.createMany({
+          data: companyIds.map((companyId) => ({
+            tenantId: tenantA,
+            userId,
+            companyId,
+            roleId,
+          })),
+        }),
+      );
+      const token = (
+        await http()
+          .post('/api/v1/auth/login')
+          .send({ email, password: PASSWORD })
+          .expect(200)
+      ).body.data.accessToken as string;
+      return { userId, token };
+    };
+
+    it('a role in company A gives no access to company B', async () => {
+      const a = await create(tokenA, { legalName: `A ${run}` });
+      const b = await create(tokenA, { legalName: `B ${run}` });
+      const { token } = await memberWith('ops-a', 'operations', [a.id]);
+      await http()
+        .get(`/api/v1/companies/${a.id}`)
+        .set(bearer(token))
+        .expect(200);
+      await http()
+        .get(`/api/v1/companies/${b.id}`)
+        .set(bearer(token))
+        .expect(404);
+      await http()
+        .patch(`/api/v1/companies/${b.id}`)
+        .set(bearer(token))
+        .send({ city: 'İzmir' })
+        .expect(404);
+      await http()
+        .post(`/api/v1/companies/${b.id}/deactivate`)
+        .set(bearer(token))
+        .expect(404);
+    });
+
+    it('a company role can read its company but cannot write it', async () => {
+      const a = await create(tokenA, { legalName: `Muhasebe ${run}` });
+      const { token } = await memberWith('acc-a', 'accounting', [a.id]);
+      await http()
+        .get(`/api/v1/companies/${a.id}`)
+        .set(bearer(token))
+        .expect(200);
+      const list = await http()
+        .get('/api/v1/companies?per_page=100')
+        .set(bearer(token))
+        .expect(200);
+      expect(list.body.data.map((c: Company) => c.id)).toEqual([a.id]);
+      await http()
+        .patch(`/api/v1/companies/${a.id}`)
+        .set(bearer(token))
+        .send({ city: 'İzmir' })
+        .expect(403);
+      for (const action of ['deactivate', 'activate']) {
+        await http()
+          .post(`/api/v1/companies/${a.id}/${action}`)
+          .set(bearer(token))
+          .expect(403);
+      }
+      const me = await http()
+        .get('/api/v1/auth/me')
+        .set(bearer(token))
+        .expect(200);
+      expect(me.body.data).toMatchObject({
+        canManageUsers: false,
+        canWriteAllCompanies: false,
+        companyCapabilities: { [a.id]: { canWrite: false } },
+      });
+    });
+
+    it('admin can write every company', async () => {
+      const a = await create(tokenA, { legalName: `Admin A ${run}` });
+      const b = await create(tokenA, { legalName: `Admin B ${run}` });
+      const { token } = await memberWith('admin', 'admin');
+      for (const id of [a.id, b.id]) {
+        await http()
+          .patch(`/api/v1/companies/${id}`)
+          .set(bearer(token))
+          .send({ city: 'Ankara' })
+          .expect(200);
+      }
+      const list = await http()
+        .get('/api/v1/companies?per_page=100')
+        .set(bearer(token))
+        .expect(200);
+      const ids = list.body.data.map((c: Company) => c.id);
+      expect(ids).toEqual(expect.arrayContaining([a.id, b.id]));
+      const me = await http()
+        .get('/api/v1/auth/me')
+        .set(bearer(token))
+        .expect(200);
+      expect(me.body.data).toMatchObject({
+        canManageUsers: true,
+        canWriteAllCompanies: true,
+        companyCapabilities: {},
+      });
+    });
+
+    it('removing the company role blocks access with the old token', async () => {
+      const a = await create(tokenA, { legalName: `Kaldırılan ${run}` });
+      const { userId, token } = await memberWith('removed', 'viewer', [a.id]);
+      await http()
+        .get(`/api/v1/companies/${a.id}`)
+        .set(bearer(token))
+        .expect(200);
+
+      // Only the assignment goes; auth_version is not bumped, so the token stays
+      // valid and still carries companies:read. The check reads the database.
+      await TenantContext.run(tenantA, () =>
+        prisma.userCompanyRole.deleteMany({
+          where: { userId, companyId: a.id },
+        }),
+      );
+      await http()
+        .get(`/api/v1/companies/${a.id}`)
+        .set(bearer(token))
+        .expect(404);
+      const list = await http()
+        .get('/api/v1/companies?per_page=100')
+        .set(bearer(token))
+        .expect(200);
+      expect(list.body.data).toEqual([]);
     });
   });
 });
