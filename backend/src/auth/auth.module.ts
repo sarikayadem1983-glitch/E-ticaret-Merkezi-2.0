@@ -51,6 +51,6 @@ import { TokenService } from './token.service.js';
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
-  exports: [AccountsService],
+  exports: [AccountsService, AuthRateLimitService],
 })
 export class AuthModule {}

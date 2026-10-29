@@ -14,6 +14,7 @@ import { AccessService } from '../access/access.service.js';
 import { ROLE_CATALOG, type RoleKey } from '../access/roles.catalog.js';
 import { AuditService } from '../audit/audit.service.js';
 import { AccountsService } from '../auth/accounts.service.js';
+import { AuthRateLimitService } from '../auth/auth-rate-limit.service.js';
 import type { AuthUser } from '../auth/decorators.js';
 import { maskEmail } from '../common/mask-email.js';
 import { CompaniesService } from '../companies/companies.service.js';
@@ -104,6 +105,7 @@ export class InvitationsService {
     private readonly repository: InvitationsRepository,
     private readonly access: AccessService,
     private readonly accounts: AccountsService,
+    private readonly loginLimits: AuthRateLimitService,
     private readonly companies: CompaniesService,
     private readonly memberships: MembershipsRepository,
     private readonly tenants: TenantsService,
@@ -311,7 +313,7 @@ export class InvitationsService {
         this.memberships.get(invitation.tenantId, invitation.invitedByUserId),
         this.summary(invitation),
       ]);
-      return tenant && inviter && summary !== null
+      return tenant && inviter?.status === 'active' && summary !== null
         ? {
             tenantName: tenant.name,
             inviterName: inviter.user.name,
@@ -336,7 +338,7 @@ export class InvitationsService {
    * alone is not enough). Everything is granted in one transaction; the
    * response carries no tokens and does not switch the caller's store.
    */
-  async accept(dto: AcceptInvitationDto) {
+  async accept(dto: AcceptInvitationDto, ip?: string) {
     const tokenHash = hashInvitationToken(dto.token);
     const invitation = await this.repository.findUsableByTokenHash(tokenHash);
     if (!invitation) throw invalid();
@@ -344,12 +346,17 @@ export class InvitationsService {
     const account = await this.accounts.findByEmail(invitation.email);
     let newAccount: { name: string; passwordHash: string } | null = null;
     if (account) {
+      // Same per-account / per-IP lockout as /auth/login (keys depend only on
+      // the e-mail and IP), so the invitation cannot be used to guess the
+      // password of an existing account. Fail-closed when Redis is down.
+      await this.loginLimits.beforeLogin(ip, invitation.email);
       if (!(await this.accounts.verifyPassword(account, dto.password))) {
         throw new UnauthorizedException({
           code: 'INVALID_CREDENTIALS',
           message: 'Şifre hatalı',
         });
       }
+      await this.loginLimits.loginSucceeded(ip, invitation.email);
     } else {
       newAccount = {
         name: this.validateNewAccount(dto),
@@ -357,6 +364,33 @@ export class InvitationsService {
       };
     }
 
+    try {
+      return await this.acceptInTransaction(
+        invitation,
+        tokenHash,
+        account,
+        newAccount,
+      );
+    } catch (error) {
+      // Another request created the account after our check: the whole
+      // transaction rolled back, the invitation is still pending.
+      if (!account && isUniqueViolation(error)) {
+        throw new ConflictException({
+          code: 'ACCOUNT_EXISTS',
+          message:
+            'Bu e-postayla bir hesap oluşturuldu; mevcut hesabın şifresiyle tekrar deneyin',
+        });
+      }
+      throw error;
+    }
+  }
+
+  private acceptInTransaction(
+    invitation: InvitationRow,
+    tokenHash: string,
+    account: Awaited<ReturnType<AccountsService['findByEmail']>>,
+    newAccount: { name: string; passwordHash: string } | null,
+  ) {
     const tenantId = invitation.tenantId;
     return TenantContext.run(tenantId, () =>
       this.repository.prisma.$transaction(async (tx) => {
@@ -482,6 +516,7 @@ export class InvitationsService {
     if (inviter === null) throw invalid();
     const inviterKey = await this.access.tenantRoleKey(
       invitation.invitedByUserId,
+      tx,
     );
     const keys = await this.access.roleKeysByIds(
       this.roleIdsOf(invitation),

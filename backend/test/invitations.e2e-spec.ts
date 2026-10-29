@@ -4,6 +4,7 @@ import { hash } from '@node-rs/argon2';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { AccessService } from './../src/access/access.service.js';
+import { AccountsService } from './../src/auth/accounts.service.js';
 import { isValidVkn } from './../src/companies/tax-number.js';
 import { MailDeliveryError } from './../src/mail/mail.errors.js';
 import {
@@ -652,6 +653,9 @@ describe('Invitations (e2e)', () => {
       );
       try {
         expect(
+          (await lookup(mail.tokenFor(to)).expect(404)).body.error.code,
+        ).toBe('INVITATION_INVALID');
+        expect(
           (await accept(mail.tokenFor(to)).expect(404)).body.error.code,
         ).toBe('INVITATION_INVALID');
       } finally {
@@ -659,6 +663,48 @@ describe('Invitations (e2e)', () => {
           "UPDATE tenant_memberships SET status = 'active', deactivated_at = NULL WHERE tenant_id = $1 AND user_id = $2",
           [tenantA, adminAId],
         );
+      }
+    });
+
+    it('an account created concurrently gives 409 ACCOUNT_EXISTS and keeps the invitation', async () => {
+      const to = email('squat-race');
+      await inviteCompany(ownerA, to).expect(201);
+      const token = mail.tokenFor(to);
+      // The account appears between accept's check and its transaction
+      // (e.g. another tenant's invitation accepted at the same moment).
+      await seedMember({
+        email: to,
+        name: 'Eş zamanlı',
+        passwordHash: await hash(PASSWORD),
+        memberships: [{ tenantId: tenantB }],
+      });
+      const accounts = app.get(AccountsService);
+      const spy = vi.spyOn(accounts, 'findByEmail').mockResolvedValueOnce(null);
+      try {
+        const res = await accept(token).expect(409);
+        expect(res.body.error.code).toBe('ACCOUNT_EXISTS');
+      } finally {
+        spy.mockRestore();
+      }
+      const [row] = await sql<{ status: string }>(
+        'SELECT status FROM invitations WHERE token_hash = $1',
+        [sha256(token)],
+      );
+      expect(row.status).toBe('pending');
+      // Retrying as the existing account works.
+      await accept(token, { name: undefined }).expect(200);
+    });
+
+    it("re-reads the inviter's role inside the accept transaction", async () => {
+      const to = email('tx-role');
+      await inviteCompany(adminA, to).expect(201);
+      const access = app.get(AccessService);
+      const spy = vi.spyOn(access, 'tenantRoleKey');
+      try {
+        await accept(mail.tokenFor(to)).expect(200);
+        expect(spy).toHaveBeenCalledWith(adminAId, expect.anything());
+      } finally {
+        spy.mockRestore();
       }
     });
 
@@ -757,5 +803,81 @@ describe('Invitations rate limits (e2e)', () => {
     await call().expect(404);
     await call().expect(404);
     await call().expect(429);
+  });
+});
+
+describe('Invitations: existing-account lockout (e2e)', () => {
+  let app: INestApplication<App>;
+  const mail = new FakeTransport();
+  const run = randomUUID().slice(0, 8);
+  const slugs = [`invl-a-${run}`, `invl-b-${run}`];
+  const ip = `10.98.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
+
+  const http = () => request(app.getHttpServer());
+
+  beforeAll(async () => {
+    app = await createTestApp(
+      { TRUST_PROXY: 'loopback' },
+      {
+        providers: [{ provide: MAIL_TRANSPORT, useValue: mail }],
+        rateLimits: {
+          ...RELAXED_RATE_LIMITS,
+          loginPerAccountIp: {
+            free: 2,
+            baseMs: 60_000,
+            maxMs: 60_000,
+            windowMs: 60_000,
+          },
+        },
+      },
+    );
+    for (const slug of slugs) {
+      await http()
+        .post('/api/v1/auth/register')
+        .send({
+          tenantName: `Mağaza ${slug}`,
+          tenantSlug: slug,
+          name: 'Sahip',
+          email: `${slug}@test.local`,
+          password: PASSWORD,
+        })
+        .expect(201);
+    }
+  });
+
+  afterAll(async () => {
+    await app?.close();
+    await purgeTenants(slugs);
+  });
+
+  it('wrong passwords count toward the same lockout as /auth/login', async () => {
+    const ownerA = (
+      await http()
+        .post('/api/v1/auth/login')
+        .send({ email: `${slugs[0]}@test.local`, password: PASSWORD })
+        .expect(200)
+    ).body.data.accessToken as string;
+    const to = `${slugs[1]}@test.local`; // existing account (owner of B)
+    await http()
+      .post('/api/v1/invitations')
+      .set({ Authorization: `Bearer ${ownerA}` })
+      .send({ email: to, tenantRole: 'admin' })
+      .expect(201);
+    const token = mail.tokenFor(to);
+    const accept = (password: string) =>
+      http()
+        .post('/api/v1/invitations/accept')
+        .set('X-Forwarded-For', ip)
+        .send({ token, password });
+
+    await accept('Wrong-Password-1').expect(401);
+    await accept('Wrong-Password-2').expect(401);
+    // Locked: even the right password waits, on both endpoints.
+    await accept(PASSWORD).expect(429);
+    await http()
+      .post('/api/v1/auth/login')
+      .set('X-Forwarded-For', ip)
+      .send({ email: to, password: PASSWORD })
+      .expect(429);
   });
 });

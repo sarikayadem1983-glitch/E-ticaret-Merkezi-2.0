@@ -66,8 +66,11 @@ export class AccessRepository {
   }
 
   /** The member's tenant role (owner/admin), if any. */
-  async findTenantRole(userId: string): Promise<AssignedRole | null> {
-    const row = await this.prisma.userRole.findFirst({
+  async findTenantRole(
+    userId: string,
+    db: PrismaTx = this.prisma,
+  ): Promise<AssignedRole | null> {
+    const row = await db.userRole.findFirst({
       where: { userId },
       select: roleSelect,
     });

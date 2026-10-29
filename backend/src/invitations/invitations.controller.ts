@@ -79,6 +79,6 @@ export class InvitationsController {
   @HttpCode(HttpStatus.OK)
   async accept(@Body() dto: AcceptInvitationDto, @Ip() ip: string) {
     await this.limits.beforeAccept(ip);
-    return { data: await this.invitations.accept(dto) };
+    return { data: await this.invitations.accept(dto, ip) };
   }
 }

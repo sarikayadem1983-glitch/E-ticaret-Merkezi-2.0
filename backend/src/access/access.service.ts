@@ -64,8 +64,8 @@ export class AccessService {
   }
 
   /** Tenant context. The member's tenant role key (owner/admin), read from the database. */
-  async tenantRoleKey(userId: string): Promise<RoleKey | null> {
-    const role = await this.repository.findTenantRole(userId);
+  async tenantRoleKey(userId: string, db?: PrismaTx): Promise<RoleKey | null> {
+    const role = await this.repository.findTenantRole(userId, db);
     return isRoleKey(role?.key) ? role.key : null;
   }
 
