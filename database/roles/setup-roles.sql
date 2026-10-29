@@ -5,6 +5,22 @@
 
 \set ON_ERROR_STOP on
 
+-- Guard: stop before any change when a password is missing or empty. An empty
+-- value would clear the role's password (ALTER ROLE ... PASSWORD '').
+-- Test: database/scripts/test-setup-roles-guard.sh
+\if :{?app_password}
+\else
+  DO $$ BEGIN RAISE EXCEPTION 'setup-roles durdu: app_password verilmedi, hiçbir değişiklik yapılmadı'; END $$;
+\endif
+\if :{?migrator_password}
+\else
+  DO $$ BEGIN RAISE EXCEPTION 'setup-roles durdu: migrator_password verilmedi, hiçbir değişiklik yapılmadı'; END $$;
+\endif
+SELECT btrim(:'app_password') = '' OR btrim(:'migrator_password') = '' AS setup_roles_empty_password \gset
+\if :setup_roles_empty_password
+  DO $$ BEGIN RAISE EXCEPTION 'setup-roles durdu: parola boş, hiçbir değişiklik yapılmadı'; END $$;
+\endif
+
 -- Roles ---------------------------------------------------------------------
 
 SELECT 'CREATE ROLE tm_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS'

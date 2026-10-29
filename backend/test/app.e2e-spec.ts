@@ -3,6 +3,7 @@ import { INestApplication } from '@nestjs/common';
 import { hash } from '@node-rs/argon2';
 import { ROLE_CATALOG } from './../src/access/roles.catalog.js';
 import { AuditService } from './../src/audit/audit.service.js';
+import { TokenService } from './../src/auth/token.service.js';
 import { isValidVkn } from './../src/companies/tax-number.js';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
@@ -235,12 +236,25 @@ describe('API (e2e)', () => {
         .post('/api/v1/auth/refresh')
         .send({ refreshToken: second })
         .expect(401);
+      // …and the open access token is refused at once.
+      const stale = await http()
+        .get('/api/v1/auth/me')
+        .set('Authorization', `Bearer ${rotated.body.data.accessToken}`)
+        .expect(401);
+      expect(stale.body.error.code).toBe('TOKEN_STALE');
+
+      // Later tests use tokens.b: sign in again.
+      const fresh = await http()
+        .post('/api/v1/auth/login')
+        .send({ email: tenants.b.email, password: PASSWORD })
+        .expect(200);
+      tokens.b = fresh.body.data;
     });
 
     it('logout revokes the refresh token', async () => {
       const login = await http()
         .post('/api/v1/auth/login')
-        .send({ email: tenants.a.email, password: PASSWORD })
+        .send({ email: tenants.b.email, password: PASSWORD })
         .expect(200);
       const { accessToken, refreshToken } = login.body.data;
 
@@ -253,6 +267,13 @@ describe('API (e2e)', () => {
         .post('/api/v1/auth/refresh')
         .send({ refreshToken })
         .expect(401);
+      // Presenting a revoked token counts as reuse and ends every session of
+      // the user (b, so a's auth_version stays 1), so tokens.b is renewed.
+      const fresh = await http()
+        .post('/api/v1/auth/login')
+        .send({ email: tenants.b.email, password: PASSWORD })
+        .expect(200);
+      tokens.b = fresh.body.data;
     });
   });
   describe('memberships', () => {
@@ -958,6 +979,36 @@ describe('API (e2e)', () => {
         .post('/api/v1/auth/refresh')
         .send({ refreshToken: session.refreshToken })
         .expect(401);
+    });
+
+    it('replaying the pre-switch refresh token raises the reuse alarm', async () => {
+      const session = await loginA();
+      const switched = (await switchTo(session, tenantB).expect(200)).body.data;
+      const [old] = await sql<{ replaced_by_id: string | null }>(
+        'SELECT replaced_by_id FROM refresh_tokens WHERE token_hash = $1',
+        [TokenService.hash(session.refreshToken)],
+      );
+      const [successor] = await sql<{ id: string; tenant_id: string }>(
+        'SELECT id, tenant_id FROM refresh_tokens WHERE token_hash = $1',
+        [TokenService.hash(switched.refreshToken)],
+      );
+      expect(successor.tenant_id).toBe(tenantB);
+      expect(old.replaced_by_id).toBe(successor.id);
+
+      await http()
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: session.refreshToken })
+        .expect(401);
+      // Reuse revoked the session issued by the switch as well.
+      await http()
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: switched.refreshToken })
+        .expect(401);
+      const alarms = await sql(
+        `SELECT 1 FROM audit_logs WHERE entity_id = $1 AND action = 'TOKEN_REUSE_DETECTED'`,
+        [userId],
+      );
+      expect(alarms.length).toBeGreaterThan(0);
     });
 
     it.each([

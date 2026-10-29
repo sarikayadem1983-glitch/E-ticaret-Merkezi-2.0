@@ -6,6 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { hash, verify } from '@node-rs/argon2';
+import { AccessService } from '../access/access.service.js';
 import { ROLE_CATALOG } from '../access/roles.catalog.js';
 import { type AuditEvent, AuditService } from '../audit/audit.service.js';
 import {
@@ -68,6 +69,14 @@ function invalidCredentials() {
   });
 }
 
+/** Another request revoked the token first; thrown to roll back the transaction. */
+class LostRotationRace extends Error {}
+
+function nullOnLostRace(error: unknown): null {
+  if (error instanceof LostRotationRace) return null;
+  throw error;
+}
+
 function tenantNotFound() {
   return new NotFoundException({
     code: 'TENANT_NOT_FOUND',
@@ -92,6 +101,7 @@ export class AuthService {
     private readonly tokens: TokenService,
     private readonly audit: AuditService,
     private readonly memberships: MembershipsRepository,
+    private readonly access: AccessService,
   ) {}
 
   async register(dto: RegisterDto): Promise<TokenPair> {
@@ -270,9 +280,12 @@ export class AuthService {
         throw invalidRefreshToken();
       }
       if (stored.revokedAt) {
-        // Reuse of a rotated token: assume it leaked and end every session.
-        await this.repository.revokeAllForUser(stored.userId);
-        await this.recordTokenReuse(stored.userId);
+        // Only rotation sets replacedById. A token revoked without a successor
+        // (logout, bulk revocation) is refused without the reuse alarm.
+        if (stored.replacedById) {
+          // Reuse of a rotated token: assume it leaked and end every session.
+          await this.handleTokenReuse(stored.userId, stored.tenantId);
+        }
         throw invalidRefreshToken();
       }
       if (stored.expiresAt <= new Date()) throw invalidRefreshToken();
@@ -290,22 +303,37 @@ export class AuthService {
       }
 
       const next = this.tokens.newRefreshToken();
-      const rotated = await prisma.$transaction(async (tx) => {
-        const created = await this.repository.createRefreshToken(tx, {
-          userId: stored.userId,
-          tokenHash: next.hash,
-          expiresAt: next.expiresAt,
-        });
-        return this.repository.revokeRefreshToken(tx, stored.id, created.id);
-      });
+      const rotated = await prisma
+        .$transaction(async (tx) => {
+          const created = await this.repository.createRefreshToken(tx, {
+            userId: stored.userId,
+            tokenHash: next.hash,
+            expiresAt: next.expiresAt,
+          });
+          // Lost the race: throw so the new token is rolled back, not left
+          // active without ever reaching a client.
+          if (
+            !(await this.repository.revokeRefreshToken(
+              tx,
+              stored.id,
+              created.id,
+            ))
+          ) {
+            throw new LostRotationRace();
+          }
+          return true;
+        })
+        .catch(nullOnLostRace);
       if (!rotated) {
         // Lost a race with a concurrent refresh of the same token: treat as reuse.
-        await this.repository.revokeAllForUser(stored.userId);
-        await this.recordTokenReuse(stored.userId);
+        await this.handleTokenReuse(stored.userId, stored.tenantId);
         throw invalidRefreshToken();
       }
 
-      const perms = await this.repository.findPermissions(stored.userId);
+      const perms = await this.access.tenantPermissions(
+        stored.tenantId,
+        stored.userId,
+      );
       return this.issueAccess(
         {
           tenantId: stored.tenantId,
@@ -358,15 +386,71 @@ export class AuthService {
     }
   }
 
-  private recordTokenReuse(userId: string) {
-    return this.audit.record({
-      action: 'TOKEN_REUSE_DETECTED',
-      module: MODULE,
-      entityType: 'User',
-      entityId: userId,
-      after: { revokedAllSessions: true },
-      actorUserId: null,
-    });
+  /**
+   * Ends every session of the user in every tenant: all unrevoked refresh
+   * tokens are revoked and auth_version is bumped on all memberships, in one
+   * transaction in system context (both queries filter by userId). If it
+   * fails the error propagates (500, no token issued) and nothing is audited
+   * as done. After commit, one TOKEN_REUSE_DETECTED row is written into each
+   * affected tenant (always including the detecting one) with that tenant's
+   * revoked count; an audit failure is logged and does not undo the
+   * revocation or change the 401.
+   */
+  private async handleTokenReuse(
+    userId: string,
+    detectedInTenantId: string,
+  ): Promise<void> {
+    let revoked: { tenantId: string; count: number }[];
+    let bumped: string[];
+    try {
+      ({ revoked, bumped } = await TenantContext.runAsSystem(() =>
+        this.repository.prisma.$transaction(async (tx) => {
+          const revoked = await TenantContext.runAsSystem(() =>
+            this.repository.revokeAllForUserEverywhere(tx, userId),
+          );
+          const bumped = await this.memberships.bumpAuthVersionForUser(
+            tx,
+            userId,
+          );
+          return { revoked, bumped };
+        }),
+      ));
+    } catch (error) {
+      this.logger.error(
+        `Refresh token tekrar kullanımı: oturumlar iptal EDİLEMEDİ (user ${userId}): ${(error as Error).message}`,
+      );
+      throw error;
+    }
+
+    const perTenant = new Map(revoked.map((r) => [r.tenantId, r.count]));
+    const affectedTenantIds = [
+      ...new Set([detectedInTenantId, ...bumped, ...perTenant.keys()]),
+    ];
+    const totalRefreshRevokedCount = revoked.reduce((n, r) => n + r.count, 0);
+    for (const tenantId of affectedTenantIds) {
+      try {
+        await TenantContext.run(tenantId, () =>
+          this.audit.record({
+            action: 'TOKEN_REUSE_DETECTED',
+            module: MODULE,
+            entityType: 'User',
+            entityId: userId,
+            after: {
+              detectedInTenantId,
+              refreshRevokedCount: perTenant.get(tenantId) ?? 0,
+              accessRevoked: bumped.includes(tenantId),
+              totalRefreshRevokedCount,
+              affectedTenantIds,
+            },
+            actorUserId: null,
+          }),
+        );
+      } catch (error) {
+        this.logger.error(
+          `TOKEN_REUSE_DETECTED audit kaydı yazılamadı (tenant ${tenantId}): ${(error as Error).message}`,
+        );
+      }
+    }
   }
 
   /** The user's active stores in active tenants, marking the current one. */
@@ -428,41 +512,56 @@ export class AuthService {
       };
       const next = this.tokens.newRefreshToken();
       // Throws 404 inside the transaction so nothing is revoked or issued.
-      const switched = await this.repository.prisma.$transaction(async (tx) => {
-        const ver = await this.memberships.lockActive(
-          tx,
-          targetTenantId,
-          current.sub,
-        );
-        if (ver === null) throw tenantNotFound();
-        const revoked = await TenantContext.run(current.tid, async () => {
-          if (
-            !(await this.repository.revokeRefreshToken(tx, stored.id, null))
-          ) {
-            return false;
-          }
-          // The old store's access tokens die with the switch (TOKEN_STALE);
-          // the user's other devices there refresh once and continue.
-          await this.memberships.bumpAuthVersion(tx, current.tid, current.sub);
+      const switched = await this.repository.prisma
+        .$transaction(async (tx) => {
+          const ver = await this.memberships.lockActive(
+            tx,
+            targetTenantId,
+            current.sub,
+          );
+          if (ver === null) throw tenantNotFound();
+          const created = await this.repository.createRefreshToken(tx, {
+            userId: current.sub,
+            tokenHash: next.hash,
+            expiresAt: next.expiresAt,
+          });
+          const revoked = await TenantContext.run(current.tid, async () => {
+            // The successor marks this as a rotation: replaying the old token
+            // raises the reuse alarm.
+            if (
+              !(await this.repository.revokeRefreshToken(
+                tx,
+                stored.id,
+                created.id,
+              ))
+            ) {
+              return false;
+            }
+            // The old store's access tokens die with the switch (TOKEN_STALE);
+            // the user's other devices there refresh once and continue.
+            await this.memberships.bumpAuthVersion(
+              tx,
+              current.tid,
+              current.sub,
+            );
+            await this.audit.record(event, tx);
+            return true;
+          });
+          // Used concurrently by another request: roll back so nothing is issued.
+          if (!revoked) throw new LostRotationRace();
           await this.audit.record(event, tx);
-          return true;
-        });
-        // Used concurrently by another request: nothing is issued.
-        if (!revoked) return null;
-        await this.repository.createRefreshToken(tx, {
-          userId: current.sub,
-          tokenHash: next.hash,
-          expiresAt: next.expiresAt,
-        });
-        await this.audit.record(event, tx);
-        return { ver };
-      });
+          return { ver };
+        })
+        .catch(nullOnLostRace);
       if (!switched) throw invalidRefreshToken();
 
       await TenantContext.runAsSystem(() =>
         this.repository.setLastTenant(current.sub, targetTenantId),
       );
-      const perms = await this.repository.findPermissions(current.sub);
+      const perms = await this.access.tenantPermissions(
+        targetTenantId,
+        current.sub,
+      );
       return this.issueAccess(
         {
           tenantId: targetTenantId,
@@ -481,8 +580,17 @@ export class AuthService {
     if (membership?.status !== 'active') {
       throw new NotFoundException('Kullanıcı bulunamadı');
     }
-    const tenant = await this.tenants.profile(this.repository.prisma, tenantId);
-    return { ...membership.user, tenantId, tenant, permissions };
+    const [tenant, capabilities] = await Promise.all([
+      this.tenants.profile(this.repository.prisma, tenantId),
+      this.access.capabilities(userId),
+    ]);
+    return {
+      ...membership.user,
+      tenantId,
+      tenant,
+      permissions,
+      ...capabilities,
+    };
   }
 
   private async startSession(session: Session): Promise<TokenPair> {
@@ -492,7 +600,10 @@ export class AuthService {
       tokenHash: refresh.hash,
       expiresAt: refresh.expiresAt,
     });
-    const perms = await this.repository.findPermissions(session.userId);
+    const perms = await this.access.tenantPermissions(
+      session.tenantId,
+      session.userId,
+    );
     return this.issueAccess(session, perms, refresh.token);
   }
 

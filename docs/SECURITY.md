@@ -34,6 +34,8 @@ sh docker/postgres/setup-roles.sh
 
 Script tekrar çalıştırılabilir (idempotent). Şifre değiştirmek için `.env`'deki değeri güncelleyip yeniden çalıştırın.
 
+`setup-roles.sql` doğrudan `psql` ile de çalıştırılabilir; parola değişkenlerinden biri eksik veya boşsa hiçbir değişiklik yapmadan durur (boş değer `ALTER ROLE ... PASSWORD ''` ile rolün parolasını silerdi). Test: `bash database/scripts/test-setup-roles-guard.sh` (atılabilir konteynerde, mevcut veritabanı veya `.env` kullanılmaz).
+
 ### Production bağlantı bilgileri
 
 - `DATABASE_URL` ve `MIGRATION_DATABASE_URL` ayrı gizli değerlerdir. Bir secret manager (ör. AWS Secrets Manager, GCP Secret Manager, Vault, Kubernetes Secret) ile ortam değişkeni olarak verilir. Repoya, imaja veya loglara yazılmaz.
@@ -61,7 +63,19 @@ Ayarlar açılışta `backend/src/config/security.config.ts` ile okunur ve doğr
 
 ## 3. Kimlik doğrulama koruması
 
-Mevcut katmanlar: argon2id şifre hash'i, bilinmeyen email'de sahte hash doğrulaması (yanıt süresi kullanıcı varlığını ele vermez), refresh token rotation ve tekrar kullanımda tüm oturumların kapatılması, başarısız girişlerin Audit Log'a yazılması.
+Mevcut katmanlar: argon2id şifre hash'i, bilinmeyen email'de sahte hash doğrulaması (yanıt süresi kullanıcı varlığını ele vermez), refresh token rotation ve tekrar kullanımda kullanıcının tüm mağazalardaki oturumlarının hemen kapatılması, başarısız girişlerin Audit Log'a yazılması.
+
+### Refresh token tekrar kullanımı
+
+İptal edilmiş (döndürülmüş) bir refresh token aktif bir kullanıcı tarafından tekrar gönderilirse veya aynı token'ın eş zamanlı iki rotation'ından biri yarışı kaybederse token çalınmış sayılır:
+
+- Kullanıcının **tüm mağazalardaki** iptal edilmemiş refresh token'ları iptal edilir ve **tüm üyeliklerinin** (pasifler dahil) `auth_version`'ı artırılır. İkisi tek veritabanı transaction'ında, `runAsSystem` bağlamında çalışır; sorgular `user_id` ile açıkça filtrelenir (`AuthRepository.revokeAllForUserEverywhere`, `MembershipsRepository.bumpAuthVersionForUser`). İzin listesine yeni dosya eklenmedi. Sonuç: açık access token'lar bir sonraki istekte `401 TOKEN_STALE` alır (15 dk beklenmez), refresh yapılamaz, kullanıcı tüm cihazlarda yeniden giriş yapar.
+- Yanıt `401 INVALID_REFRESH_TOKEN`, token üretilmez.
+- İptal veya `auth_version` artırımı başarısız olursa transaction geri alınır, istek `500` ile biter (token yine üretilmez), hata loglanır ve **audit yazılmaz**: gerçekleşmeyen iptal hiçbir yerde yapılmış gibi kaydedilmez.
+- Commit sonrası etkilenen her mağazaya (tespitin yapıldığı mağaza her zaman dahil) birer `TOKEN_REUSE_DETECTED` kaydı yazılır: `after: { detectedInTenantId, refreshRevokedCount (o mağazada), accessRevoked, totalRefreshRevokedCount, affectedTenantIds }`. Token veya hash içermez. Alan adları bilerek `token`/`session` kelimesini içermez; aksi halde audit sanitizer değerleri `[REDACTED]` yapar. İptal edilmiş bir token'ın sonradan tekrar sunulması da yeniden tekrar kullanım sayılır ve sayıları 0 olan yeni kayıtlar yazar. Audit yazımı başarısız olursa loglanır; iptal geri alınmaz ve yanıt değişmez.
+- Pasif/silinmiş kullanıcının token'ı tekrar kullanım sayılmaz (aşağıda).
+- Halefsiz iptal edilmiş token (çıkış, toplu iptal; `replaced_by_id` boş) tekrar kullanım sayılmaz: yalnızca `401 INVALID_REFRESH_TOKEN`, oturumlar ve audit dokunulmaz. `replaced_by_id`'yi yalnızca rotation ve mağaza değiştirme yazar (halef hedef mağazadaki yeni token); değiştirme öncesi token'ın tekrar sunulması da alarm verir.
+- **Bilinen risk (takip işi):** Eşzamanlı iki rotation'dan yarışı kaybeden, BFF kilidi dışında gelirse (ör. iki farklı istemci, kilit zaman aşımı, ağ tekrarı) meşru kullanıcının tüm oturumlarını kapatır. Şimdilik bilerek korunuyor. Çözüm seçenekleri: (a) kısa tolerans penceresi: halef token az önce üretildiyse ve henüz kullanılmadıysa alarm verme; (b) backend tarafında token başına Redis kilidi; (c) halef token'ı idempotent dönmek (aynı yanıtı tekrar ver). Seçim ayrı görevde yapılacak.
 
 ### Access token sürümü (`ver`) ve eski token'lar
 

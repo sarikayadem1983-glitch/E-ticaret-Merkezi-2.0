@@ -6,6 +6,7 @@ import { join, relative } from 'node:path';
  * adding one must fail this test and go through code review.
  */
 const ALLOWED = new Set([
+  'access/access.repository.ts',
   'auth/auth.service.ts',
   'database/database-role.check.ts',
   'health/health.service.ts',
