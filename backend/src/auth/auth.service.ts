@@ -301,14 +301,27 @@ export class AuthService {
       }
 
       const next = this.tokens.newRefreshToken();
-      const rotated = await prisma.$transaction(async (tx) => {
-        const created = await this.repository.createRefreshToken(tx, {
-          userId: stored.userId,
-          tokenHash: next.hash,
-          expiresAt: next.expiresAt,
-        });
-        return this.repository.revokeRefreshToken(tx, stored.id, created.id);
-      });
+      const rotated = await prisma
+        .$transaction(async (tx) => {
+          const created = await this.repository.createRefreshToken(tx, {
+            userId: stored.userId,
+            tokenHash: next.hash,
+            expiresAt: next.expiresAt,
+          });
+          // Lost the race: throw so the new token is rolled back, not left
+          // active without ever reaching a client.
+          if (
+            !(await this.repository.revokeRefreshToken(
+              tx,
+              stored.id,
+              created.id,
+            ))
+          ) {
+            throw new LostRotationRace();
+          }
+          return true;
+        })
+        .catch(nullOnLostRace);
       if (!rotated) {
         // Lost a race with a concurrent refresh of the same token: treat as reuse.
         await this.handleTokenReuse(stored.userId, stored.tenantId);

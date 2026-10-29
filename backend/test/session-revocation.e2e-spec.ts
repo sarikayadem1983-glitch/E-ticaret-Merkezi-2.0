@@ -389,9 +389,7 @@ describe('session revocation (e2e)', () => {
       const a = await me(inA.accessToken).expect(401);
       expect(a.body.error.code).toBe('TOKEN_STALE');
 
-      const byTenant = Object.fromEntries(
-        audits.map((r) => [r.tenant_id, r]),
-      );
+      const byTenant = Object.fromEntries(audits.map((r) => [r.tenant_id, r]));
       expect(audits).toHaveLength(2);
       const affected = [tenant.a, tenant.b];
       for (const [tid, count] of [
@@ -450,6 +448,32 @@ describe('session revocation (e2e)', () => {
         totalRefreshRevokedCount: 2,
         affectedTenantIds: [tenant.a],
       });
+    });
+
+    it('concurrent refreshes leave no stored token that no client received', async () => {
+      const { email, userId } = await member('racer', [
+        { tenantId: tenant.a, role: 'owner' },
+      ]);
+      const session = await login(email);
+      const results = await Promise.all(
+        Array.from({ length: 6 }, () => refresh(session.refreshToken)),
+      );
+      const issued = results
+        .filter((r) => r.status === 200)
+        .map((r) => r.body.data.refreshToken as string);
+      expect(issued.length).toBeLessThanOrEqual(1);
+
+      // Login token + one row per token handed out; a lost race adds none.
+      const rows = await sql<{ n: number }>(
+        'SELECT count(*)::int AS n FROM refresh_tokens WHERE user_id = $1',
+        [userId],
+      );
+      expect(rows[0].n).toBe(1 + issued.length);
+      const active = await sql(
+        'SELECT 1 FROM refresh_tokens WHERE user_id = $1 AND revoked_at IS NULL',
+        [userId],
+      );
+      expect(active).toHaveLength(0);
     });
   });
 

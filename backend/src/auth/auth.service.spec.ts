@@ -260,15 +260,13 @@ describe('AuthService.refresh', () => {
         system: TenantContext.isSystem(),
         tenant: TenantContext.tenantId(),
       });
-      ctx.repository.revokeAllForUserEverywhere.mockImplementation(
-        async () => {
-          seen.revoke.push(here());
-          return [
-            { tenantId: TENANT, count: 2 },
-            { tenantId: OTHER, count: 1 },
-          ];
-        },
-      );
+      ctx.repository.revokeAllForUserEverywhere.mockImplementation(async () => {
+        seen.revoke.push(here());
+        return [
+          { tenantId: TENANT, count: 2 },
+          { tenantId: OTHER, count: 1 },
+        ];
+      });
       ctx.memberships.bumpAuthVersionForUser.mockImplementation(async () => {
         seen.bump.push(here());
         return [TENANT, OTHER];
@@ -297,10 +295,7 @@ describe('AuthService.refresh', () => {
         tx,
         USER,
       );
-      expect(memberships.bumpAuthVersionForUser).toHaveBeenCalledWith(
-        tx,
-        USER,
-      );
+      expect(memberships.bumpAuthVersionForUser).toHaveBeenCalledWith(tx, USER);
       expect(repository.prisma.$transaction).toHaveBeenCalledTimes(1);
       expect(seen.revoke).toEqual([{ system: true, tenant: undefined }]);
       expect(seen.bump).toEqual([{ system: true, tenant: undefined }]);
@@ -370,11 +365,20 @@ describe('AuthService.refresh', () => {
         tx,
         USER,
       );
-      expect(memberships.bumpAuthVersionForUser).toHaveBeenCalledWith(
-        tx,
-        USER,
-      );
+      expect(memberships.bumpAuthVersionForUser).toHaveBeenCalledWith(tx, USER);
       expect(tokens.signAccess).not.toHaveBeenCalled();
+    });
+
+    it('rolls back the rotation transaction when the race is lost', async () => {
+      const { service, repository } = reuseSetup();
+      repository.findRefreshToken.mockResolvedValue(stored());
+      repository.revokeRefreshToken.mockResolvedValue(false);
+      await rejection(service.refresh('presented'));
+      // The callback throws, so Prisma rolls back the inserted successor.
+      expect(repository.createRefreshToken).toHaveBeenCalledTimes(1);
+      await expect(
+        repository.prisma.$transaction.mock.results[0].value,
+      ).rejects.toThrow();
     });
 
     it.each([['revoke'], ['bump']])(
