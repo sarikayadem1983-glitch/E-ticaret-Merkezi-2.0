@@ -316,6 +316,33 @@ it('never logs the invitation URL', async () => { /* log transport çıktısınd
 - [ ] **Step 2–4:** FAIL → uygula → PASS. Dokümanları güncelle.
 - [ ] **Step 5:** Commit `feat(users): member list, access editing and deactivation`.
 
+#### USR-T11a (MVP dilimi) — güncelleme 2026-10-30
+
+Kapsam: `GET /users`, `PUT /users/:userId/access`, `POST /users/:userId/deactivate`, `/activate`. `GET /users/:userId` ve `lastLoginAt` T11b'ye kalır. Migration yok (`tm_app`: `user_roles`/`user_company_roles` üzerinde DELETE var, `tenant_memberships` yalnızca UPDATE).
+
+**Owner politikası (kullanıcı kararı 2026-10-30):** owner'ın rolü ve erişimi `PUT /access` ile değiştirilemez (`403 OWNER_IMMUTABLE`); owner son aktif owner değilse pasife alınabilir; sahiplik devri ayrı görev (USR-21). Son owner koruması eşzamanlı isteklerde de geçerli: owner üyelikleri işlem içinde `FOR UPDATE` ile kilitlenir, sayım kilitten sonra yapılır.
+
+**Modül sınırları:** `users` modülü tablo sahibi değildir. `MembershipsRepository` (`listForTenant`, `lockForUpdate`, `setStatus`), `AccessService` (`rolesForUsers`, `replaceAccess`, owner kimlikleri), `AccountsService` (`profiles`, `revokeRefreshTokensInTenant`), `CompaniesService.activeByIds`, `AuditService.record` üzerinden çalışır.
+
+**Kritik senaryolar:** yetki yükseltme (admin → owner/admin ataması, JWT'deki eski izin), başka tenant'ın üyesi/firması, numaralandırma (üye değil = başka tenant = `404`), eşzamanlı iki owner pasife alma, pasife alma ile eşzamanlı refresh/mağaza değiştirme, audit'te sır, kısmi rol değişikliği (tek işlem).
+
+**Başarısız testler (önce yazılır):**
+- `lists only members of the current tenant` (ad, e-posta, durum, erişim; firma adı dahil)
+- `a member of another tenant is 404` (GET listesinde yok; PUT/deactivate/activate `404`)
+- `requires users:read / users:manage` (operations/viewer `403`)
+- `deactivate keeps assignments and kills sessions` (sonraki istek `SESSION_REVOKED`, refresh `401`, `user_company_roles` duruyor; kullanıcının diğer mağazadaki oturumu çalışır)
+- `activate restores access and requires a fresh login` (eski refresh `401`, yeni login çalışır, eski firmalar geri)
+- `nobody changes their own access or deactivates themselves` (`403 SELF_CHANGE`)
+- `owner access is immutable` (owner hedefli `PUT /access` `403 OWNER_IMMUTABLE`, owner tarafından bile)
+- `admin cannot change an owner or another admin` (`403`); `only an owner grants or removes admin`
+- `a non-last owner can be deactivated by another owner; the last active owner cannot` (`409 LAST_OWNER`)
+- `concurrent deactivation of the two owners leaves one active owner` (paralel iki istek: biri `200`, diğeri `409`)
+- `company roles must name active companies of this tenant` (boş liste, pasif firma, başka tenant'ın firması `422`)
+- `switching from admin to company roles` (admin → firma rolleri; eski izinler sonraki istekte `TOKEN_STALE`)
+- `audit records before/after without secrets` (`ROLE_CHANGED`, `COMPANY_ACCESS_CHANGED`, `MEMBERSHIP_DEACTIVATED`/`ACTIVATED`; token/hash yok)
+
+**Kapanış:** CRITICAL bağımsız güvenlik incelemesi (ayrı ajan) bulguları kapatılmadan `DONE-PR` olmaz; PR o zamana kadar draft kalır.
+
 ## Bölüm 6 — Next.js kullanıcı yönetimi ekranları
 
 ### Task 12: BFF route'ları

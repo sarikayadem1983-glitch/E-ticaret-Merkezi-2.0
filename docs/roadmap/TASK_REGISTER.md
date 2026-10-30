@@ -1,7 +1,7 @@
 # Görev Kaydı (Task Register)
 
 Tüm görevlerin tek kaynağı. Durum güncelleme kuralları: `AGENTS.md` → "Yol haritası ve durum takibi".
-Son güncelleme: 2026-10-30 (`origin/main` @ `6824f6f`: PR #10–#16 merge edildi, deploy edilmedi; CAT-01 migration'ı dev DB'ye uygulanmadı). Önceki: 2026-10-29, MVP kapsamı kullanıcı kararıyla sadeleştirildi: Trendyol-only.
+Son güncelleme: 2026-10-30 (USR-T11a başladı; OPS-08 ve USR-21 eklendi. `origin/main` @ `6824f6f`: PR #10–#16 merge edildi, deploy edilmedi; CAT-01 migration'ı dev DB'ye uygulanmadı). Önceki: 2026-10-29, MVP kapsamı kullanıcı kararıyla sadeleştirildi: Trendyol-only.
 
 > **Onay durumu:** Yalnızca kullanıcı yönetimi planındaki görevler (`USR-T1`…`USR-T16`, plan: `docs/superpowers/plans/2026-10-28-user-management.md`) ve merge edilmiş işler (INF-01…08, USR-01, USR-02, DSH-01) **onaylı plandır**. Diğer tüm modüller, görevler, tahminler ve tarihler **öneridir, kullanıcı onayı beklemektedir**. Her görevin kaynağı `TASK_REGISTER.md`'deki "Kaynak" sütunundadır.
 
@@ -103,7 +103,7 @@ Kaynak: `docs/superpowers/plans/2026-10-28-user-management.md` (T1–T16 numaral
 | USR-T10 | Davet servisi (oluştur, yeniden gönder, iptal, lookup, kabul) | P0 | USR-T7, USR-T9 | 1 | CRITICAL | B | PLANNED | Plan T10 testlerinin kalan kısmı. Kalan (USR-T10b): `GET /invitations?status=` filtresi, `accept-as-current`, pasif üyeliği davetle yeniden açma (`replacesInactiveMembership`), resend hız sınırları. MVP dilimi: USR-T10a | E, S | Yüksek | Onaylı plan |
 | USR-T10a | Davet servisi çekirdeği: oluştur (Admin / firma rolleri), iptal, yeniden gönder (yeni token), lookup, kabul (yeni hesap; mevcut hesap şifreyle) | P0 | USR-T7, USR-T9a | 3 | CRITICAL | A | DONE-NOT-DEPLOYED (PR #15, merge `bc37227`) | Plan T10 testleri; `accept-as-current` ve pasif üyelik değiştirme testleri hariç (T10b). Pasif üyeliği olan e-postaya davet MVP'de `409` (yeniden aktifleştirme T11a ile) | E, S | Yüksek | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
 | USR-T11 | Users modülü (liste, erişim düzenleme, pasife alma) | P0 | USR-T8, USR-T10 | 0,5 | CRITICAL | B | PLANNED | Plan T11 testlerinin kalan kısmı. Kalan (USR-T11b): `GET /users/:userId` detay, `lastLoginAt`. MVP dilimi: USR-T11a | E, S | Yüksek | Onaylı plan |
-| USR-T11a | Users modülü çekirdeği: `GET /users`, `PUT /users/:userId/access`, `POST /users/:userId/deactivate` / `activate` (T6 `bumpAuthVersion` + refresh iptali), audit | P0 | USR-T8, USR-T10a | 2,5 | CRITICAL | A | PLANNED | Plan T11 testleri (detay/`lastLoginAt` hariç); pasife alınan personelin sonraki isteği `SESSION_REVOKED` | E, S | Yüksek | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
+| USR-T11a | Users modülü çekirdeği: `GET /users`, `PUT /users/:userId/access`, `POST /users/:userId/deactivate` / `activate` (T6 `bumpAuthVersion` + refresh iptali), audit | P0 | USR-T8, USR-T10a | 2,5 | CRITICAL | A | IN-PROGRESS | Plan T11 testleri (detay/`lastLoginAt` hariç); pasife alınan personelin sonraki isteği `SESSION_REVOKED`. Owner politikası (kullanıcı kararı 2026-10-30): owner'ın rolü/erişimi değiştirilemez; son aktif owner değilse pasife alınabilir; son owner koruması eşzamanlı isteklerde de geçerli. Sahiplik devri USR-21 | E, S | Yüksek | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
 | USR-T12 | BFF route'ları (kullanıcı/davet allowlist, oturumsuz davet route'ları) | P0 | USR-T11 | 0,5 | CRITICAL | B | PLANNED | Plan T12 testlerinin kalan kısmı. Kalan (USR-T12b): resend ve durum filtreli davet listesi route'ları, oturum açıkken `accept-as-current` dalı. MVP dilimi: USR-T12a | F | Orta | Onaylı plan |
 | USR-T12a | BFF route'ları çekirdeği: users + invitations (oluştur, iptal) allowlist, `PUT`, oturumsuz `invitations/lookup` ve `accept`, `/invite/*` için `Referrer-Policy: no-referrer` | P0 | USR-T11a | 0,5 | CRITICAL | A | PLANNED | Plan T12 testleri | F | Orta | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
 | USR-T13 | Kullanıcılar sayfası, davet diyaloğu, davet kabul sayfası | P0 | USR-T12 | 1 | STANDARD | B | PLANNED | Plan T13 testlerinin kalan kısmı. Kalan (USR-T13b): bekleyen davetler paneli, `signedInSameEmail`/`signedInOtherEmail` durumları, "mağazaya geç" düğmesi, mobil kart görünümü. MVP dilimi: USR-T13a | F, P | Düşük | Onaylı plan |
@@ -120,6 +120,7 @@ Kaynak: `docs/superpowers/plans/2026-10-28-user-management.md` (T1–T16 numaral
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | USR-19 | Şifre sıfırlama ve e-posta doğrulama (hash'li tek kullanımlık token) | P0 | USR-T9a | 3 | CRITICAL | A | PLANNED | Token tek kullanımlık, süreli; sıfırlama tüm oturumları düşürür; yanıt hesap varlığını sızdırmaz | E, S | Yüksek | Öneri (onay bekliyor) |
 | USR-20 | İki adımlı doğrulama (TOTP) ve kurtarma kodları | P2 | USR-19 | 3 | CRITICAL | B | PLANNED | Owner/admin için zorunlu kılınabilir | U, E | Orta | Öneri (onay bekliyor) |
+| USR-21 | Sahiplik devri: owner rolünü başka bir aktif üyeye devretme (devreden onayı, yeniden kimlik doğrulama, audit, son owner koruması) | P2 | USR-T11a | 1,5 | CRITICAL | B | PLANNED | Devir tek işlemde; devir sırasında mağaza hiçbir an owner'sız kalmaz; eşzamanlı devir/pasife alma güvenli | E, S | Yüksek | Kullanıcı kararı (2026-10-30) |
 
 ## M03 — Dashboard (`DSH`)
 
@@ -382,6 +383,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | OPS-02 | Metrikler, uptime ve alarm (DB, Redis, kuyruk, entegrasyon hata oranı) | P0 | OPS-01, INF-11 | 3 | STANDARD | B | PLANNED | Alarm kanalı test edildi | Smoke | Orta | Öneri (onay bekliyor) |
 | OPS-03 | Otomatik yedekleme ve geri yükleme (PITR), geri yükleme tatbikatı | P0 | — | 3 | CRITICAL | A | PLANNED | Belgelenmiş RPO/RTO; tatbikat başarılı | M | Kritik | Öneri (onay bekliyor) |
 | OPS-06 | Yük ve performans testi (senkron, sipariş içeri alma, raporlar) | P1 | INF-11 | 3 | STANDARD | B | PLANNED | Hedef p95 süreleri belgelendi ve karşılandı | L | Orta | Öneri (onay bekliyor) |
+| OPS-08 | `backup-and-rehearse.sh` genelleştirme: başlangıç noktası hedef DB'nin son uygulanmış migration'ından otomatik; yalnızca bekleyen migration'ların kontrolleri (migration klasöründe `verify.sql`); `down.sql` provası (boş ve dolu veriyle durma koşulu); Aşama 1 kontrolleri yalnızca Aşama 1 bekliyorken | P1 | — | 1 | STANDARD | A | PLANNED | Dev'in mevcut durumunda (CAT-01 uygulanmış) betik çıkış 0 verir; bekleyen migration yoksa açıkça bunu raporlar; CAT-01 benzeri yeni bir migration için `verify.sql` kontrolleri ve `down.sql` provası raporda görünür; hiçbir aşamada kaynak DB'ye yazılmaz (yalnızca `pg_dump`); `tm_` dışı DB oluşturulmaz/silinmez; rapor satır içeriği içermez | M (izole) | Orta (yanlış prova güveni) | Kullanıcı kararı (2026-10-30) |
 
 ### OPS-E2 Yönetim ve uyum
 
@@ -393,7 +395,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 
 ## Sürümlere göre görev listeleri
 
-### Sürüm A — MVP: Trendyol-only (57 görev: 27 tamamlandı + 30 kalan; kalan tahmin 89 iş günü; 18 EPIC)
+### Sürüm A — MVP: Trendyol-only (58 görev: 27 tamamlandı + 31 kalan; kalan tahmin 90 iş günü; 18 EPIC)
 
 | ID | Görev | Durum | Tahmin | Mod | Kaynak |
 |---|---|---|---|---|---|
@@ -422,7 +424,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | USR-T8 | Companies modülünü firma başına role bağla; `auth/me` yetenek bayrakları | DONE-NOT-DEPLOYED (PR #9, merge `95b5bdb`) | 2 | CRITICAL | Onaylı plan |
 | USR-T9a | Mail modülü çekirdeği: `MailService.send`, SMTP/log transport, `mail.config` (prod'da `log` yasak, TLS zorunlu), Mailpit (docker), URL/token loglanmaz | DONE-NOT-DEPLOYED (PR #12, merge `f9b5889`) | 1,5 | STANDARD | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
 | USR-T10a | Davet servisi çekirdeği: oluştur (Admin / firma rolleri), iptal, yeniden gönder (yeni token), lookup, kabul (yeni hesap; mevcut hesap şifreyle) | DONE-NOT-DEPLOYED (PR #15, merge `bc37227`) | 3 | CRITICAL | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
-| USR-T11a | Users modülü çekirdeği: `GET /users`, `PUT /users/:userId/access`, `POST /users/:userId/deactivate` / `activate` (T6 `bumpAuthVersion` + refresh iptali), audit | PLANNED | 2,5 | CRITICAL | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
+| USR-T11a | Users modülü çekirdeği: `GET /users`, `PUT /users/:userId/access`, `POST /users/:userId/deactivate` / `activate` (T6 `bumpAuthVersion` + refresh iptali), audit | IN-PROGRESS | 2,5 | CRITICAL | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
 | USR-T12a | BFF route'ları çekirdeği: users + invitations (oluştur, iptal) allowlist, `PUT`, oturumsuz `invitations/lookup` ve `accept`, `/invite/*` için `Referrer-Policy: no-referrer` | PLANNED | 0,5 | CRITICAL | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
 | USR-T13a | Kullanıcılar sayfası (masaüstü tablo), davet diyaloğu + erişim düzenleyici, pasife al/aktifleştir; davet kabul sayfası (`loading`, `invalid`, `newAccount`, `existingAccount`, `done`) | PLANNED | 2 | STANDARD | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
 | USR-T14 | Yetki yükseltme ve tenant izolasyonu test paketi | PLANNED | 2 | CRITICAL | Onaylı plan |
@@ -454,8 +456,9 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | RPT-01 | Satış raporları (dönem, kanal, ürün) | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
 | OPS-01 | Yapılandırılmış log + hata izleme (ör. Sentry), istek kimliği | PLANNED | 2 | STANDARD | Öneri (onay bekliyor) |
 | OPS-03 | Otomatik yedekleme ve geri yükleme (PITR), geri yükleme tatbikatı | PLANNED | 3 | CRITICAL | Öneri (onay bekliyor) |
+| OPS-08 | `backup-and-rehearse.sh` genelleştirme (son migration'dan başlangıç, `verify.sql`, `down.sql` provası) | PLANNED | 1 | STANDARD | Kullanıcı kararı (2026-10-30) |
 
-### Sürüm B — Ticari SaaS (61 görev: 0 tamamlandı + 61 kalan; kalan tahmin 188,5 iş günü; 23 EPIC)
+### Sürüm B — Ticari SaaS (62 görev: 0 tamamlandı + 62 kalan; kalan tahmin 190 iş günü; 23 EPIC)
 
 | ID | Görev | Durum | Tahmin | Mod | Kaynak |
 |---|---|---|---|---|---|
@@ -475,6 +478,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | USR-T15 | Playwright akışları (davet, erişim, mağaza değiştirme, mobil) | PLANNED | 1 | STANDARD | Onaylı plan |
 | USR-18 | Aşama 2 migration: `users.tenant_id` / `users.is_active` eski kolonlarını kaldırma; önce guard ve login/refresh'in `users.is_active` okuması yeni modele taşınır | BLOCKED (T16 + ayrı migration onayı) | 3 | CRITICAL | Öneri (onay bekliyor) |
 | USR-20 | İki adımlı doğrulama (TOTP) ve kurtarma kodları | PLANNED | 3 | CRITICAL | Öneri (onay bekliyor) |
+| USR-21 | Sahiplik devri (owner rolünü devretme) | PLANNED | 1,5 | CRITICAL | Kullanıcı kararı (2026-10-30) |
 | DSH-02 | KPI kartları: günlük sipariş, ciro, bekleyen kargo, düşük stok, entegrasyon hataları | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
 | DSH-03 | Bildirim merkezi (uygulama içi + e-posta tercihleri) | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
 | IMP-02 | Asenkron içe aktarma işi (kuyruk), ilerleme ve hata raporu indirme | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
@@ -555,15 +559,15 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 |---|---|
 | Modül | 20 |
 | EPIC | 33 |
-| Görev | 139 (133 + 6 MVP dilimi: USR-T9a, T10a, T11a, T12a, T13a, T15a) |
+| Görev | 141 (133 + 6 MVP dilimi: USR-T9a, T10a, T11a, T12a, T13a, T15a + 2 kullanıcı kararı 2026-10-30: OPS-08, USR-21) |
 | DONE-MERGED | 11 |
 | DONE-PR | 0 |
 | DONE-NOT-DEPLOYED | 16 (USR-T1…T8, USR-17; PR #6, #8, #9; INF-10 #11, INF-18 #10, USR-T9a #12, CAT-01 #13, INF-09 #14, USR-T10a #15, CAT-02 #16) |
-| IN-PROGRESS | 0 |
+| IN-PROGRESS | 1 (USR-T11a) |
 | BLOCKED | 1 (USR-18) |
-| PLANNED | 111 |
-| Sürüm A | 57 görev (27 tamamlandı + 30 kalan), 18 EPIC, kalan 89 iş günü |
-| Sürüm B | 61 görev (0 tamamlandı + 61 kalan), 23 EPIC, kalan 188,5 iş günü |
+| PLANNED | 112 |
+| Sürüm A | 58 görev (27 tamamlandı + 31 kalan), 18 EPIC, kalan 90 iş günü |
+| Sürüm B | 62 görev (0 tamamlandı + 62 kalan), 23 EPIC, kalan 190 iş günü |
 | Sürüm C | 21 görev (0 tamamlandı + 21 kalan), 9 EPIC, kalan 87 iş günü |
-| Mod: CRITICAL / STANDARD / FAST | 54 / 78 / 7 |
-| Kaynak: Onaylı plan / Onaylı plan MVP dilimi / PR #6 düzeltmesi / Öneri | 27 / 6 / 1 / 105 |
+| Mod: CRITICAL / STANDARD / FAST | 55 / 79 / 7 |
+| Kaynak: Onaylı plan / Onaylı plan MVP dilimi / PR #6 düzeltmesi / Kullanıcı kararı / Öneri | 27 / 6 / 1 / 2 / 105 |
