@@ -337,7 +337,7 @@ Kapsam: `GET /users`, `PUT /users/:userId/access`, `POST /users/:userId/deactiva
 - `admin cannot change an owner or another admin` (`403`); `only an owner grants or removes admin`
 - `a non-last owner can be deactivated by another owner; the last active owner cannot` (`409 LAST_OWNER`)
 - `concurrent deactivation of the two owners leaves one active owner` (paralel iki istek: biri `200`, diğeri `409`)
-- `company roles must name active companies of this tenant` (boş liste, pasif firma, başka tenant'ın firması `422`)
+- `company roles must name active companies of this tenant` (boş liste `400 COMPANY_REQUIRED`, pasif veya başka tenant'ın firması `404`; davetlerle aynı)
 - `switching from admin to company roles` (admin → firma rolleri; eski izinler sonraki istekte `TOKEN_STALE`)
 - `audit records before/after without secrets` (`ROLE_CHANGED`, `COMPANY_ACCESS_CHANGED`, `MEMBERSHIP_DEACTIVATED`/`ACTIVATED`; token/hash yok)
 

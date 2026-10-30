@@ -57,6 +57,13 @@ export class CompaniesService {
     return this.repository.findActiveByIds(ids, db);
   }
 
+  /** Legal names of the current tenant's companies among `ids`, active or not. */
+  async namesByIds(ids: string[]): Promise<Map<string, string>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.repository.findNamesByIds(ids);
+    return new Map(rows.map((r) => [r.id, r.legalName]));
+  }
+
   async list(user: AuthUser, q: ListCompaniesQuery) {
     const { items, total } = await this.repository.findPage(
       {

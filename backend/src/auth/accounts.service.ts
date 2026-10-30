@@ -62,6 +62,22 @@ export class AccountsService {
     return ok && !!account?.usable;
   }
 
+  /**
+   * Tenant context, inside the caller's transaction: revokes every unrevoked
+   * refresh token of the user in the current tenant only (the extension
+   * filters by tenant). Returns the revoked count.
+   */
+  async revokeRefreshTokensInTenant(
+    tx: PrismaTx,
+    userId: string,
+  ): Promise<number> {
+    const { count } = await tx.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    return count;
+  }
+
   hashPassword(password: string): Promise<string> {
     return hash(password);
   }

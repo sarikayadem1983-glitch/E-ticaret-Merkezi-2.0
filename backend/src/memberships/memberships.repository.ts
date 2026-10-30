@@ -98,6 +98,61 @@ export class MembershipsRepository {
     });
   }
 
+  /** Tenant context: every member of the current tenant with the public profile. */
+  listForTenant() {
+    return this.prisma.tenantMembership.findMany({
+      select: {
+        status: true,
+        user: { select: { id: true, name: true, email: true } },
+      },
+      orderBy: [{ joinedAt: 'asc' }, { userId: 'asc' }],
+    });
+  }
+
+  /**
+   * Inside a transaction: locks the memberships of `userIds` in the tenant
+   * with FOR UPDATE, always in user_id order (no deadlock between two callers
+   * locking overlapping sets), and returns their status. Users without a
+   * membership in the tenant are absent. Concurrent writers to these rows wait
+   * until the transaction ends, so a status read here stays true until then.
+   * Row locks need raw SQL, which the extension allows only in system
+   * context; the query filters by the given tenant itself.
+   */
+  async lockForUpdate(
+    tx: PrismaTx,
+    tenantId: string,
+    userIds: string[],
+  ): Promise<Map<string, 'active' | 'inactive'>> {
+    const ids = [...new Set(userIds)].sort();
+    const rows = await TenantContext.runAsSystem(
+      () => tx.$queryRaw<{ user_id: string; status: 'active' | 'inactive' }[]>`
+      SELECT user_id, status::text AS status
+      FROM tenant_memberships
+      WHERE tenant_id = ${tenantId}::uuid AND user_id = ANY(${ids}::uuid[])
+      ORDER BY user_id
+      FOR UPDATE`,
+    );
+    return new Map(rows.map((r) => [r.user_id, r.status]));
+  }
+
+  /** Tenant context, inside the caller's transaction (users module). */
+  async setStatus(
+    tx: PrismaTx,
+    userId: string,
+    status: 'active' | 'inactive',
+  ): Promise<void> {
+    const { count } = await tx.tenantMembership.updateMany({
+      where: { userId },
+      data: {
+        status,
+        deactivatedAt: status === 'inactive' ? new Date() : null,
+      },
+    });
+    if (count !== 1) {
+      throw new Error('Üyelik bulunamadı: durum değiştirilemedi');
+    }
+  }
+
   /**
    * Inside a transaction: the auth version of the user's membership in the
    * tenant when the membership is active and the tenant is active, else null.

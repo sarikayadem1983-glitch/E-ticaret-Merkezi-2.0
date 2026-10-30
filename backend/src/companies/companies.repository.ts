@@ -83,6 +83,13 @@ export class CompaniesRepository {
     });
   }
 
+  findNamesByIds(ids: string[]) {
+    return this.prisma.company.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, legalName: true },
+    });
+  }
+
   findActiveByIds(ids: string[], db: PrismaTx = this.prisma) {
     return db.company.findMany({
       where: { id: { in: ids }, isActive: true },
