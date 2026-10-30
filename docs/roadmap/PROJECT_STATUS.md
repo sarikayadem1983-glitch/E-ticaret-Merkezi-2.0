@@ -158,3 +158,4 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 | 2026-10-30 | USR-T12a → DONE-PR | [#22](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/22) | frontend unit 124/124, typecheck ok; CI ✓; bağımsız inceleme 2 tur, açık bulgu yok | yok |
 | 2026-10-30 | USR-T12a → DONE-NOT-DEPLOYED (merge `f41c88e`, kullanıcı onayı) | [#22](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/22) | PR CI ✓ (`6fde946`) | yok (dev `8fc7ae3`) |
 | 2026-10-30 | USR-T14 → DONE-PR | [#23](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/23) | CI (`42c82e6` sonrası): bkz. PR; ürün kodu değişmedi; bağımsız inceleme 2 tur, 2. turdaki Low bulgular (hata kodu sabitleme, rol geri yükleme) kapatıldı | yok |
+| 2026-10-30 | USR-T13a → DONE-PR | [#25](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/25) | frontend unit 132/132, lint ok, typecheck ok; davranış testi USR-T15a (Playwright) | yok |
