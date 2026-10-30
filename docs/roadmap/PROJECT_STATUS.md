@@ -28,26 +28,45 @@ Son güncelleme: 2026-10-30 (PR #10–#16 merge edildi) · Kaynak: `origin/main`
 | M05–M20 | 0 / 82 | 0 | Başlanmadı |
 | **Toplam** | **27 / 139** | **19,4** | Dev'e deploy edilmiş: 11 / 139 (%7,9) |
 
-## 2. Merge edilen kullanıcı yönetimi PR'ları
+## 2. Merge edilen, deploy edilmemiş PR'lar
 
-Hepsi merge commit ile, kullanıcının PR başına ayrı onayıyla merge edildi. **Hiçbiri dev'e deploy edilmedi.**
+Hepsi merge commit ile, kullanıcının PR başına ayrı onayıyla merge edildi. **Hiçbiri dev'e deploy edilmedi** (dev `eda38da`).
 
 | PR | Merge | Görevler | İçerik |
 |---|---|---|---|
 | [#6](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/6) | `f1be19a` | USR-T1…T6, USR-17 | Aşama 1 migration, yedek/prova betiği, global kullanıcı + üyelik, mağaza değiştirme, `auth_version` ile oturum iptali, pasif kullanıcıya token verilmemesi, `setup-roles.sql` boş parola koruması |
 | [#8](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/8) | `cc8b72a` | USR-T7 | Rol kataloğu, `AccessService`, `canGrant`, son owner koruması |
 | [#9](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/9) | `95b5bdb` | USR-T8 | Companies modülünde firma başına rol kontrolü |
+| [#11](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/11) | `9c405bd` | INF-10 | GitHub Actions CI: backend lint/typecheck/unit/e2e (servis PG/Redis), frontend test/lint/typecheck |
+| [#10](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/10) | `113b522` | INF-18 | Mağaza değiştirmede Redis hatası: istek 503, refresh zinciri korunur, sahte `REFRESH_REUSE` audit'i yok; reuse işleme kullanıcı satırında serileştirildi |
+| [#12](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/12) | `f9b5889` | USR-T9a | `mail` modülü: `MailService.send`, SMTP/log transport, `mail.config` (prod'da `log` yasak, TLS zorunlu), Mailpit (docker) |
+| [#15](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/15) | `bc37227` | USR-T10a | `invitations` modülü: oluştur, iptal, yeniden gönder, lookup, kabul; hız sınırı; audit |
+| [#13](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/13) | `aa02144` | CAT-01 | Katalog şeması (kategori, marka, ürün, varyant; tenant içinde tekil SKU/barkod) — migration `20261029120000_catalog_schema` + `down.sql`; `setup-roles.sql` katalog yetkileri |
+| [#14](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/14) | `6fef239` | INF-09 | `queue` modülü (BullMQ/Redis): tenant context'li job, retry/backoff, ölü kuyruk; `/health` `queue` alanı |
+| [#16](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/16) | `6824f6f` | CAT-02 | `catalog` API: `/categories`, `/brands`, `/products` (+ varyantlar); firma rolü izinleri; pasif firma `409 COMPANY_INACTIVE` |
 
-Aşama 2 SQL'i (`migrations-pending/`) uygulanmadı (USR-18).
+Migration getiren tek PR #13'tür (CAT-01); dev DB'ye **uygulanmadı**. Aşama 2 SQL'i (`migrations-pending/`) uygulanmadı (USR-18).
 
-## 3. Dev deploy önkoşulları (`main` @ `95b5bdb`)
+## 3. Dev deploy önkoşulları (`main` @ `6824f6f`)
 
-1. Dev DB yedeği: `bash database/scripts/backup-and-rehearse.sh <out-dir>` → çıkış 0.
-2. `cd backend && npx prisma migrate status` → bekleyen migration yok. Aşama 2 **uygulanmaz**.
-3. Backend'in (`:4000`) yeni kodla başlatılması için kullanıcı onayı.
-4. Smoke test: login, `auth/memberships`, mağaza değiştirme, pasife alınan üyenin `SESSION_REVOKED` alması, pasif kullanıcının login/refresh reddi, firma rolüne göre erişim (T8).
-5. Geri dönüş planı: `eda38da` kodunu yeniden başlat (DB şeması uyumlu); gerekirse 1. adımdaki yedekten geri yükleme.
-6. Deploy sonrası USR-T1…T8 ve USR-17 `DONE-MERGED` olur; bu dosya ve `TASK_REGISTER.md` güncellenir.
+Her adım kullanıcı onayı gerektirir; deploy ve migration ayrı onaylardır.
+
+1. Dev DB yedeği: `bash database/scripts/backup-and-rehearse.sh <out-dir>` → çıkış 0 (CAT-01 migration'ı yedek üzerinde prova edilir).
+2. `cd backend && npx prisma migrate status` → yalnızca `20261029120000_catalog_schema` bekler. Kullanıcı onayıyla `npx prisma migrate deploy` (`MIGRATION_DATABASE_URL`, `tm_migrator`). Aşama 2 **uygulanmaz**.
+3. `database/roles/setup-roles.sql` migration'dan sonra yeniden çalıştırılır: `tm_app` katalog tablolarında yalnızca `SELECT, INSERT, UPDATE` alır (silme yok).
+4. Dev `.env`'e yeni ayarlar (değerler commit edilmez, `.env.example`'a bakın):
+   - `mail`: `MAIL_TRANSPORT`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_REQUIRE_TLS`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM` (dev'de Mailpit veya `log`).
+   - `invitations`: `INVITATION_TTL_HOURS`.
+   - `queue`: `QUEUE_WORKERS`, `QUEUE_SHUTDOWN_TIMEOUT_MS` (Redis `REDIS_URL` üzerinden).
+5. Backend'in (`:4000`) ve frontend'in yeni kodla başlatılması için kullanıcı onayı.
+6. Smoke test:
+   - Önceki: login, `auth/memberships`, mağaza değiştirme, pasife alınan üyenin `SESSION_REVOKED` alması, pasif kullanıcının login/refresh reddi, firma rolüne göre erişim (T8).
+   - INF-18: mağaza değiştirme sırasında Redis hatası → `503`, oturum korunur.
+   - INF-09: `/health` → `queue: "up"`.
+   - USR-T9a/T10a: davet oluştur → e-posta Mailpit'te → kabul; iptal edilen davet kabul edilemez.
+   - CAT-02: kategori/marka/ürün oluştur, listele, sil; firma dışı ürün `404`, pasif firmada yazma `409 COMPANY_INACTIVE`.
+7. Geri dönüş planı: `eda38da` kodunu yeniden başlat. CAT-01 uygulandıysa önce `down.sql` (`tm_migrator`; katalogda satır varken çalışmaz) ve `_prisma_migrations` satırının silinmesi; gerekirse 1. adımdaki yedekten geri yükleme.
+8. Deploy sonrası USR-T1…T8, USR-T9a, USR-T10a, USR-17, INF-09, INF-10, INF-18, CAT-01, CAT-02 `DONE-MERGED` olur; bu dosya ve `TASK_REGISTER.md` güncellenir.
 
 ## 4. Sıradaki görevler (önerilen sıra, 2 akış)
 
