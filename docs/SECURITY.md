@@ -259,3 +259,14 @@ Kod: `backend/src/invitations/`. Tasarım: [kullanıcı yönetimi spec'i](superp
 - **Hız sınırı:** `lookup` ve `accept` IP başına 10/dk (Redis, fail-closed). Yeniden gönderme sınırları USR-T10b'de.
 - **Kabul edilen risk — e-posta gaspı:** kayıtta e-posta doğrulaması olmadığından biri başkasının e-postasıyla önceden hesap açmışsa gerçek sahip daveti kabul **edemez**: lookup "hesap var" der, kabul o hesabın şifresini ister. Saldırgan token'ı görmediği için yetki sızıntısı yoktur, yalnızca engelleme vardır. **USR-19 (şifre sıfırlama / e-posta doğrulama) gelene kadar gerçek sahip için kurtarma yolu yoktur**; destek elle müdahale etmelidir.
 - **Kalan risk:** gönderim istek içinde (outbox yok).
+
+## 8. Kullanıcı yönetimi (USR-T11a)
+
+Kod: `backend/src/users/`.
+
+- **Yetki yükseltme:** işlemi yapanın tenant rolü ve `users:manage` izni her değişiklikte transaction içinde veritabanından okunur (JWT `perms`'e güvenilmez). Verilebilecek roller `canGrant` ile sınırlıdır: Owner verilmez, Admin'i yalnızca Owner verir/kaldırır, Admin yalnızca firma rollerini yönetir ve Owner'a/başka Admin'e dokunamaz. Kimse kendi erişimini değiştiremez veya kendini pasife alamaz.
+- **Owner politikası (kullanıcı kararı 2026-10-30):** Owner'ın rolü ve erişimi değiştirilemez (`OWNER_IMMUTABLE`); son aktif Owner değilse başka bir Owner tarafından pasife alınabilir. Sahiplik devri ayrı görevdir (USR-21).
+- **Son Owner, eş zamanlı:** her değişiklik işlemi yapanın, hedefin ve tüm Owner'ların üyelik satırlarını `FOR UPDATE` ile `user_id` sırasıyla kilitler (aynı kümeleri kilitleyen iki istek kilitlenmez), aktif Owner sayısını kilitten sonra okur. İki Owner'ın birbirini aynı anda pasife alması en çok birinde başarılı olur; diğeri kilitte bekler, kilitten sonra kendini pasif görür ve `403` alır; `LAST_OWNER` (`409`) ek bir savunmadır (sıralı isteklerde aktif başka bir owner işlemi yaptığı için oluşmaz). Yetkisi olmayan aktör hedefin üyeliğini öğrenemez: aktör kontrolü `404`'ten önce yapılır.
+- **Oturum:** pasife alma `auth_version`'ı artırır ve kullanıcının **yalnızca bu tenant'taki** refresh token'larını iptal eder; erişim değişikliği `auth_version`'ı artırır (eski izinli token `TOKEN_STALE`).
+- **Tenant izolasyonu:** hedef üyelik kilit sorgusunda tenant ile süzülür; başka tenant'ın üyesi ve bilinmeyen kimlik aynı `404`'ü alır. Firma kimlikleri bu tenant'ın aktif firmalarıyla doğrulanır.
+- **Audit:** `ROLE_CHANGED`, `COMPANY_ACCESS_CHANGED`, `MEMBERSHIP_DEACTIVATED`/`ACTIVATED`; içerikte yalnızca rol anahtarları, firma kimlikleri ve durum vardır (token, hash, e-posta yok).

@@ -9,6 +9,12 @@ import { TenantContext } from '../tenancy/tenant-context.js';
 import { AccessRepository, type AssignedRole } from './access.repository.js';
 import { isRoleKey, type RoleKey } from './roles.catalog.js';
 
+/** A member's roles in the current tenant, by catalog key. */
+export interface MemberAccess {
+  tenantRole: RoleKey | null;
+  companyRoles: { companyId: string; roleKey: RoleKey }[];
+}
+
 const allows = (role: AssignedRole, permission: string) =>
   role.permissions.includes('*') || role.permissions.includes(permission);
 
@@ -100,6 +106,71 @@ export class AccessService {
     roles: { companyId: string; roleId: string }[],
   ) {
     return this.repository.insertCompanyRoles(tx, userId, roles);
+  }
+
+  /** Tenant context. True when the member's tenant role grants `permission` (read from the database). */
+  async hasTenantPermission(
+    userId: string,
+    permission: string,
+    db?: PrismaTx,
+  ): Promise<boolean> {
+    const role = await this.repository.findTenantRole(userId, db);
+    return !!role && allows(role, permission);
+  }
+
+  /**
+   * Tenant context. Each member's access: a tenant role (owner/admin) or
+   * company roles. Members without any role get no tenant role and no
+   * company roles.
+   */
+  async accessOf(
+    userIds: string[],
+    db?: PrismaTx,
+  ): Promise<Map<string, MemberAccess>> {
+    const { tenant, company } = await this.repository.findRolesOfUsers(
+      userIds,
+      db,
+    );
+    const result = new Map<string, MemberAccess>(
+      userIds.map((id) => [id, { tenantRole: null, companyRoles: [] }]),
+    );
+    for (const r of company) {
+      if (isRoleKey(r.role.key)) {
+        result.get(r.userId)?.companyRoles.push({
+          companyId: r.companyId,
+          roleKey: r.role.key,
+        });
+      }
+    }
+    for (const r of tenant) {
+      const entry = result.get(r.userId);
+      if (entry && isRoleKey(r.role.key)) entry.tenantRole = r.role.key;
+    }
+    return result;
+  }
+
+  /** Tenant context, inside the caller's transaction. Owners of the tenant, active or not. */
+  ownerUserIds(tx: PrismaTx): Promise<string[]> {
+    return this.repository.findUserIdsWithRoleKey('owner', tx);
+  }
+
+  /**
+   * Tenant context, inside the caller's transaction: replaces every role of
+   * the member with one tenant role or the given company roles.
+   */
+  async replaceAccess(
+    tx: PrismaTx,
+    userId: string,
+    access:
+      | { tenantRoleId: string }
+      | { companyRoles: { companyId: string; roleId: string }[] },
+  ): Promise<void> {
+    await this.repository.deleteRolesOf(tx, userId);
+    if ('tenantRoleId' in access) {
+      await this.repository.insertTenantRole(tx, userId, access.tenantRoleId);
+    } else {
+      await this.repository.insertCompanyRoles(tx, userId, access.companyRoles);
+    }
   }
 
   /** Tenant context. True when the tenant role covers every company. */

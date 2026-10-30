@@ -305,6 +305,26 @@ Hatalar: `401`, `403`, `404` (yok veya başka tenant'a ait — ayrım yapılmaz)
 
 Audit log kayıtlarını değiştiren veya silen endpoint yoktur.
 
+### GET /api/v1/users
+Açıklama: Mevcut tenant'ın üyeleri (aktif ve pasif). Başka tenant'ın üyeleri hiç görünmez. Parola, hash veya token dönmez. Detay (`GET /users/:userId`) ve `lastLoginAt` USR-T11b'de.
+Yetki: Bearer token + `users:read`
+Yanıt: `200` `{ "data": [ { "userId", "name", "email", "status": "active" | "inactive", "access": { "tenantRole": "owner" | "admin" } | { "companyRoles": [ { "companyId", "companyName", "roleKey" } ] } } ] }`
+Hatalar: `401`, `403`
+
+### PUT /api/v1/users/:userId/access
+Açıklama: Üyenin erişiminin **tamamını** değiştirir. Tam olarak biri: `tenantRole: "admin"` (yalnızca Owner verir) veya `companyRoles` (Owner/Admin; en az bir firma, her firma bir kez, bu tenant'ın aktif firmaları). Owner'ın rolü ve erişimi değiştirilemez (sahiplik devri USR-21). Admin, Owner'a veya başka bir Admin'e dokunamaz; kimse kendi erişimini değiştiremez. İşlemi yapanın rolü veritabanından okunur. Değişiklik tek transaction'dadır; üyenin açık access token'ları bir sonraki istekte `TOKEN_STALE` alır. Audit: `ROLE_CHANGED` (tenant rolü önce/sonra), `COMPANY_ACCESS_CHANGED` (firma rolleri önce/sonra, eklenen/çıkarılan).
+Yetki: Bearer token + `users:manage`
+İstek: `{ "tenantRole": "admin" }` veya `{ "companyRoles": [ { "companyId": "<uuid>", "roleKey": "operations" | "accounting" | "viewer" } ] }`
+Yanıt: `200` `{ "data": { "userId", "access": { ... } } }`
+Hatalar: `400` `ROLE_REQUIRED` (ikisi birden veya hiçbiri), `COMPANY_REQUIRED`, `DUPLICATE_COMPANY`; `403` `FORBIDDEN`, `SELF_CHANGE`, `OWNER_IMMUTABLE` (hedef Owner), `ROLE_NOT_GRANTABLE` (Admin → Owner/Admin hedefi veya Admin rolü verme); `404` `NOT_FOUND` (üye yok veya başka tenant'ın — ayrım yapılmaz; firma yok, pasif veya başka tenant'ın); `422` (geçersiz UUID, `roleKey`)
+
+### POST /api/v1/users/:userId/deactivate
+### POST /api/v1/users/:userId/activate
+Açıklama: Üyeliği bu tenant'ta pasife alır / aktifleştirir. Pasife alma rol ve firma atamalarını **korur**; üyenin bu tenant'taki oturumlarını bitirir (sonraki istek `401 SESSION_REVOKED`, bu tenant'taki refresh token'lar iptal). Kullanıcının diğer mağazalarına ve global hesabına dokunulmaz. Aktifleştirme atamaları geri getirir; eski refresh token'lar iptal kaldığından yeniden giriş gerekir. Aynı durumu tekrar istemek bir şey değiştirmez (`200`). Owner'ı yalnızca başka bir Owner pasife alır ve en az bir Owner aktif kalmalıdır; kontrol, Owner üyeliklerinin satır kilidinden sonra yapılır (eş zamanlı istekler de geçemez). Audit: `MEMBERSHIP_DEACTIVATED` / `MEMBERSHIP_ACTIVATED`.
+Yetki: Bearer token + `users:manage`
+Yanıt: `200` `{ "data": { "userId", "status": "inactive" | "active" } }`
+Hatalar: `403` `FORBIDDEN` (izin yok veya aktör pasif; hedefin üyeliği açıklanmaz), `SELF_CHANGE`, `ROLE_NOT_GRANTABLE` (Admin → Owner/Admin); `404` `NOT_FOUND`; `409` `LAST_OWNER` (ek savunma; normalde oluşmaz — eş zamanlı istekte kaybeden `403` alır); `422` (geçersiz UUID)
+
 ### POST /api/v1/invitations
 Açıklama: E-posta daveti oluşturur ve bağlantıyı gönderir. Tam olarak biri: `tenantRole: "admin"` (yalnızca Owner verebilir) veya `companyRoles` (Owner/Admin; en az bir firma, her firma bir kez, firmalar bu tenant'ın aktif firmaları). Davet edenin rolü veritabanından okunur (`canGrant`); Owner'a davet yoktur. Davet transaction'da kaydedilir (audit `INVITATION_CREATED`), e-posta commit'ten sonra gönderilir; gönderim başarısızsa davet `pending` kalır, `delivery: "failed"` döner (`send_attempts`, `last_send_error` güncellenir). Yanıt, e-postanın başka bir tenant'ta hesabı olup olmadığına göre değişmez.
 Yetki: Bearer token + `users:invite`

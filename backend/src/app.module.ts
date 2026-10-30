@@ -10,6 +10,7 @@ import { HealthModule } from './health/health.module.js';
 import { InvitationsModule } from './invitations/invitations.module.js';
 import { MailModule } from './mail/mail.module.js';
 import { QueueModule } from './queue/queue.module.js';
+import { UsersModule } from './users/users.module.js';
 import { TenantContextMiddleware } from './tenancy/tenant-context.middleware.js';
 
 @Module({
@@ -25,6 +26,7 @@ import { TenantContextMiddleware } from './tenancy/tenant-context.middleware.js'
     // Validates mail settings at startup; production refuses log/plain SMTP.
     MailModule,
     QueueModule,
+    UsersModule,
   ],
 })
 export class AppModule implements NestModule {

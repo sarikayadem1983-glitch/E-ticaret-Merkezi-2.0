@@ -126,6 +126,41 @@ export class AccessRepository {
     });
   }
 
+  /** Tenant role keys and company roles of the given members. */
+  async findRolesOfUsers(userIds: string[], db: PrismaTx = this.prisma) {
+    const [tenant, company] = await Promise.all([
+      db.userRole.findMany({
+        where: { userId: { in: userIds } },
+        select: { userId: true, role: { select: { key: true } } },
+      }),
+      db.userCompanyRole.findMany({
+        where: { userId: { in: userIds } },
+        select: {
+          userId: true,
+          companyId: true,
+          role: { select: { key: true } },
+        },
+        orderBy: [{ companyId: 'asc' }],
+      }),
+    ]);
+    return { tenant, company };
+  }
+
+  /** Users holding the role with this catalog key in the current tenant. */
+  async findUserIdsWithRoleKey(key: string, db: PrismaTx): Promise<string[]> {
+    const rows = await db.userRole.findMany({
+      where: { role: { key } },
+      select: { userId: true },
+    });
+    return rows.map((r) => r.userId);
+  }
+
+  /** Inside the caller's transaction: removes every role of the member. */
+  async deleteRolesOf(tx: PrismaTx, userId: string) {
+    await tx.userRole.deleteMany({ where: { userId } });
+    await tx.userCompanyRole.deleteMany({ where: { userId } });
+  }
+
   /** System context: catalog roles missing from a live tenant. */
   findMissingSystemRoles(): Promise<{ tenantId: string; key: string }[]> {
     const keys = Object.keys(ROLE_CATALOG);
