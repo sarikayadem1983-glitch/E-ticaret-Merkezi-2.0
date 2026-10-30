@@ -105,10 +105,10 @@ Kaynak: `docs/superpowers/plans/2026-10-28-user-management.md` (T1–T16 numaral
 | USR-T11 | Users modülü (liste, erişim düzenleme, pasife alma) | P0 | USR-T8, USR-T10 | 0,5 | CRITICAL | B | PLANNED | Plan T11 testlerinin kalan kısmı. Kalan (USR-T11b): `GET /users/:userId` detay, `lastLoginAt`. MVP dilimi: USR-T11a | E, S | Yüksek | Onaylı plan |
 | USR-T11a | Users modülü çekirdeği: `GET /users`, `PUT /users/:userId/access`, `POST /users/:userId/deactivate` / `activate` (T6 `bumpAuthVersion` + refresh iptali), audit | P0 | USR-T8, USR-T10a | 2,5 | CRITICAL | A | DONE-MERGED (PR #19, merge `8fc7ae3`; dev `8fc7ae3`, 2026-10-30) | Plan T11 testleri (detay/`lastLoginAt` hariç); pasife alınan personelin sonraki isteği `SESSION_REVOKED`. Owner politikası (kullanıcı kararı 2026-10-30): owner'ın rolü/erişimi değiştirilemez; son aktif owner değilse pasife alınabilir; son owner koruması eşzamanlı isteklerde de geçerli. Sahiplik devri USR-21 | E, S | Yüksek | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
 | USR-T12 | BFF route'ları (kullanıcı/davet allowlist, oturumsuz davet route'ları) | P0 | USR-T11 | 0,5 | CRITICAL | B | PLANNED | Plan T12 testlerinin kalan kısmı. Kalan (USR-T12b): resend ve durum filtreli davet listesi route'ları, oturum açıkken `accept-as-current` dalı. MVP dilimi: USR-T12a | F | Orta | Onaylı plan |
-| USR-T12a | BFF route'ları çekirdeği: users + invitations (oluştur, iptal) allowlist, `PUT`, oturumsuz `invitations/lookup` ve `accept`, `/invite/*` için `Referrer-Policy: no-referrer` | P0 | USR-T11a | 0,5 | CRITICAL | A | DONE-PR (PR #22) | Plan T12 testleri | F | Orta | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
+| USR-T12a | BFF route'ları çekirdeği: users + invitations (oluştur, iptal) allowlist, `PUT`, oturumsuz `invitations/lookup` ve `accept`, `/invite/*` için `Referrer-Policy: no-referrer` | P0 | USR-T11a | 0,5 | CRITICAL | A | DONE-NOT-DEPLOYED (PR #22, merge `f41c88e`) | Plan T12 testleri | F | Orta | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
 | USR-T13 | Kullanıcılar sayfası, davet diyaloğu, davet kabul sayfası | P0 | USR-T12 | 1 | STANDARD | B | PLANNED | Plan T13 testlerinin kalan kısmı. Kalan (USR-T13b): bekleyen davetler paneli, `signedInSameEmail`/`signedInOtherEmail` durumları, "mağazaya geç" düğmesi, mobil kart görünümü. MVP dilimi: USR-T13a | F, P | Düşük | Onaylı plan |
 | USR-T13a | Kullanıcılar sayfası (masaüstü tablo), davet diyaloğu + erişim düzenleyici, pasife al/aktifleştir; davet kabul sayfası (`loading`, `invalid`, `newAccount`, `existingAccount`, `done`) | P0 | USR-T12a | 2 | STANDARD | A | PLANNED | lint + typecheck; davranış USR-T15a'da | F, P | Düşük | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
-| USR-T14 | Yetki yükseltme ve tenant izolasyonu test paketi | P0 | USR-T11a, USR-T10a | 2 | CRITICAL | A | PLANNED | Plan T14 maddeleri PASS (MVP dilimlerinin uçları: users, invitations, access, deactivate) | S, E | Yüksek | Onaylı plan |
+| USR-T14 | Yetki yükseltme ve tenant izolasyonu test paketi | P0 | USR-T11a, USR-T10a | 2 | CRITICAL | A | DONE-PR (PR #23) | Plan T14 maddeleri PASS (MVP dilimlerinin uçları: users, invitations, access, deactivate) | S, E | Yüksek | Onaylı plan |
 | USR-T15 | Playwright akışları (davet, erişim, mağaza değiştirme, mobil) | P1 | USR-T13 | 1 | STANDARD | B | PLANNED | Plan T15 testlerinin kalan kısmı. Kalan (USR-T15b): başka mağazadaki mevcut kullanıcının kabul + isteğe bağlı mağaza değiştirme, açık sekmede rol değişikliği, mobil kart testleri. MVP dilimi: USR-T15a | P | Düşük | Onaylı plan |
 | USR-T15a | Playwright çekirdek akışlar: owner muhasebeciyi A firmasına davet eder, davetli yalnızca A'yı görür; iptal edilen bağlantı geçersiz sayfası; pasife alınan kullanıcı sonraki işlemde çıkış yapar | P1 | USR-T13a | 1 | STANDARD | A | PLANNED | 2 ardışık koşuda PASS | P | Düşük | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
 | USR-T16 | Tam doğrulama ve PR | P0 | USR-T14, USR-T15a | 1 | STANDARD | A | PLANNED | Plan T16 adımları (MVP dilimleri için; T9b–T15b B'de ayrı PR) | Tümü | Düşük | Onaylı plan |
@@ -425,9 +425,9 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | USR-T9a | Mail modülü çekirdeği: `MailService.send`, SMTP/log transport, `mail.config` (prod'da `log` yasak, TLS zorunlu), Mailpit (docker), URL/token loglanmaz | DONE-MERGED (PR #12, merge `f9b5889`; dev `f010233`, 2026-10-30) | 1,5 | STANDARD | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
 | USR-T10a | Davet servisi çekirdeği: oluştur (Admin / firma rolleri), iptal, yeniden gönder (yeni token), lookup, kabul (yeni hesap; mevcut hesap şifreyle) | DONE-MERGED (PR #15, merge `bc37227`; dev `f010233`, 2026-10-30) | 3 | CRITICAL | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
 | USR-T11a | Users modülü çekirdeği: `GET /users`, `PUT /users/:userId/access`, `POST /users/:userId/deactivate` / `activate` (T6 `bumpAuthVersion` + refresh iptali), audit | DONE-MERGED (PR #19, merge `8fc7ae3`; dev `8fc7ae3`, 2026-10-30) | 2,5 | CRITICAL | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
-| USR-T12a | BFF route'ları çekirdeği: users + invitations (oluştur, iptal) allowlist, `PUT`, oturumsuz `invitations/lookup` ve `accept`, `/invite/*` için `Referrer-Policy: no-referrer` | DONE-PR (PR #22) | 0,5 | CRITICAL | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
+| USR-T12a | BFF route'ları çekirdeği: users + invitations (oluştur, iptal) allowlist, `PUT`, oturumsuz `invitations/lookup` ve `accept`, `/invite/*` için `Referrer-Policy: no-referrer` | DONE-NOT-DEPLOYED (PR #22, merge `f41c88e`) | 0,5 | CRITICAL | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
 | USR-T13a | Kullanıcılar sayfası (masaüstü tablo), davet diyaloğu + erişim düzenleyici, pasife al/aktifleştir; davet kabul sayfası (`loading`, `invalid`, `newAccount`, `existingAccount`, `done`) | PLANNED | 2 | STANDARD | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
-| USR-T14 | Yetki yükseltme ve tenant izolasyonu test paketi | PLANNED | 2 | CRITICAL | Onaylı plan |
+| USR-T14 | Yetki yükseltme ve tenant izolasyonu test paketi | DONE-PR (PR #23) | 2 | CRITICAL | Onaylı plan |
 | USR-T15a | Playwright çekirdek akışlar: owner muhasebeciyi A firmasına davet eder, davetli yalnızca A'yı görür; iptal edilen bağlantı geçersiz sayfası; pasife alınan kullanıcı sonraki işlemde çıkış yapar | PLANNED | 1 | STANDARD | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
 | USR-T16 | Tam doğrulama ve PR | PLANNED | 1 | STANDARD | Onaylı plan |
 | USR-19 | Şifre sıfırlama ve e-posta doğrulama (hash'li tek kullanımlık token) | PLANNED | 3 | CRITICAL | Öneri (onay bekliyor) |
@@ -561,8 +561,8 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | EPIC | 33 |
 | Görev | 141 (133 + 6 MVP dilimi: USR-T9a, T10a, T11a, T12a, T13a, T15a + 2 kullanıcı kararı 2026-10-30: OPS-08, USR-21) |
 | DONE-MERGED | 28 |
-| DONE-PR | 1 (USR-T12a #22) |
-| DONE-NOT-DEPLOYED | 0 |
+| DONE-PR | 1 (USR-T14 #23) |
+| DONE-NOT-DEPLOYED | 1 (USR-T12a #22) |
 | IN-PROGRESS | 0 |
 | BLOCKED | 1 (USR-18) |
 | PLANNED | 111 |

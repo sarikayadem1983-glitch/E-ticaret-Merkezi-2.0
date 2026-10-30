@@ -666,6 +666,48 @@ describe('Invitations (e2e)', () => {
       }
     });
 
+    it('accept is refused when the inviter was demoted to a company role', async () => {
+      const to = email('inviter-demoted');
+      await inviteCompany(adminA, to).expect(201);
+      const [admin] = await sql<{ role_id: string }>(
+        'SELECT role_id FROM user_roles WHERE tenant_id = $1 AND user_id = $2',
+        [tenantA, adminAId],
+      );
+      const [viewer] = await sql<{ id: string }>(
+        "SELECT id FROM roles WHERE tenant_id = $1 AND key = 'viewer'",
+        [tenantA],
+      );
+      try {
+        // Admin → viewer on one company: may no longer grant any role.
+        await sql(
+          'DELETE FROM user_roles WHERE tenant_id = $1 AND user_id = $2',
+          [tenantA, adminAId],
+        );
+        await sql(
+          `INSERT INTO user_company_roles (tenant_id, user_id, company_id, role_id)
+           VALUES ($1, $2, $3, $4)`,
+          [tenantA, adminAId, companyA1, viewer.id],
+        );
+        expect(
+          (await accept(mail.tokenFor(to)).expect(404)).body.error.code,
+        ).toBe('INVITATION_INVALID');
+        const [row] = await sql<{ status: string }>(
+          'SELECT status FROM invitations WHERE token_hash = $1',
+          [sha256(mail.tokenFor(to))],
+        );
+        expect(row.status).toBe('pending');
+      } finally {
+        await sql(
+          'DELETE FROM user_company_roles WHERE tenant_id = $1 AND user_id = $2',
+          [tenantA, adminAId],
+        );
+        await sql(
+          'INSERT INTO user_roles (tenant_id, user_id, role_id, updated_at) VALUES ($1, $2, $3, now()) ON CONFLICT DO NOTHING',
+          [tenantA, adminAId, admin.role_id],
+        );
+      }
+    });
+
     it('an account created concurrently gives 409 ACCOUNT_EXISTS and keeps the invitation', async () => {
       const to = email('squat-race');
       await inviteCompany(ownerA, to).expect(201);
