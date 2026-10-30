@@ -1,7 +1,7 @@
 # Ana Geliştirme Yol Haritası (Master Development Roadmap)
 
 Ticaret Merkezi 2.0 — çok kiracılı (multi-tenant) e-ticaret yönetim SaaS'ı.
-Hazırlanma: 2026-10-29, kaynak kod `feature/user-management` @ `946dec0` incelenerek; durum `origin/main` @ `6824f6f`'ye göre güncellendi (2026-10-30).
+Hazırlanma: 2026-10-29, kaynak kod `feature/user-management` @ `946dec0` incelenerek; durum `origin/main` @ `f010233`'ye göre güncellendi (2026-10-30, dev deploy sonrası).
 
 > **Onay durumu:** Yalnızca kullanıcı yönetimi planındaki görevler (`USR-T1`…`USR-T16`, plan: `docs/superpowers/plans/2026-10-28-user-management.md`) ve merge edilmiş işler (INF-01…08, USR-01, USR-02, DSH-01) **onaylı plandır**. Diğer tüm modüller, görevler, tahminler ve tarihler **öneridir, kullanıcı onayı beklemektedir**. Her görevin kaynağı `TASK_REGISTER.md`'deki "Kaynak" sütunundadır.
 
@@ -21,10 +21,10 @@ Görev numaraları kalıcıdır; kullanıcı yönetimi planının Task 1–16's�
 
 **Merge edilmiş ve dev'de (PR #1–#5):** Docker dev ortamı; NestJS + Prisma iskeleti ve Prisma tenant izolasyon eklentisi; append-only audit log; en az yetkili DB rolü `tm_app`; HTTP sertleştirme; Redis tabanlı rate limiting; firma (company) API'si; Next.js BFF (Redis oturumu, CSRF, açık proxy koruması, güvenlik başlıkları); firma ekranları; dashboard iskeleti; yetkisiz erişim/oturum e2e testleri.
 
-**Merge edilmiş, dev'e deploy edilmemiş (`origin/main` @ `6824f6f`):** PR #6 (kullanıcı yönetimi Task 1–6 ve pasif/silinmiş kullanıcı düzeltmesi, `f1be19a`), PR #8 (Task 7, `cc8b72a`), PR #9 (Task 8, `95b5bdb`), PR #10 (INF-18, `113b522`), PR #11 (INF-10, `9c405bd`), PR #12 (USR-T9a, `f9b5889`), PR #15 (USR-T10a, `bc37227`), PR #13 (CAT-01, `aa02144`; migration dev DB'ye uygulanmadı), PR #14 (INF-09, `6fef239`), PR #16 (CAT-02, `6824f6f`). Ayrıntı: `PROJECT_STATUS.md` §2.
+**Dev'e deploy edildi (2026-10-30, `main` @ `f010233`):** PR #6, #8, #9, #10–#16 (kullanıcı yönetimi T1–T8, T9a, T10a, USR-17, INF-09, INF-10, INF-18, CAT-01, CAT-02). CAT-01 migration'ı dev DB'ye uygulandı. Ayrıntı: `PROJECT_STATUS.md` §3.
 
 - Task 3 yalnızca rapor üretti (onay kapısı); Aşama 1 migration'ı dev DB'ye sonradan kullanıcı onayıyla uygulandı.
-- Dev DB'de Aşama 1 şeması var; son deploy edilen kod `eda38da` (Task 4). Task 5–8 ve güvenlik düzeltmesi dev'de değildir; deploy kullanıcı onayı bekler.
+- Dev DB'de Aşama 1 ve CAT-01 şeması var; dev kodu `f010233`. Aşama 2 uygulanmadı (USR-18).
 - M0'ın merge kısmı tamam (2026-10-29); dev deploy ayrı onay bekler.
 - Son test sonuçları (`main` @ `6824f6f`, CI): backend unit 283/283, e2e 305/306 (1 skip, Mailpit); frontend 84/84. Önceki yerel tur (`95b5bdb`): Playwright 13/13 yalnızca `next dev` ile (`next start` 11/13, bkz. `PROJECT_STATUS.md` R-24).
 
