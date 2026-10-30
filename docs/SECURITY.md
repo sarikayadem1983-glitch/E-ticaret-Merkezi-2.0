@@ -202,7 +202,7 @@ Gövde yalnızca `application/json` ve en fazla 64 KB kabul edilir.
 
 `/api/bff/*` yalnızca izin listesindeki (`frontend/src/server/bff-routes.ts`) metot + yol + sorgu parametrelerini iletir. Listede olmayan endpoint (`audit-logs`, `auth/refresh` vb.), farklı metot, UUID olmayan kimlik, `..`, `/`, `%`, ters bölü içeren yol parçaları ve bilinmeyen sorgu parametreleri reddedilir. Hedef adres her zaman `BACKEND_URL`'dir; yönlendirme izlenmez. Backend'e yalnızca JSON gövde, `Authorization`, `User-Agent` ve BFF'in belirlediği `X-Forwarded-For` gider; tarayıcının cookie ve diğer başlıkları gitmez.
 
-Kullanıcı yönetimi (USR-T12a) izin listesinde yalnızca şunlar var: `GET users`, `PUT users/:uuid/access` (gövdeli), `POST users/:uuid/(de)activate`, `GET invitations`, `POST invitations` (gövdeli), `POST invitations/:uuid/revoke`. Sorgu parametresi yok; `resend`, `accept-as-current` ve `GET users/:uuid` sonraki dilimlerde eklenir. `PUT` yalnızca gövde bayrağı olan bu rotada kabul edilir. Yetki kararları backend'dedir (her istekte JWT, izin ve tenant).
+Kullanıcı yönetimi (USR-T12a) izin listesinde yalnızca şunlar var: `GET users`, `PUT users/:uuid/access` (gövdeli), `POST users/:uuid/(de)activate`, `GET invitations`, `POST invitations` (gövdeli), `POST invitations/:uuid/revoke`. Sorgu parametresi yok; `resend`, `accept-as-current` ve `GET users/:uuid` sonraki dilimlerde eklenir. `PUT` yalnızca gövde bayrağı olan bu rotada kabul edilir. Yetki kararları backend'dedir (her istekte JWT, izin ve tenant). Gövdeli rotalar JSON gövdenin tamamını iletir; fazla alanları backend'in global `ValidationPipe`'ı (`whitelist` + `forbidNonWhitelisted`, `backend/src/common/validation.pipe.ts`) `422` ile reddeder.
 
 ### Oturumsuz davet uçları
 

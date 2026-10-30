@@ -55,6 +55,24 @@ describe.each([
     expect(init.client.ip).toBe('203.0.113.7');
   });
 
+  it('ignores __proto__ / constructor keys and forwards nothing extra', async () => {
+    fetchMock.mockResolvedValue(json(200, { data: { ok: true } }));
+    const raw = `{"__proto__":{"isAdmin":true},"constructor":{"x":1},${JSON.stringify(body).slice(1)}`;
+    await handler(post(url, raw));
+    const forwarded = fetchMock.mock.calls[0][1].body as Record<string, unknown>;
+    expect(forwarded).toEqual(body);
+    expect(Object.keys(forwarded).sort()).toEqual(Object.keys(body).sort());
+    expect(({} as Record<string, unknown>).isAdmin).toBeUndefined();
+  });
+
+  it('never uses an existing session cookie', async () => {
+    fetchMock.mockResolvedValue(json(200, { data: { ok: true } }));
+    const res = await handler(post(url, body, { ...valid, cookie: 'tm_sid=some-session-id' }));
+    expect(res.status).toBe(200);
+    expect(fetchMock.mock.calls[0][1].accessToken).toBeUndefined();
+    expect(res.headers.get('set-cookie')).toBeNull();
+  });
+
   it('relays the backend status and body, not its headers', async () => {
     fetchMock.mockResolvedValue(
       json(404, { error: { code: 'INVITATION_INVALID', message: 'x', details: [] } }),
