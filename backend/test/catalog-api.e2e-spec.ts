@@ -846,13 +846,13 @@ describe('Catalog API (e2e)', () => {
         .expect(201);
     });
 
-    it('rejects companyId in a product PATCH (400): products cannot change company', async () => {
+    it('rejects companyId in a product PATCH (422 validation): products cannot change company', async () => {
       const p = await createProduct(tokenA, productBody('move'));
       await http()
         .patch(`/api/v1/products/${p.id}`)
         .set(bearer(tokenA))
         .send({ companyId: companyY })
-        .expect(400);
+        .expect(422);
       const after = await http()
         .get(`/api/v1/products/${p.id}`)
         .set(bearer(tokenA))
@@ -1015,6 +1015,13 @@ describe('Catalog API (e2e)', () => {
       await http()
         .patch(`/api/v1/products/${p.id}`)
         .set(bearer(tokenB))
+        .send({ name: 'x' })
+        .expect(404);
+      // Same tenant, role only in another company: still 404.
+      const outsider = await memberWith('frz-none', 'operations', [companyX]);
+      await http()
+        .patch(`/api/v1/products/${p.id}`)
+        .set(bearer(outsider))
         .send({ name: 'x' })
         .expect(404);
 
