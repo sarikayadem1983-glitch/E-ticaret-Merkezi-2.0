@@ -305,6 +305,10 @@ Hatalar: `401`, `403`, `404` (yok veya başka tenant'a ait — ayrım yapılmaz)
 
 Audit log kayıtlarını değiştiren veya silen endpoint yoktur.
 
+### BFF: POST /api/invitations/lookup, POST /api/invitations/accept
+Açıklama: Oturumsuz; `invitations/lookup` ve `invitations/accept`'i backend'e iletir (yalnızca `token` / `token`, `name`, `password`). Oturum başlatmaz; kabulden sonra kullanıcı giriş yapar. Kullanıcı yönetimi uç noktaları (`users`, `invitations`, `invitations/:id/revoke`) oturumlu `/api/bff/*` üzerinden çağrılır.
+Hatalar: `400` (gövde JSON nesnesi değil), `403` `CSRF_REJECTED`, `413`, `415`; diğerleri backend'den aynen (`404 INVITATION_INVALID`, `429` + `Retry-After` vb.)
+
 ### GET /api/v1/users
 Açıklama: Mevcut tenant'ın üyeleri (aktif ve pasif). Başka tenant'ın üyeleri hiç görünmez. Parola, hash veya token dönmez. Detay (`GET /users/:userId`) ve `lastLoginAt` USR-T11b'de.
 Yetki: Bearer token + `users:read`

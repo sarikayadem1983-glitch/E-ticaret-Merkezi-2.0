@@ -16,6 +16,13 @@ describe('matchBffRoute', () => {
     ['POST', `companies/${ID}/activate`, ''],
     ['GET', 'auth/me', ''],
     ['GET', 'auth/memberships', ''],
+    ['GET', 'users', ''],
+    ['PUT', `users/${ID}/access`, ''],
+    ['POST', `users/${ID}/deactivate`, ''],
+    ['POST', `users/${ID}/activate`, ''],
+    ['GET', 'invitations', ''],
+    ['POST', 'invitations', ''],
+    ['POST', `invitations/${ID}/revoke`, ''],
   ])('allows %s %s', (method, path, query) => {
     expect(match(method, path, query)).toMatchObject({ ok: true, path });
   });
@@ -23,6 +30,32 @@ describe('matchBffRoute', () => {
   it('forwards a body only where the route takes one', () => {
     expect(match('POST', 'companies')).toMatchObject({ body: true });
     expect(match('POST', `companies/${ID}/deactivate`)).toMatchObject({ body: false });
+    expect(match('PUT', `users/${ID}/access`)).toMatchObject({ body: true });
+    expect(match('POST', 'invitations')).toMatchObject({ body: true });
+    expect(match('POST', `users/${ID}/deactivate`)).toMatchObject({ body: false });
+    expect(match('POST', `invitations/${ID}/revoke`)).toMatchObject({ body: false });
+  });
+
+  it.each([
+    // Session-less invitation endpoints have their own routes (/api/invitations/*).
+    ['lookup through the session proxy', 'POST', 'invitations/lookup'],
+    ['accept through the session proxy', 'POST', 'invitations/accept'],
+    ['accept-as-current (USR-T10b)', 'POST', 'invitations/accept-as-current'],
+    ['resend (USR-T13b)', 'POST', `invitations/${ID}/resend`],
+    ['user detail (USR-T11b)', 'GET', `users/${ID}`],
+    ['PUT without a body route', 'PUT', `users/${ID}`],
+    ['PUT on companies', 'PUT', `companies/${ID}`],
+    ['PATCH on access', 'PATCH', `users/${ID}/access`],
+    ['GET on access', 'GET', `users/${ID}/access`],
+    ['DELETE on users', 'DELETE', `users/${ID}`],
+    ['non-uuid user', 'PUT', 'users/me/access'],
+  ])('refuses %s: %s %s', (_name, method, path) => {
+    expect(match(method, path)).toEqual({ ok: false, status: 404 });
+  });
+
+  it('accepts no query on the user management routes yet', () => {
+    expect(match('GET', 'users', 'page=1')).toEqual({ ok: false, status: 400 });
+    expect(match('GET', 'invitations', 'status=pending')).toEqual({ ok: false, status: 400 });
   });
 
   it.each([

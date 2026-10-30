@@ -202,6 +202,12 @@ Gövde yalnızca `application/json` ve en fazla 64 KB kabul edilir.
 
 `/api/bff/*` yalnızca izin listesindeki (`frontend/src/server/bff-routes.ts`) metot + yol + sorgu parametrelerini iletir. Listede olmayan endpoint (`audit-logs`, `auth/refresh` vb.), farklı metot, UUID olmayan kimlik, `..`, `/`, `%`, ters bölü içeren yol parçaları ve bilinmeyen sorgu parametreleri reddedilir. Hedef adres her zaman `BACKEND_URL`'dir; yönlendirme izlenmez. Backend'e yalnızca JSON gövde, `Authorization`, `User-Agent` ve BFF'in belirlediği `X-Forwarded-For` gider; tarayıcının cookie ve diğer başlıkları gitmez.
 
+Kullanıcı yönetimi (USR-T12a) izin listesinde yalnızca şunlar var: `GET users`, `PUT users/:uuid/access` (gövdeli), `POST users/:uuid/(de)activate`, `GET invitations`, `POST invitations` (gövdeli), `POST invitations/:uuid/revoke`. Sorgu parametresi yok; `resend`, `accept-as-current` ve `GET users/:uuid` sonraki dilimlerde eklenir. `PUT` yalnızca gövde bayrağı olan bu rotada kabul edilir. Yetki kararları backend'dedir (her istekte JWT, izin ve tenant).
+
+### Oturumsuz davet uçları
+
+`POST /api/invitations/lookup` ve `/accept` (`frontend/src/server/public-invitation.ts`) oturum okumaz ve başlatmaz; davetli genelde oturumsuzdur. `/api/bff` üzerinden bu yollar reddedilir. CSRF kontrolü (`Origin`, `Sec-Fetch-Site`, `x-tm-csrf`) her istekte yapılır; gövde JSON nesnesi olmalı (64 KB sınırı). Backend'e yalnızca `token` (lookup) veya `token`, `name`, `password` (accept) gider; başka alanlar atılır. Hız sınırı backend'de, `server.mjs`'nin belirlediği istemci IP'sine göredir. Yanıt `relay` ile döner: yalnızca durum, JSON gövde ve `Retry-After`; `Cache-Control: no-store`. `/invite/:path*` sayfaları `Referrer-Policy: no-referrer` ile sunulur, URL'deki token `Referer` ile sızmaz.
+
 ### Gerçek istemci IP'si
 
 Next.js, istemcinin gönderdiği `X-Forwarded-For`'u değiştirmeden geçirir (doğrulandı). Bu yüzden `frontend/server.mjs`, Next.js'ten önce:
