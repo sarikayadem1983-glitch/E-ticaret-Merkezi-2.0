@@ -677,17 +677,17 @@ describe('Invitations (e2e)', () => {
         "SELECT id FROM roles WHERE tenant_id = $1 AND key = 'viewer'",
         [tenantA],
       );
-      // Admin → viewer on one company: may no longer grant any role.
-      await sql(
-        'DELETE FROM user_roles WHERE tenant_id = $1 AND user_id = $2',
-        [tenantA, adminAId],
-      );
-      await sql(
-        `INSERT INTO user_company_roles (tenant_id, user_id, company_id, role_id)
-         VALUES ($1, $2, $3, $4)`,
-        [tenantA, adminAId, companyA1, viewer.id],
-      );
       try {
+        // Admin → viewer on one company: may no longer grant any role.
+        await sql(
+          'DELETE FROM user_roles WHERE tenant_id = $1 AND user_id = $2',
+          [tenantA, adminAId],
+        );
+        await sql(
+          `INSERT INTO user_company_roles (tenant_id, user_id, company_id, role_id)
+           VALUES ($1, $2, $3, $4)`,
+          [tenantA, adminAId, companyA1, viewer.id],
+        );
         expect(
           (await accept(mail.tokenFor(to)).expect(404)).body.error.code,
         ).toBe('INVITATION_INVALID');
@@ -702,7 +702,7 @@ describe('Invitations (e2e)', () => {
           [tenantA, adminAId],
         );
         await sql(
-          'INSERT INTO user_roles (tenant_id, user_id, role_id, updated_at) VALUES ($1, $2, $3, now())',
+          'INSERT INTO user_roles (tenant_id, user_id, role_id, updated_at) VALUES ($1, $2, $3, now()) ON CONFLICT DO NOTHING',
           [tenantA, adminAId, admin.role_id],
         );
       }

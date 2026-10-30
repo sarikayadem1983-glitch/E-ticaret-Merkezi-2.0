@@ -223,7 +223,11 @@ describe('Privilege escalation and tenant isolation (e2e)', () => {
       ];
       for (const call of calls) {
         const res = await call().set(bearer(s.accessToken));
-        expect({ role, status: res.status }).toEqual({ role, status: 403 });
+        expect({
+          role,
+          status: res.status,
+          code: res.body.error?.code,
+        }).toEqual({ role, status: 403, code: 'FORBIDDEN' });
       }
     }
   });
@@ -328,7 +332,8 @@ describe('Privilege escalation and tenant isolation (e2e)', () => {
       () => http().post(`/api/v1/invitations/${invitationB}/resend`),
       () => http().get(`/api/v1/companies/${companyB}`),
     ]) {
-      await call().set(bearer(ownerA.accessToken)).expect(404);
+      const res = await call().set(bearer(ownerA.accessToken)).expect(404);
+      expect(res.body.error.code).toBe('NOT_FOUND');
     }
     // Nothing changed in tenant B.
     const stillB = await http()
@@ -566,14 +571,16 @@ describe('Privilege escalation and tenant isolation (e2e)', () => {
   it('audit:read is denied to every company role', async () => {
     for (const role of COMPANY_ROLES) {
       const s = await member(tenantA, role, [companyA]);
-      await http()
-        .get('/api/v1/audit-logs')
-        .set(bearer(s.accessToken))
-        .expect(403);
-      await http()
-        .get(`/api/v1/audit-logs/${randomUUID()}`)
-        .set(bearer(s.accessToken))
-        .expect(403);
+      for (const path of [
+        '/api/v1/audit-logs',
+        `/api/v1/audit-logs/${randomUUID()}`,
+      ]) {
+        const res = await http()
+          .get(path)
+          .set(bearer(s.accessToken))
+          .expect(403);
+        expect(res.body.error.code).toBe('FORBIDDEN');
+      }
     }
     await http()
       .get('/api/v1/audit-logs')
