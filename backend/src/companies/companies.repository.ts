@@ -83,6 +83,14 @@ export class CompaniesRepository {
     });
   }
 
+  findActiveByIds(ids: string[], db: PrismaTx = this.prisma) {
+    return db.company.findMany({
+      where: { id: { in: ids }, isActive: true },
+      select: { id: true, legalName: true },
+      orderBy: [{ legalName: 'asc' }, { id: 'asc' }],
+    });
+  }
+
   create(
     tx: PrismaTx,
     data: Omit<Prisma.CompanyUncheckedCreateInput, 'tenantId'>,

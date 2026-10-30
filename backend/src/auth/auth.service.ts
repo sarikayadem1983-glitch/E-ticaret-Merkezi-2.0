@@ -25,7 +25,7 @@ import { TokenService, type TokenPair } from './token.service.js';
 const MODULE = 'auth';
 
 /** Verified against when the email is unknown, so response time does not reveal which emails exist. */
-const DUMMY_HASH =
+export const DUMMY_HASH =
   '$argon2id$v=19$m=19456,t=2,p=1$k64vcPJe/wujm0zOZjSf7Q$ByIDorJvL/RYwKH5NhGhrmAuiob8Xb8wdk7OLWtBypo';
 
 interface Session {
