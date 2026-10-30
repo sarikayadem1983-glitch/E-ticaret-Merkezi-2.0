@@ -10,9 +10,9 @@ Görev listeleri `TASK_REGISTER.md`'deki "Sürüm" sütunundan türetilir. Tahmi
 
 **Zorunlu özellikler:** çoklu tenant ve firma başına rol (USR-T7/T8), temel rol/yetki yönetimi, davetle ekip ekleme ve personeli pasife alma (MVP dilimleri USR-T9a…T15a), şifre sıfırlama, yetki yükseltme güvenlik paketi (USR-T14); ürün kataloğu (varyant, fiyat, görsel, Excel/CSV içe aktarma); Trendyol'da listeleme, stok/fiyat senkronu, sipariş içeri alma, iptal (tedarik edememe) ve iade (claim) senkronu ile yerel stok iadesi; sipariş ekranları, stok rezervasyonu ve düşümü, Trendyol kargo etiketi; temel satış raporu; hata izleme, otomatik yedek.
 
-**Görevler:** 57 (20 tamamlandı, 37 kalan). Kalan: INF-09, INF-10, INF-12, INF-18 · USR-T9a, USR-T10a, USR-T11a, USR-T12a, USR-T13a, USR-T14, USR-T15a, USR-T16, USR-19 · CAT-01…CAT-06 · IMP-01 · IMG-01 · INT-01…INT-03 · INT-TY-01…03 · ORD-01…ORD-03 · INV-01…INV-03 · SHP-02 · RPT-01 · OPS-01, OPS-03.
+**Görevler:** 57 (27 tamamlandı, 30 kalan). Kalan: INF-12 · USR-T11a, USR-T12a, USR-T13a, USR-T14, USR-T15a, USR-T16, USR-19 · CAT-03…CAT-06 · IMP-01 · IMG-01 · INT-01…INT-03 · INT-TY-01…03 · ORD-01…ORD-03 · INV-01…INV-03 · SHP-02 · RPT-01 · OPS-01, OPS-03.
 
-**İş yükü:** 106,5 iş günü (takvim değil). **Takvim:** M0'dan sonra ≈ 62 iş günü + 5 iş günü kabul → **tahmini hedef 2027-02-03** (taahhüt değil). Hesap: `MVP_PLAN.md` §3.
+**İş yükü:** 106,5 iş günü toplam, 89 iş günü kalan (takvim değil). **Takvim:** 2026-10-30'dan sonra ≈ 52 iş günü + 5 iş günü kabul → **tahmini hedef 2027-01-20** (önceki 2027-02-03) (taahhüt değil). Hesap: `MVP_PLAN.md` §3.
 
 **Çıkış kriterleri:**
 1. Tüm A görevleri `DONE-MERGED` ve dev'e deploy edilmiş; CI yeşil.
@@ -56,8 +56,8 @@ Tüm tarihler **tahmini hedeftir, taahhüt değildir**. Yöntem: kalan iş yük�
 | M0 | 2026-10-29 (merge tamam) | PR #6, #8, #9 kullanıcı onayıyla merge edildi; dev deploy ayrı onay bekliyor |
 | M1 | 2026-11-25 | Kullanıcı yönetimi backend dilimleri, INF-09/10/18, CAT-01/02/03/05, görsel |
 | M2 | 2026-12-25 | Entegrasyon çerçevesi, kanal eşleme, katalog UI, içe aktarma, kullanıcı yönetimi PR'ı, şifre sıfırlama, sipariş/stok çekirdeği |
-| M3 | 2027-01-27 | Trendyol uçtan uca (listeleme, stok/fiyat, sipariş, iptal/iade, kargo), raporlar, yedek tatbikatı |
-| **A — MVP** | **2027-02-03 (tahmini)** | Kabul testi ve pilot başlangıcı |
+| M3 | 2027-01-13 | Trendyol uçtan uca (listeleme, stok/fiyat, sipariş, iptal/iade, kargo), raporlar, yedek tatbikatı |
+| **A — MVP** | **2027-01-20 (tahmini)** | Kabul testi ve pilot başlangıcı |
 | M5 | 2027-04-21 | Abonelik/ödeme, e-Fatura, staging/prod altyapısı, Hepsiburada |
 | M6 | 2027-06-29 | Amazon TR, n11, kârlılık, hakediş, KVKK, süper admin |
 | **B — Ticari** | **2027-07-27 (tahmini)** | 188,5 iş günü; güvenlik denetimi kapandı, satışa açılış |

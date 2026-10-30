@@ -1,7 +1,7 @@
 # Görev Kaydı (Task Register)
 
 Tüm görevlerin tek kaynağı. Durum güncelleme kuralları: `AGENTS.md` → "Yol haritası ve durum takibi".
-Son güncelleme: 2026-10-29 (`origin/main` @ `95b5bdb`: PR #6, #8, #9 merge edildi, deploy edilmedi; MVP kapsamı kullanıcı kararıyla sadeleştirildi: Trendyol-only).
+Son güncelleme: 2026-10-30 (`origin/main` @ `6824f6f`: PR #10–#16 merge edildi, deploy edilmedi; CAT-01 migration'ı dev DB'ye uygulanmadı). Önceki: 2026-10-29, MVP kapsamı kullanıcı kararıyla sadeleştirildi: Trendyol-only.
 
 > **Onay durumu:** Yalnızca kullanıcı yönetimi planındaki görevler (`USR-T1`…`USR-T16`, plan: `docs/superpowers/plans/2026-10-28-user-management.md`) ve merge edilmiş işler (INF-01…08, USR-01, USR-02, DSH-01) **onaylı plandır**. Diğer tüm modüller, görevler, tahminler ve tarihler **öneridir, kullanıcı onayı beklemektedir**. Her görevin kaynağı `TASK_REGISTER.md`'deki "Kaynak" sütunundadır.
 
@@ -54,7 +54,7 @@ Son güncelleme: 2026-10-29 (`origin/main` @ `95b5bdb`: PR #6, #8, #9 merge edil
 
 | ID | Görev | Öncelik | Bağımlılık | Tahmin | Mod | Sürüm | Durum | Kabul kriteri | Test | Güvenlik riski | Kaynak |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| INF-09 | Kuyruk altyapısı (BullMQ/Redis): tenant context taşıyan job, retry/backoff, ölü kuyruk, idempotency anahtarı | P0 | PR #6 merge | 3 | CRITICAL | A | DONE-PR (PR #14) | Job tenant context'i olmadan çalışamaz; başarısız iş ölü kuyrukta görünür | U, E, S | Yüksek (job'da tenant sızıntısı) | Öneri (onay bekliyor) |
+| INF-09 | Kuyruk altyapısı (BullMQ/Redis): tenant context taşıyan job, retry/backoff, ölü kuyruk, idempotency anahtarı | P0 | PR #6 merge | 3 | CRITICAL | A | DONE-NOT-DEPLOYED (PR #14, merge `6fef239`) | Job tenant context'i olmadan çalışamaz; başarısız iş ölü kuyrukta görünür | U, E, S | Yüksek (job'da tenant sızıntısı) | Öneri (onay bekliyor) |
 | INF-10 | CI pipeline (GitHub Actions): lint, typecheck, unit, e2e (servis konteynerli PG/Redis), frontend test; PR'da zorunlu kontrol | P0 | — | 2 | STANDARD | A | DONE-NOT-DEPLOYED (PR #11, merge `9c405bd`) | PR'da tüm kontroller otomatik koşar; kırmızı PR merge edilemez | CI | Orta (CI'da secret) | Öneri (onay bekliyor) |
 | INF-11 | Staging ortamı ve deploy pipeline (migration `migrate deploy` adımı, onay kapısı, geri dönüş) | P1 | INF-10 | 4 | CRITICAL | B | PLANNED | Tek komut/iş akışıyla staging deploy; rollback denenmiş | Smoke | Yüksek | Öneri (onay bekliyor) |
 | INF-12 | Nesne depolama (S3 uyumlu; dev'de MinIO): tenant önekli anahtar, imzalı URL | P0 | — | 2 | STANDARD | A | PLANNED | Bir tenant başka tenant'ın nesnesine imzalı URL üretemez | U, E, S | Orta | Öneri (onay bekliyor) |
@@ -99,9 +99,9 @@ Kaynak: `docs/superpowers/plans/2026-10-28-user-management.md` (T1–T16 numaral
 | USR-T7 | Rol kataloğu, erişim servisi ve kurallar (`ROLE_CATALOG`, `AccessService`, `canGrant`, son owner koruması) | P0 | PR #6 merge, kullanıcı onayı | 2 | CRITICAL | A | DONE-NOT-DEPLOYED (PR #8, merge `cc8b72a`) | Plan T7 testleri | U | Yüksek (yetki yükseltme) | Onaylı plan |
 | USR-T8 | Companies modülünü firma başına role bağla; `auth/me` yetenek bayrakları | P0 | USR-T7 | 2 | CRITICAL | A | DONE-NOT-DEPLOYED (PR #9, merge `95b5bdb`) | Plan T8 testleri (A rolü B'ye erişemez, okuma/yazma ayrımı, eski token `TOKEN_STALE`) | E, S | Yüksek | Onaylı plan |
 | USR-T9 | Mail modülü ve Mailpit | P0 | PR #6 merge | 0,5 | STANDARD | B | PLANNED | Plan T9 testlerinin kalan kısmı. Kalan (USR-T9b): davet e-posta şablonu `renderInvitation` ve testleri. MVP dilimi: USR-T9a | U | Orta | Onaylı plan |
-| USR-T9a | Mail modülü çekirdeği: `MailService.send`, SMTP/log transport, `mail.config` (prod'da `log` yasak, TLS zorunlu), Mailpit (docker), URL/token loglanmaz | P0 | PR #6 merge | 1,5 | STANDARD | A | DONE-PR (PR #12) | Plan T9 testleri (şablon testi hariç); USR-19 ve USR-T10a bunu kullanır | U | Orta | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
+| USR-T9a | Mail modülü çekirdeği: `MailService.send`, SMTP/log transport, `mail.config` (prod'da `log` yasak, TLS zorunlu), Mailpit (docker), URL/token loglanmaz | P0 | PR #6 merge | 1,5 | STANDARD | A | DONE-NOT-DEPLOYED (PR #12, merge `f9b5889`) | Plan T9 testleri (şablon testi hariç); USR-19 ve USR-T10a bunu kullanır | U | Orta | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
 | USR-T10 | Davet servisi (oluştur, yeniden gönder, iptal, lookup, kabul) | P0 | USR-T7, USR-T9 | 1 | CRITICAL | B | PLANNED | Plan T10 testlerinin kalan kısmı. Kalan (USR-T10b): `GET /invitations?status=` filtresi, `accept-as-current`, pasif üyeliği davetle yeniden açma (`replacesInactiveMembership`), resend hız sınırları. MVP dilimi: USR-T10a | E, S | Yüksek | Onaylı plan |
-| USR-T10a | Davet servisi çekirdeği: oluştur (Admin / firma rolleri), iptal, yeniden gönder (yeni token), lookup, kabul (yeni hesap; mevcut hesap şifreyle) | P0 | USR-T7, USR-T9a | 3 | CRITICAL | A | DONE-PR (PR #15) | Plan T10 testleri; `accept-as-current` ve pasif üyelik değiştirme testleri hariç (T10b). Pasif üyeliği olan e-postaya davet MVP'de `409` (yeniden aktifleştirme T11a ile) | E, S | Yüksek | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
+| USR-T10a | Davet servisi çekirdeği: oluştur (Admin / firma rolleri), iptal, yeniden gönder (yeni token), lookup, kabul (yeni hesap; mevcut hesap şifreyle) | P0 | USR-T7, USR-T9a | 3 | CRITICAL | A | DONE-NOT-DEPLOYED (PR #15, merge `bc37227`) | Plan T10 testleri; `accept-as-current` ve pasif üyelik değiştirme testleri hariç (T10b). Pasif üyeliği olan e-postaya davet MVP'de `409` (yeniden aktifleştirme T11a ile) | E, S | Yüksek | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
 | USR-T11 | Users modülü (liste, erişim düzenleme, pasife alma) | P0 | USR-T8, USR-T10 | 0,5 | CRITICAL | B | PLANNED | Plan T11 testlerinin kalan kısmı. Kalan (USR-T11b): `GET /users/:userId` detay, `lastLoginAt`. MVP dilimi: USR-T11a | E, S | Yüksek | Onaylı plan |
 | USR-T11a | Users modülü çekirdeği: `GET /users`, `PUT /users/:userId/access`, `POST /users/:userId/deactivate` / `activate` (T6 `bumpAuthVersion` + refresh iptali), audit | P0 | USR-T8, USR-T10a | 2,5 | CRITICAL | A | PLANNED | Plan T11 testleri (detay/`lastLoginAt` hariç); pasife alınan personelin sonraki isteği `SESSION_REVOKED` | E, S | Yüksek | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
 | USR-T12 | BFF route'ları (kullanıcı/davet allowlist, oturumsuz davet route'ları) | P0 | USR-T11 | 0,5 | CRITICAL | B | PLANNED | Plan T12 testlerinin kalan kısmı. Kalan (USR-T12b): resend ve durum filtreli davet listesi route'ları, oturum açıkken `accept-as-current` dalı. MVP dilimi: USR-T12a | F | Orta | Onaylı plan |
@@ -137,8 +137,8 @@ Kaynak: `docs/superpowers/plans/2026-10-28-user-management.md` (T1–T16 numaral
 
 | ID | Görev | Öncelik | Bağımlılık | Tahmin | Mod | Sürüm | Durum | Kabul kriteri | Test | Güvenlik riski | Kaynak |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| CAT-01 | Katalog şeması: kategori, marka, ürün, varyant, barkod/SKU (tenant + firma kapsamlı) | P0 | PR #6 merge (USR-T7/T8 ile paralel) | 3 | CRITICAL | A | DONE-PR (PR #13) | Composite tenant FK'leri; SKU tenant içinde tekil; migration provası | M, E | Yüksek (izolasyon) | Öneri (onay bekliyor) |
-| CAT-02 | Ürün CRUD API (liste, filtre, sayfalama, soft-delete, audit) | P0 | CAT-01; merge öncesi USR-T8 (firma izin kontrolü) | 3 | STANDARD | A | PLANNED | Firma rolü izinleri uygulanır | E, S | Orta | Öneri (onay bekliyor) |
+| CAT-01 | Katalog şeması: kategori, marka, ürün, varyant, barkod/SKU (tenant + firma kapsamlı) | P0 | PR #6 merge (USR-T7/T8 ile paralel) | 3 | CRITICAL | A | DONE-NOT-DEPLOYED (PR #13, merge `aa02144`; migration dev DB'ye uygulanmadı) | Composite tenant FK'leri; SKU tenant içinde tekil; migration provası | M, E | Yüksek (izolasyon) | Öneri (onay bekliyor) |
+| CAT-02 | Ürün CRUD API (liste, filtre, sayfalama, soft-delete, audit) | P0 | CAT-01; merge öncesi USR-T8 (firma izin kontrolü) | 3 | STANDARD | A | DONE-NOT-DEPLOYED (PR #16, merge `6824f6f`) | Firma rolü izinleri uygulanır; pasif firmanın ürünleri yazılamaz (`409 COMPANY_INACTIVE`) | E, S | Orta | Öneri (onay bekliyor) |
 | CAT-03 | Varyant ve özellik (attribute) yönetimi | P0 | CAT-02 | 4 | STANDARD | A | PLANNED | Renk/beden gibi eksenlerden varyant üretimi | U, E | Düşük | Öneri (onay bekliyor) |
 | CAT-04 | Katalog UI: liste, filtre, ürün formu, varyant editörü | P0 | CAT-03 | 4 | STANDARD | A | PLANNED | Mobilde kullanılabilir | F, P | Düşük | Öneri (onay bekliyor) |
 | CAT-05 | Fiyat yönetimi: liste fiyatı, kanal fiyatı, KDV oranı (`decimal` + para birimi) | P0 | CAT-02 | 2 | STANDARD | A | PLANNED | Float yok; yuvarlama kuralı belgelendi | U, E | Orta (finansal doğruluk) | Öneri (onay bekliyor) |
@@ -393,7 +393,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 
 ## Sürümlere göre görev listeleri
 
-### Sürüm A — MVP: Trendyol-only (57 görev: 22 tamamlandı + 35 kalan; kalan tahmin 102,5 iş günü; 18 EPIC)
+### Sürüm A — MVP: Trendyol-only (57 görev: 27 tamamlandı + 30 kalan; kalan tahmin 89 iş günü; 18 EPIC)
 
 | ID | Görev | Durum | Tahmin | Mod | Kaynak |
 |---|---|---|---|---|---|
@@ -405,7 +405,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | INF-06 | Redis tabanlı auth rate limiting (fail-closed) | DONE-MERGED (PR #3) | — | STANDARD | Onaylı plan |
 | INF-07 | Next.js BFF: Redis oturumu, CSRF, açık proxy koruması, güvenlik başlıkları | DONE-MERGED (PR #4) | — | CRITICAL | Onaylı plan |
 | INF-08 | Yetkisiz erişim / oturum süresi e2e testleri, PR otomasyon kuralları | DONE-MERGED (PR #5) | — | FAST | Onaylı plan |
-| INF-09 | Kuyruk altyapısı (BullMQ/Redis): tenant context taşıyan job, retry/backoff, ölü kuyruk, idempotency anahtarı | DONE-PR (PR #14) | 3 | CRITICAL | Öneri (onay bekliyor) |
+| INF-09 | Kuyruk altyapısı (BullMQ/Redis): tenant context taşıyan job, retry/backoff, ölü kuyruk, idempotency anahtarı | DONE-NOT-DEPLOYED (PR #14, merge `6fef239`) | 3 | CRITICAL | Öneri (onay bekliyor) |
 | INF-10 | CI pipeline (GitHub Actions): lint, typecheck, unit, e2e (servis konteynerli PG/Redis), frontend test; PR'da zorunlu kontrol | DONE-NOT-DEPLOYED (PR #11, merge `9c405bd`) | 2 | STANDARD | Öneri (onay bekliyor) |
 | INF-12 | Nesne depolama (S3 uyumlu; dev'de MinIO): tenant önekli anahtar, imzalı URL | PLANNED | 2 | STANDARD | Öneri (onay bekliyor) |
 | INF-18 | Mağaza değiştirmede Redis hatası: sahte "token hırsızlığı" audit'i ve tüm cihazlardan çıkışın önlenmesi | DONE-NOT-DEPLOYED (PR #10, merge `113b522`) | 2 | CRITICAL | Öneri (onay bekliyor) |
@@ -420,8 +420,8 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | USR-17 | Güvenlik düzeltmesi: pasif / soft-delete kullanıcıya login ve refresh'te token verilmemesi, yanlış şifre audit'i arka planda | DONE-NOT-DEPLOYED (PR #6, `140d348`, `946dec0`; merge `f1be19a`) | — | CRITICAL | PR #6 güvenlik düzeltmesi (uygulandı) |
 | USR-T7 | Rol kataloğu, erişim servisi ve kurallar (`ROLE_CATALOG`, `AccessService`, `canGrant`, son owner koruması) | DONE-NOT-DEPLOYED (PR #8, merge `cc8b72a`) | 2 | CRITICAL | Onaylı plan |
 | USR-T8 | Companies modülünü firma başına role bağla; `auth/me` yetenek bayrakları | DONE-NOT-DEPLOYED (PR #9, merge `95b5bdb`) | 2 | CRITICAL | Onaylı plan |
-| USR-T9a | Mail modülü çekirdeği: `MailService.send`, SMTP/log transport, `mail.config` (prod'da `log` yasak, TLS zorunlu), Mailpit (docker), URL/token loglanmaz | DONE-PR (PR #12) | 1,5 | STANDARD | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
-| USR-T10a | Davet servisi çekirdeği: oluştur (Admin / firma rolleri), iptal, yeniden gönder (yeni token), lookup, kabul (yeni hesap; mevcut hesap şifreyle) | DONE-PR (PR #15) | 3 | CRITICAL | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
+| USR-T9a | Mail modülü çekirdeği: `MailService.send`, SMTP/log transport, `mail.config` (prod'da `log` yasak, TLS zorunlu), Mailpit (docker), URL/token loglanmaz | DONE-NOT-DEPLOYED (PR #12, merge `f9b5889`) | 1,5 | STANDARD | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
+| USR-T10a | Davet servisi çekirdeği: oluştur (Admin / firma rolleri), iptal, yeniden gönder (yeni token), lookup, kabul (yeni hesap; mevcut hesap şifreyle) | DONE-NOT-DEPLOYED (PR #15, merge `bc37227`) | 3 | CRITICAL | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
 | USR-T11a | Users modülü çekirdeği: `GET /users`, `PUT /users/:userId/access`, `POST /users/:userId/deactivate` / `activate` (T6 `bumpAuthVersion` + refresh iptali), audit | PLANNED | 2,5 | CRITICAL | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
 | USR-T12a | BFF route'ları çekirdeği: users + invitations (oluştur, iptal) allowlist, `PUT`, oturumsuz `invitations/lookup` ve `accept`, `/invite/*` için `Referrer-Policy: no-referrer` | PLANNED | 0,5 | CRITICAL | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
 | USR-T13a | Kullanıcılar sayfası (masaüstü tablo), davet diyaloğu + erişim düzenleyici, pasife al/aktifleştir; davet kabul sayfası (`loading`, `invalid`, `newAccount`, `existingAccount`, `done`) | PLANNED | 2 | STANDARD | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
@@ -430,8 +430,8 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | USR-T16 | Tam doğrulama ve PR | PLANNED | 1 | STANDARD | Onaylı plan |
 | USR-19 | Şifre sıfırlama ve e-posta doğrulama (hash'li tek kullanımlık token) | PLANNED | 3 | CRITICAL | Öneri (onay bekliyor) |
 | DSH-01 | Uygulama kabuğu ve dashboard iskeleti | DONE-MERGED (PR #4) | — | FAST | Onaylı plan |
-| CAT-01 | Katalog şeması: kategori, marka, ürün, varyant, barkod/SKU (tenant + firma kapsamlı) | DONE-PR (PR #13) | 3 | CRITICAL | Öneri (onay bekliyor) |
-| CAT-02 | Ürün CRUD API (liste, filtre, sayfalama, soft-delete, audit) | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
+| CAT-01 | Katalog şeması: kategori, marka, ürün, varyant, barkod/SKU (tenant + firma kapsamlı) | DONE-NOT-DEPLOYED (PR #13, merge `aa02144`; migration dev DB'ye uygulanmadı) | 3 | CRITICAL | Öneri (onay bekliyor) |
+| CAT-02 | Ürün CRUD API (liste, filtre, sayfalama, soft-delete, audit) | DONE-NOT-DEPLOYED (PR #16, merge `6824f6f`) | 3 | STANDARD | Öneri (onay bekliyor) |
 | CAT-03 | Varyant ve özellik (attribute) yönetimi | PLANNED | 4 | STANDARD | Öneri (onay bekliyor) |
 | CAT-04 | Katalog UI: liste, filtre, ürün formu, varyant editörü | PLANNED | 4 | STANDARD | Öneri (onay bekliyor) |
 | CAT-05 | Fiyat yönetimi: liste fiyatı, kanal fiyatı, KDV oranı (`decimal` + para birimi) | PLANNED | 2 | STANDARD | Öneri (onay bekliyor) |
@@ -557,12 +557,12 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | EPIC | 33 |
 | Görev | 139 (133 + 6 MVP dilimi: USR-T9a, T10a, T11a, T12a, T13a, T15a) |
 | DONE-MERGED | 11 |
-| DONE-PR | 4 (USR-T9a #12, CAT-01 #13, INF-09 #14, USR-T10a #15) |
-| DONE-NOT-DEPLOYED | 11 (USR-T1…T8, USR-17; PR #6, #8, #9; INF-10 #11, INF-18 #10) |
+| DONE-PR | 0 |
+| DONE-NOT-DEPLOYED | 16 (USR-T1…T8, USR-17; PR #6, #8, #9; INF-10 #11, INF-18 #10, USR-T9a #12, CAT-01 #13, INF-09 #14, USR-T10a #15, CAT-02 #16) |
 | IN-PROGRESS | 0 |
 | BLOCKED | 1 (USR-18) |
-| PLANNED | 112 |
-| Sürüm A | 57 görev (22 tamamlandı + 35 kalan), 18 EPIC, kalan 102,5 iş günü |
+| PLANNED | 111 |
+| Sürüm A | 57 görev (27 tamamlandı + 30 kalan), 18 EPIC, kalan 89 iş günü |
 | Sürüm B | 61 görev (0 tamamlandı + 61 kalan), 23 EPIC, kalan 188,5 iş günü |
 | Sürüm C | 21 görev (0 tamamlandı + 21 kalan), 9 EPIC, kalan 87 iş günü |
 | Mod: CRITICAL / STANDARD / FAST | 54 / 78 / 7 |

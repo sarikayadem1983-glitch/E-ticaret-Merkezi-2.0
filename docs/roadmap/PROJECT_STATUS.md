@@ -1,31 +1,32 @@
 # Proje Durumu
 
-Son güncelleme: 2026-10-29 (PR #6, #8, #9 merge edildi) · Kaynak: `origin/main` @ `95b5bdb` · Güncelleme kuralları: `AGENTS.md` → "Yol haritası ve durum takibi".
+Son güncelleme: 2026-10-30 (PR #10–#16 merge edildi) · Kaynak: `origin/main` @ `6824f6f` · Güncelleme kuralları: `AGENTS.md` → "Yol haritası ve durum takibi".
 
 ## 1. Özet
 
 | Ölçü | Değer |
 |---|---|
 | Toplam EPIC / görev | 33 / 139 (133 + 6 kullanıcı yönetimi MVP dilimi) |
-| Tamamlanan | 22 (%15,8) — 11 `DONE-MERGED` (dev'de), 11 `DONE-NOT-DEPLOYED` (USR-T1…T8, USR-17, INF-10, INF-18; `main`'de, dev'e deploy edilmedi) |
+| Tamamlanan | 27 (%19,4) — 11 `DONE-MERGED` (dev'de), 16 `DONE-NOT-DEPLOYED` (USR-T1…T8, USR-17, INF-09, INF-10, INF-18, USR-T9a, USR-T10a, CAT-01, CAT-02; `main`'de, dev'e deploy edilmedi) |
 | BLOCKED | 1 — USR-18 (T16 + Aşama 2 migration onayı) |
-| Sürüm A (Trendyol-only MVP) ilerleme | 22 / 57 görev merge edildi (11 dev'de değil) + 4 görev PR'da; kalan 35 görev, 102,5 iş günü (4 PR merge edilirse 31 görev, 92 iş günü); tahmini hedef 2027-02-03 (taahhüt değil) |
+| Sürüm A (Trendyol-only MVP) ilerleme | 27 / 57 görev merge edildi (16'sı dev'de değil); kalan 30 görev, 89 iş günü; tahmini hedef 2027-01-20 (taahhüt değil; önceki 2027-02-03) |
 | Sürüm B / C | 61 / 21 görev |
-| Açık PR | #7 roadmap (draft) · #12 USR-T9a, #13 CAT-01, #14 INF-09 → `main` · #15 USR-T10a → `feature/usr-t9a-mail`. Hepsinde CI ✓, `MERGEABLE`/`CLEAN`; CRITICAL olanlarda bağımsız inceleme temiz. Önerilen sıra #12 → #15 → #13 → #14. Migration: yalnızca CAT-01 (`20261029120000_catalog_schema`), yalnızca izole DB'de denendi |
-| `origin/main` | `113b522` (PR #10 merge; #11 `9c405bd`). `main` CI ✓: backend unit 211/211, e2e 184/184, frontend 84/84 |
+| Açık PR | #7 roadmap (draft). #12–#16 merge edildi |
+| `origin/main` | `6824f6f` (PR #16 merge; #15 `bc37227`, #13 `aa02144`, #14 `6fef239`). `main` CI ✓: backend unit 283/283, e2e 305/306 (1 skip, Mailpit), frontend 84/84 |
 | Dev ortamı | Son deploy edilen kod `eda38da` (Task 4). `main` dev'e deploy edilmedi (kullanıcı onayı gerekir) |
-| Dev DB şeması | Aşama 1 migration `20261029090000_tenant_memberships` uygulanmış (kullanıcı onayıyla); PR #6/#8/#9 yeni migration getirmez |
-| Son testler (`main` @ `95b5bdb`, izole PG/Redis) | backend unit 211/211, e2e 173/173, build ok; frontend 81/81, lint ok, typecheck ok, `next build` ok; Playwright 13/13 yalnızca `next dev` ile — `next start` (prod modu, http) 11/13: `APP_ORIGIN` https koruması, bkz. R-24 |
+| Dev DB şeması | Aşama 1 migration `20261029090000_tenant_memberships` uygulanmış (kullanıcı onayıyla); PR #6/#8/#9 yeni migration getirmez. CAT-01 migration'ı `20261029120000_catalog_schema` `main`'de, dev DB'ye **uygulanmadı** (kullanıcı onayı gerekir) |
+| Son testler (`main` @ `6824f6f`, CI) | backend unit 283/283, e2e 305/306 (1 skip); frontend 84/84. Önceki yerel tam tur (`95b5bdb`): build ok; frontend 81/81, lint ok, typecheck ok, `next build` ok; Playwright 13/13 yalnızca `next dev` ile — `next start` (prod modu, http) 11/13: `APP_ORIGIN` https koruması, bkz. R-24 |
 
 ### Modül bazında tamamlanma (görev sayısına göre)
 
 | Modül | Tamamlanan / Toplam | % | Not |
 |---|---|---|---|
-| M01 INF | 8 / 20 | 40 | Hepsi merge edildi ve dev'de |
-| M02 USR | 11 / 28 | 39 | 2'si dev'de; 9'u `main`'de, deploy edilmedi |
+| M01 INF | 11 / 20 | 55 | 8'i dev'de; INF-09, INF-10, INF-18 `main`'de, deploy edilmedi |
+| M02 USR | 13 / 28 | 46 | 2'si dev'de; 11'i `main`'de, deploy edilmedi |
 | M03 DSH | 1 / 3 | 33 | İskelet |
-| M04–M20 | 0 / 88 | 0 | Başlanmadı |
-| **Toplam** | **20 / 139** | **14,4** | Dev'e deploy edilmiş: 11 / 139 (%7,9) |
+| M04 CAT | 2 / 6 | 33 | CAT-01, CAT-02 `main`'de, deploy edilmedi; migration dev DB'ye uygulanmadı |
+| M05–M20 | 0 / 82 | 0 | Başlanmadı |
+| **Toplam** | **27 / 139** | **19,4** | Dev'e deploy edilmiş: 11 / 139 (%7,9) |
 
 ## 2. Merge edilen kullanıcı yönetimi PR'ları
 
@@ -52,16 +53,13 @@ Aşama 2 SQL'i (`migrations-pending/`) uygulanmadı (USR-18).
 
 | # | ID | Başlık | Not |
 |---|---|---|---|
-| 1 | INF-18 | Mağaza değiştirmede Redis hatası | P0; regresyon testiyle kapanışı kanıtlanmalı (sonraki kapıdan önce) |
-| 2 | INF-10 | CI pipeline | İzole PG/Redis; sonraki tüm PR'ları korur |
-| 3 | CAT-01 | Katalog şeması | Akış 1; migration dev'e uygulanması onay gerektirir (G3) |
-| 4 | USR-T9a | Mail modülü çekirdeği | Akış 2; USR-T10a ve USR-19'un önkoşulu |
-| 5 | CAT-02 | Ürün CRUD API | USR-T8 artık `main`'de |
-| 6 | USR-T10a | Davet servisi çekirdeği | T7 + T9a |
-| 7 | INF-09 | Kuyruk altyapısı | INT-02'nin önkoşulu |
-| 8 | INT-01 | `ChannelAdapter`, kimlik bilgisi şifreleme | USR-T8 tamam; INF-13 (B) bağımlılığı için bkz. R-25 |
-| 9 | CAT-03 | Varyant ve özellik yönetimi | CAT-06 ile paralel |
-| 10 | ORD-01 / INV-01 | Sipariş ve stok şemaları | CAT-01 sonrası |
+| 1 | USR-T11a | Users modülü çekirdeği | T8 + T10a tamam; CRITICAL |
+| 2 | CAT-03 | Varyant ve özellik yönetimi | CAT-02 tamam; CAT-06 ile paralel |
+| 3 | CAT-05 | Fiyat yönetimi | CAT-02 tamam |
+| 4 | INT-01 | `ChannelAdapter`, kimlik bilgisi şifreleme | INF-13 (B) bağımlılığı için bkz. R-25 |
+| 5 | ORD-01 / INV-01 | Sipariş ve stok şemaları | CAT-01 tamam; migration dev'e uygulanması onay gerektirir |
+| 6 | USR-19 | Şifre sıfırlama ve e-posta doğrulama | USR-T9a tamam |
+| 7 | INF-12 → IMG-01 | Dosya depolama, görsel yükleme | CAT-02 tamam |
 
 **Dış iş (kullanıcı, hemen):** Trendyol satıcı hesabı, API anahtarı ve stage erişimi / IP whitelist başvurusu — MVP'nin ana dış kapısı, en geç ≈ 2026-12-14 (INT-TY-01 başlangıcı).
 
@@ -131,3 +129,4 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 | 2026-10-29 | Yol haritası oluşturuldu | — | — | — |
 | 2026-10-29 | MVP Trendyol-only olarak sadeleştirildi (kullanıcı kararı): 18 görev B'ye, USR-T9…T15'ten 6 MVP dilimi, INT-TY-03'e yerel stok iadesi | #7 | — | — |
 | 2026-10-29 | USR-T1…T6, USR-17 → DONE-NOT-DEPLOYED (merge `f1be19a`); USR-T7 → DONE-NOT-DEPLOYED (#8, `cc8b72a`); USR-T8 → DONE-NOT-DEPLOYED (#9, `95b5bdb`) | #6, #8, #9 | `main`: unit 211/211, e2e 173/173, fe 81/81, Playwright 13/13 (`next dev`) | yok (dev `eda38da`) |
+| 2026-10-30 | USR-T9a (#12 `f9b5889`), USR-T10a (#15 `bc37227`), CAT-01 (#13 `aa02144`), INF-09 (#14 `6fef239`), CAT-02 (#16 `6824f6f`) → DONE-NOT-DEPLOYED | #12–#16 | `main` @ `6824f6f`: unit 283/283, e2e 305/306 (1 skip), fe 84/84 | yok (dev `eda38da`; CAT-01 migration dev DB'ye uygulanmadı) |

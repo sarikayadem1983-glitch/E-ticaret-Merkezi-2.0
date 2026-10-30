@@ -58,7 +58,7 @@ Toplamın dökümü: kullanıcının listelediği 33 görev 99 iş günü + 6 MV
 
 ## 3. İş yükü ve takvim (ayrı ayrı)
 
-**İş yükü (effort):** 106,5 iş günü. Bu, görev tahminlerinin toplamıdır; takvim süresi değildir.
+**İş yükü (effort):** 106,5 iş günü toplam; 2026-10-30 itibarıyla 27 görev tamam, **kalan 89 iş günü**. Bu, görev tahminlerinin toplamıdır; takvim süresi değildir.
 
 **Takvim süresi (calendar):**
 
@@ -66,13 +66,14 @@ Toplamın dökümü: kullanıcının listelediği 33 görev 99 iş günü + 6 MV
 |---|---|
 | M0 (başlangıç kapısı) | PR #6, #8, #9 kullanıcı onayıyla merge edildi (2026-10-29). Dev deploy ayrı onay bekler |
 | Başlangıç | 2026-11-02 (M0'dan sonraki pazartesi) |
-| 2 paralel akış | 106,5 / 2 ≈ 53,3 iş günü (kritik yol 23 iş günü olduğundan süreyi kapasite belirler) |
+| Yeniden hesap (2026-10-30) | kalan 89 / 2 ≈ 44,5 iş günü, %15 tampon → ≈ 52 iş günü → M3 2027-01-13 |
+| İlk hesap: 2 paralel akış | 106,5 / 2 ≈ 53,3 iş günü (kritik yol 23 iş günü olduğundan süreyi kapasite belirler) |
 | %15 tampon (onay gecikmesi dahil: her onay kapısı 0,5–1 iş günü; migration, merge, deploy) | ≈ 62 iş günü → 2027-01-27 |
 | Resmî tatil | 2027-01-01 düşüldü (aralıkta başka resmî tatil yok) |
 | Kabul fazı | 5 iş günü (uçtan uca stage senaryosu, kullanıcı kabulü) |
-| **Tahmini hedef** | **2027-02-03** |
+| **Tahmini hedef** | **2027-01-20** (ilk hesap 2027-02-03) |
 
-> **2027-02-03 tahmini bir hedeftir, taahhüt edilmiş teslim tarihi değildir.** Varsayımlar: M0 merge'leri 2026-10-29'da tamamlandı; Trendyol stage erişimi en geç INT-TY-01 başlangıcına (≈ 2026-12-14) kadar gelir; 2 akış kesintisiz yürür; onay kapıları ortalama 0,5–1 iş günü sürer. Bunlardan biri tutmazsa tarih kayar. İlk 3–4 modülden sonra tahminler yeniden kalibre edilir.
+> **2027-01-20 tahmini bir hedeftir, taahhüt edilmiş teslim tarihi değildir.** Varsayımlar: M0 merge'leri 2026-10-29'da tamamlandı; Trendyol stage erişimi en geç INT-TY-01 başlangıcına (≈ 2026-12-14) kadar gelir; 2 akış kesintisiz yürür; onay kapıları ortalama 0,5–1 iş günü sürer. Bunlardan biri tutmazsa tarih kayar. İlk 3–4 modülden sonra tahminler yeniden kalibre edilir.
 
 ## 4. USR-T9…T13, T15: ayrıntılı değerlendirme
 
