@@ -6,16 +6,16 @@ Son güncelleme: 2026-10-30 (PR #19 merge edildi) · Kaynak: `origin/main` @ `8f
 
 | Ölçü | Değer |
 |---|---|
-| Toplam EPIC / görev | 33 / 139 (133 + 6 kullanıcı yönetimi MVP dilimi) |
+| Toplam EPIC / görev | 33 / 141 (133 + 6 kullanıcı yönetimi MVP dilimi + 2 kullanıcı kararı 2026-10-30: OPS-08, USR-21) |
 | Tamamlanan | 28 (%19,9) — 27 `DONE-MERGED` (dev'de, `f010233`), 1 `DONE-NOT-DEPLOYED` (USR-T11a, `8fc7ae3`) |
 | BLOCKED | 1 — USR-18 (T16 + Aşama 2 migration onayı) |
 | Sürüm A (Trendyol-only MVP) ilerleme | 28 / 58 görev merge edildi (27'si dev'de); kalan 30 görev, 87,5 iş günü; tahmini hedef 2027-01-20 (taahhüt değil; OPS-08 ve USR-T11a sonrası yeniden hesaplanmadı) |
-| Sürüm B / C | 61 / 21 görev |
-| Açık PR | Bu roadmap güncellemesi (`docs/usr-t11a-merged`) |
+| Sürüm B / C | 62 / 21 görev |
+| Açık PR | #20 USR-T11a merge kaydı (`docs/usr-t11a-merged`, CI ✓) · #21 `8fc7ae3` dev deploy kaydı (#20'nin üstünde, CI ✓) · #22 USR-T12a (CI ✓, bağımsız inceleme temiz, merge onayı bekler) · #23 USR-T14 (draft, bağımsız incelemenin son turu bekleniyor) |
 | `origin/main` | `8fc7ae3` (PR #19 merge; #18 `9653158`). `main` CI ✓: backend unit 283/283, e2e 318/319 (1 skip, Mailpit), frontend 84/84 |
 | Dev ortamı | `f010233` (2026-10-30, kullanıcı onayıyla). Backend `node dist/main`, frontend `npm run dev`, Mailpit (e-posta dışarı gitmez). Smoke 30/30 |
 | Dev DB şeması | Tüm migration'lar uygulandı; son `20261029120000_catalog_schema` (CAT-01, 2026-10-30, kullanıcı onayıyla; öncesinde yedek + izole prova 16/16). `setup-roles.sql` yeniden çalıştırıldı. Aşama 2 (`migrations-pending/`) uygulanmadı |
-| Son testler (`main` @ `6824f6f`, CI) | backend unit 283/283, e2e 305/306 (1 skip); frontend 84/84. Önceki yerel tam tur (`95b5bdb`): build ok; frontend 81/81, lint ok, typecheck ok, `next build` ok; Playwright 13/13 yalnızca `next dev` ile — `next start` (prod modu, http) 11/13: `APP_ORIGIN` https koruması, bkz. R-24 |
+| Son testler (`main` @ `8fc7ae3`, CI run 41053467144) | backend build ok, lint ok, unit 283/283, e2e 318/319 (1 skip: `mail.e2e-spec.ts`, Mailpit); frontend build ok, lint ok, typecheck ok, unit 84/84. Playwright CI'da koşmuyor. Önceki yerel tam tur (`95b5bdb`): build ok; frontend 81/81, lint ok, typecheck ok, `next build` ok; Playwright 13/13 yalnızca `next dev` ile — `next start` (prod modu, http) 11/13: `APP_ORIGIN` https koruması, bkz. R-24 |
 
 ### Modül bazında tamamlanma (görev sayısına göre)
 
