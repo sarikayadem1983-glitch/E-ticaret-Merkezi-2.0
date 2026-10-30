@@ -48,7 +48,7 @@ Doğrulanabilir kanıt (2026-10-30, sonradan kontrol edildi):
 
 GitHub'daki merge commit saati (15:11:15) yerel fast-forward saatinden (15:09:34) sonra görünüyor. SHA aynı olduğundan bu fark saat sapması olarak değerlendirildi.
 
-**Doğrulanamayan:** smoke testi. Oturum içinde 44 kontrol çalıştırıldığı bildirildi (önceki 30 + USR-T11a: üye listesi, görüntüleyici `403`, `TOKEN_STALE`, `SESSION_REVOKED`, `SELF_CHANGE`, `ROLE_NOT_GRANTABLE`, başka tenant `404`). Oturum notuna göre ilk tur 43/44 geçti; başarısız kontrol eskimiş bir test token'ıyla yeniden denendi. Çıktı kaydedilmedi; sonuç doğrulanamadı.
+**Doğrulanamayan:** smoke testi. Oturum içinde 44 kontrol çalıştırıldığı bildirildi (önceki 30 + USR-T11a: üye listesi, görüntüleyici `403`, `TOKEN_STALE`, `SESSION_REVOKED`, `SELF_CHANGE`, `ROLE_NOT_GRANTABLE`, başka tenant `404`). Oturum notuna göre ilk tur 43/44 geçti; başarısız kontrolün eskimiş test token'ından kaynaklandığı bildirildi; taze oturumla yeniden denendi (`404`). Çıktı kaydedilmedi; sonuç doğrulanamadı.
 
 **Geri dönüş:** kod için `f010233` ile backend'i yeniden başlatmak yeterli (şema aynı).
 
