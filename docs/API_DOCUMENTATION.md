@@ -79,10 +79,10 @@ Hatalar:
 ## Endpoint'ler
 
 ### GET /api/v1/health
-Açıklama: Uygulamanın ve veritabanı bağlantısının durumunu döner.
+Açıklama: Uygulamanın, veritabanı bağlantısının ve kuyruk Redis'inin durumunu döner.
 Yetki: Yok (herkese açık)
 İstek: —
-Yanıt: `200` `{ "data": { "status": "ok", "database": "up" } }`
+Yanıt: `200` `{ "data": { "status": "ok", "database": "up", "queue": "up" } }`. `queue` Redis'e ulaşılamıyorsa `"down"` olur; bu durumda yanıt yine `200`'dür (API çalışmaya devam eder, arka plan işleri bekler). İzleme `queue: "down"` için ayrıca alarm vermelidir.
 Hatalar: `503` veritabanına ulaşılamıyor
 
 ### POST /api/v1/auth/register

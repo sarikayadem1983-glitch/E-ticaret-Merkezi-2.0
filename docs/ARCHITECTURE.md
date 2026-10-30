@@ -45,7 +45,23 @@ Tenant filtresi geliştiriciye bırakılmaz; Prisma seviyesinde zorunludur ve **
 - **Global modeller** (`GLOBAL_MODELS`, bugün yalnızca `User`) tenant ile filtrelenmez ve **yalnızca system context'te** kullanılabilir; tenant bağlamında `User` sorgusu `TenantViolationError` ile reddedilir. İç içe yazmalar da (`data: { user: { update | create | upsert | connectOrCreate | delete | ... } }`, `acceptedBy` dahil) reddedilir; yalnızca var olan kullanıcıya `connect` ve `include/select` ile okuma serbesttir. Tenant içinden kullanıcı bilgisi `TenantMembership` üzerinden (`select: { user: { select: { id, name, email } } }`) okunur.
 - Veritabanı seviyesinde ikinci güvence: tenant'a ait tablolar arası yabancı anahtarlar `(tenant_id, x_id)` → `(tenant_id, id)` biçiminde composite'tir; farklı tenant'ın kaydına ilişki kurulamaz.
 - Tenant'tan önce çalışması gereken işlemler (giriş, kayıt, refresh token çözümü, health check) yalnızca `TenantContext.runAsSystem()` içinde çalışır. Bu fonksiyonu kullanabilecek dosyalar bir testte izin listesiyle sabitlenmiştir; yeni kullanım test kırar ve code review gerektirir.
-- HTTP dışı işler (kuyruk worker'ları) `TenantContext.run(tenantId, fn)` ile çalışır.
+- HTTP dışı işler (kuyruk worker'ları) `TenantContext.run(tenantId, fn)` ile çalışır. Kuyruk işleri system context'te hiç çalışmaz (bkz. [Kuyruk](#kuyruk-arka-plan-işleri)).
+
+## Kuyruk (arka plan işleri)
+
+`backend/src/queue/` (global `QueueModule`, `QueueService`). BullMQ 6.3.15, Redis üzerinde. INT-02 (pazaryeri senkron motoru), içe aktarma, rapor ve `ai-engine` işleri bunu kullanır.
+
+- **Tip güvenli iş tanımı:** `defineJob<P>({ name, attempts?, backoffMs?, concurrency?, parse? })`. Her tanım kendi BullMQ kuyruğudur (anahtarlar `queue:<name>:…`). Sahibi olan modül `onModuleInit`'te `queueService.register(def, handler)` çağırır; handler `(payload, { tenantId, jobId, attempt })` alır.
+- **Tenant bağlamı:** `enqueue(def, payload, { idempotencyKey })` tenant'ı **çağıranın** `TenantContext`'inden alır ve işe yazar (`{ tenantId, payload }`). Tenant bağlamı yoksa veya system context'teyse `TENANT_CONTEXT_MISSING` ile reddedilir; başka tenant adına iş kuyruğa alınamaz. Worker işi `TenantContext.run(tenantId)` içinde çalıştırır: Prisma sorguları yalnızca o tenant'ın satırlarını görür. `tenantId` yoksa, UUID değilse, tenant bilinmiyorsa veya pasifse iş **çalıştırılmaz** (`INVALID_JOB_TENANT`), tekrar denenmez ve ölü kuyruğa düşer. Tenant kontrolü `TenantsService.isActive` ile tenant'ın kendi bağlamında yapılır (`runAsSystem` kullanılmaz).
+- **Retry/backoff:** varsayılan 5 deneme, üstel bekleme `backoffMs · 2^(deneme-1)` (varsayılan 1 sn). `parse` hatası (`INVALID_JOB_PAYLOAD`) ve tenant reddi tekrar denenmez.
+- **Ölü kuyruk:** tüm denemeleri biten veya reddedilen iş BullMQ'nun `failed` kümesinde 30 gün saklanır. `deadLetters(def, { limit, cursor })` ve `retryDeadLetter(def, id)` yalnızca çağıranın tenant'ının işlerini görür/yeniden kuyruğa alır. `deadLetters` failed kümesini 200'lük partilerle okur ve çağrı başına en fazla 2000 iş tarar (başka tenant'ın toplu hataları yükü büyütmez); sonuç `{ items, nextCursor }` döner, `nextCursor` ile devam edilir (sayfa sınırı en fazla 100). Log satırı yalnızca kuyruk, iş kimliği, tenant kimliği (geçerli UUID ise), deneme sayısı ve hata **kodunu** içerir; payload ve hata mesajı loglanmaz.
+- **Handler hataları (handler yazarları için):** runner handler'ın fırlattığı hatayı `JOB_FAILED:<kod>` ile değiştirir. Kod, hatanın `code` alanı (ör. `ETIMEDOUT`, yalnızca `A-Z0-9_`) ya da sınıf adıdır; mesaj ve stack Redis'e **yazılmaz** (`stackTraceLimit: 0`). Ret kodları: `INVALID_JOB_TENANT`, `INVALID_JOB_PAYLOAD`. Ayrıntılı tanı gerekiyorsa handler kendi logunu gizli bilgi içermeden yazar; hata sınıfına anlamlı bir `code` vermek ölü kuyrukta ayırt etmeyi sağlar. Handler `UnrecoverableError` fırlatırsa iş tekrar denenmez (`JOB_FAILED:UNRECOVERABLE`).
+- **Idempotency:** `idempotencyKey` zorunludur. İş kimliği `sha256(tanım, tenant, anahtar)`; aynı anahtar iş bekliyor/çalışıyorken, tamamlandıktan sonra 7 gün ve başarısız olduktan sonra 30 gün boyunca ikinci kez çalışmaz (`{ duplicate: true }` döner). Aynı anahtar farklı tenant'ta ayrı iştir. Saklama süresinden sonra aynı anahtar yeniden çalışabilir; daha uzun süreli garanti gereken iş (ör. sipariş içe alma) ayrıca veritabanında tekil kısıt kullanmalıdır.
+- **Redis bağlantısı:** üretici bağlantısı `rate-limit/redis.provider.ts` ile aynı ayarları kullanır (offline queue yok, 1 sn komut zaman aşımı, açılışta en fazla 2 sn bekleme). Redis kapalıyken `enqueue` beklemeden (bağlantı yoksa hemen, en geç 2 sn'de) `QueueUnavailableError` (`QUEUE_UNAVAILABLE`) fırlatır; çağıran bunu `503` veya kendi yeniden deneme mantığına çevirir. Worker bağlantısı BullMQ gereği `maxRetriesPerRequest: null` kullanır: Redis kapalıyken worker bekler ve yeniden bağlanır, işler Redis'te durduğu için kaybolmaz. Redis verisi kaybolursa (kalıcılık kapalı) kuyruktaki işler de kaybolur: production'da AOF kalıcılığı açık olmalıdır.
+- **Sağlık:** `GET /health` yanıtında `queue: "up" | "down"`. Kuyruk kapalıyken yanıt `200` kalır (API çalışır), `503` yalnızca veritabanı içindir.
+- **Kapanış:** `enableShutdownHooks` ile `onApplicationShutdown`: yeni iş kabul edilmez, çalışan işler en fazla `QUEUE_SHUTDOWN_TIMEOUT_MS` (varsayılan 10 sn) beklenir; süre dolarsa veya Redis kapalıysa worker zorla kapatılır, bağlantılar kesilir. Zorla öldürülen işin yarım kalması BullMQ tarafından "stalled" olarak algılanır ve iş tekrar çalışır; bu yüzden handler'lar idempotent yazılmalıdır.
+- **Ölçek:** `QUEUE_WORKERS=false` worker başlatmaz (yalnızca iş kuyruğa alan API örneği).
+- **Payload kuralı:** payload gizli bilgi (token, şifre, pazaryeri kimlik bilgisi) içermez; Redis'te açık metin durur ve ölü kuyrukta saklanır. Handler kimlik bilgisini çalışırken kendi tenant bağlamında okur.
 
 ## Company (Firma) Modeli
 
@@ -139,7 +155,7 @@ Modüller birbirinin veritabanı tablolarına doğrudan erişmez; servis arayüz
 ## Entegrasyonlar
 
 - Her pazaryeri bir **adapter** olarak yazılır ve ortak `ChannelAdapter` arayüzünü uygular.
-- Senkronizasyon (stok, fiyat, sipariş çekme) arka plan işi olarak kuyrukta çalışır.
+- Senkronizasyon (stok, fiyat, sipariş çekme) arka plan işi olarak kuyrukta çalışır (bkz. [Kuyruk](#kuyruk-arka-plan-işleri)).
 - Dış API hataları yeniden denenir; başarısız işler loglanır.
 
 ## Ortamlar
