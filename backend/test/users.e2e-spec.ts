@@ -515,14 +515,25 @@ describe('Users API (e2e)', () => {
           .set(bearer(o2.accessToken))
           .then((r) => r),
       ]);
-      // Both requests reach the lock (the guard has already passed).
-      for (let i = 0; i < 40; i++) {
-        const { rows } = await pool.query<{ n: string }>(
-          `SELECT count(*) n FROM pg_locks WHERE NOT granted`,
-        );
-        if (Number(rows[0].n) >= 2) break;
+      // Both requests reach the lock: count only backends blocked by the holder.
+      const holderPid = (
+        await holder.query<{ pid: number }>('SELECT pg_backend_pid() AS pid')
+      ).rows[0].pid;
+      let waiting = 0;
+      for (let i = 0; i < 40 && waiting < 2; i++) {
         await new Promise((r) => setTimeout(r, 100));
+        const { rows } = await pool.query<{ n: string }>(
+          // Directly behind the holder, or behind a backend that is (tuple lock queue).
+          `SELECT count(*) n FROM pg_stat_activity a
+           WHERE $1 = ANY(pg_blocking_pids(a.pid))
+              OR EXISTS (SELECT 1 FROM pg_stat_activity b
+                         WHERE b.pid = ANY(pg_blocking_pids(a.pid))
+                           AND $1 = ANY(pg_blocking_pids(b.pid)))`,
+          [holderPid],
+        );
+        waiting = Number(rows[0].n);
       }
+      expect(waiting).toBe(2);
       await holder.query('COMMIT');
       const results = await pending;
       const codes = results.map((r) => r.status).sort((x, y) => x - y);
@@ -660,4 +671,4 @@ describe('Users API (e2e)', () => {
     });
     expect(JSON.stringify(rows)).not.toMatch(/password|hash|token|@/i);
   });
-});
+}, 20_000); // Many argon2 hashes and logins per test: slow on small hosts.

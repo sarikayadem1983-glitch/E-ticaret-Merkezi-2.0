@@ -11,7 +11,7 @@ Son güncelleme: 2026-10-30 (PR #10–#16 merge edildi) · Kaynak: `origin/main`
 | BLOCKED | 1 — USR-18 (T16 + Aşama 2 migration onayı) |
 | Sürüm A (Trendyol-only MVP) ilerleme | 27 / 57 görev merge edildi (16'sı dev'de değil); kalan 30 görev, 89 iş günü; tahmini hedef 2027-01-20 (taahhüt değil; önceki 2027-02-03) |
 | Sürüm B / C | 61 / 21 görev |
-| Açık PR | #7 roadmap (draft). #12–#16 merge edildi |
+| Açık PR | #18 deploy sonrası roadmap · #19 USR-T11a (users modülü; CI ✓, CRITICAL bağımsız inceleme temiz, merge kullanıcı onayı bekler) |
 | `origin/main` | `6824f6f` (PR #16 merge; #15 `bc37227`, #13 `aa02144`, #14 `6fef239`). `main` CI ✓: backend unit 283/283, e2e 305/306 (1 skip, Mailpit), frontend 84/84 |
 | Dev ortamı | Son deploy edilen kod `eda38da` (Task 4). `main` dev'e deploy edilmedi (kullanıcı onayı gerekir) |
 | Dev DB şeması | Aşama 1 migration `20261029090000_tenant_memberships` uygulanmış (kullanıcı onayıyla); PR #6/#8/#9 yeni migration getirmez. CAT-01 migration'ı `20261029120000_catalog_schema` `main`'de, dev DB'ye **uygulanmadı** (kullanıcı onayı gerekir) |
@@ -72,7 +72,7 @@ Her adım kullanıcı onayı gerektirir; deploy ve migration ayrı onaylardır.
 
 | # | ID | Başlık | Not |
 |---|---|---|---|
-| 1 | USR-T11a | Users modülü çekirdeği | T8 + T10a tamam; CRITICAL |
+| 1 | USR-T11a | Users modülü çekirdeği | PR #19 (`DONE-PR`); merge onayı bekler |
 | 2 | CAT-03 | Varyant ve özellik yönetimi | CAT-02 tamam; CAT-06 ile paralel |
 | 3 | CAT-05 | Fiyat yönetimi | CAT-02 tamam |
 | 4 | INT-01 | `ChannelAdapter`, kimlik bilgisi şifreleme | INF-13 (B) bağımlılığı için bkz. R-25 |
@@ -149,3 +149,4 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 | 2026-10-29 | MVP Trendyol-only olarak sadeleştirildi (kullanıcı kararı): 18 görev B'ye, USR-T9…T15'ten 6 MVP dilimi, INT-TY-03'e yerel stok iadesi | #7 | — | — |
 | 2026-10-29 | USR-T1…T6, USR-17 → DONE-NOT-DEPLOYED (merge `f1be19a`); USR-T7 → DONE-NOT-DEPLOYED (#8, `cc8b72a`); USR-T8 → DONE-NOT-DEPLOYED (#9, `95b5bdb`) | #6, #8, #9 | `main`: unit 211/211, e2e 173/173, fe 81/81, Playwright 13/13 (`next dev`) | yok (dev `eda38da`) |
 | 2026-10-30 | USR-T9a (#12 `f9b5889`), USR-T10a (#15 `bc37227`), CAT-01 (#13 `aa02144`), INF-09 (#14 `6fef239`), CAT-02 (#16 `6824f6f`) → DONE-NOT-DEPLOYED | #12–#16 | `main` @ `6824f6f`: unit 283/283, e2e 305/306 (1 skip), fe 84/84 | yok (dev `eda38da`; CAT-01 migration dev DB'ye uygulanmadı) |
+| 2026-10-30 | USR-T11a → DONE-PR; OPS-08, USR-21 eklendi (kullanıcı kararı) | [#19](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/19) | CI: unit 283/283, e2e 318/319 (1 skip); yerel users e2e 13/13 ×3; kilitsiz mutasyonda eşzamanlılık testi başarısız (beklenen); bağımsız inceleme 2 tur, açık bulgu yok | yok |
