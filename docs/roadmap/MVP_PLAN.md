@@ -6,7 +6,7 @@
 
 Amaç: pilot satıcının ürünlerini tek yerden yönetip **Trendyol**'da satabildiği; siparişlerini, stoklarını, Trendyol iptal ve iadelerini işleyebildiği ilk çalışan e-ticaret operasyon platformu. Çıkış kriterleri: `RELEASE_PLAN.md`.
 
-**Kapsam:** 57 görev — 20 tamamlandı (11 `DONE-MERGED`, 9 `DONE-NOT-DEPLOYED`), 37 kalan.
+**Kapsam:** 57 görev — 27 tamamlandı (27 `DONE-MERGED`, dev'de), 30 kalan.
 Kalan 37 = kullanıcının listelediği 33 görev − USR-T7, USR-T8 (merge edildi, PR #8/#9) + kullanıcı yönetimi planından ayrılan 6 MVP dilimi (USR-T9a, T10a, T11a, T12a, T13a, T15a).
 
 **Kapsam dışı (Sürüm B'ye taşındı):** Hepsiburada (INT-HB-01…03), genel iptal/iade iş akışı ve iade UI (SHP-01; Trendyol iptal/iade senkronu MVP'de INT-TY-03 içinde), webhook alıcısı (INT-04; Trendyol siparişleri polling ile çekilir), asenkron içe aktarma (IMP-02; MVP'de IMP-01 senkron, satır sınırı ile), görsel türev/uygunluk (IMG-02), KPI dashboard (DSH-02), müşteri modeli ve UI (CRM-01, CRM-02), stok raporları (RPT-02), BFF `forceRefresh` yarışı (INF-19), USR-T9…T13, T15'in kalan kısımları. Ayrıca e-Fatura, abonelik/ödeme, diğer pazaryerleri, kârlılık, hakediş, prod ortamı, AI.
@@ -129,7 +129,7 @@ CAT-01/CAT-02 akış 1'de yürür; USR-T8 `main`'de olduğundan CAT-02'nin firma
 ## 7. MVP riskleri
 
 - **Ana dış kapı: Trendyol API ve stage erişimi.** Satıcı hesabı, API anahtarı/secret, satıcı ID ve stage IP whitelist'i gerekli. Stage taban URL'i ve başvuru süreci doğrulanmadı; whitelist yalnızca IPv4 ve süreli. Erişim INT-TY-01 başlangıcına (≈ 2026-12-14) kadar gelmezse INT-TY-01…03 ve SHP-02 `BLOCKED` olur ve hedef kayar. Kullanıcı başvuruyu M1'den önce başlatmalı.
-- `main` dev'e deploy edilmedi; dev'de elle doğrulama deploy onayını bekler.
+- `main` @ `f010233` dev'e deploy edildi (2026-10-30); smoke 30/30.
 - INT-01 INF-13'e (B, KMS) bağlı: A'da yerel anahtarla şifreleme; prod öncesi KMS gerekir (R-25).
 - Playwright prod modunda (`next start`) koşmuyor; kabulde yerel TLS ile koşturulacak (R-24).
 - Her yeni şema görevi (CAT-01, ORD-01, INV-01, INT-01) ayrı migration onayı gerektirir (G3).
