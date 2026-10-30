@@ -2,8 +2,10 @@ import { POST as accept } from '@/app/api/invitations/accept/route';
 import { POST as lookup } from '@/app/api/invitations/lookup/route';
 import nextConfig from '../../next.config';
 import { backendFetch } from './backend-client';
+import { currentSession, startSession } from './session';
 
 vi.mock('./backend-client', () => ({ backendFetch: vi.fn() }));
+vi.mock('./session', () => ({ currentSession: vi.fn(), startSession: vi.fn() }));
 
 const fetchMock = vi.mocked(backendFetch);
 const APP = 'http://localhost:3000';
@@ -71,6 +73,8 @@ describe.each([
     expect(res.status).toBe(200);
     expect(fetchMock.mock.calls[0][1].accessToken).toBeUndefined();
     expect(res.headers.get('set-cookie')).toBeNull();
+    expect(vi.mocked(currentSession)).not.toHaveBeenCalled();
+    expect(vi.mocked(startSession)).not.toHaveBeenCalled();
   });
 
   it('relays the backend status and body, not its headers', async () => {
