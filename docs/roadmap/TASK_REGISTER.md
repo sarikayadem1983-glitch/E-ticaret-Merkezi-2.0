@@ -1,7 +1,7 @@
 # Görev Kaydı (Task Register)
 
 Tüm görevlerin tek kaynağı. Durum güncelleme kuralları: `AGENTS.md` → "Yol haritası ve durum takibi".
-Son güncelleme: 2026-10-30 (`main` @ `8fc7ae3` dev'e deploy edildi; USR-T11a dev'de, smoke 44/44; migration yok). Önceki: `9653158` — `f010233` dev'e deploy edildi, CAT-01 dev DB'ye uygulandı; OPS-08 ve USR-21 eklendi.
+Son güncelleme: 2026-10-30 (`main` @ `8fc7ae3` dev'e deploy edildi; USR-T11a dev'de; migration yok; smoke çıktısı kaydedilmedi, doğrulanamadı). Önceki: `9653158` — `f010233` dev'e deploy edildi, CAT-01 dev DB'ye uygulandı; OPS-08 ve USR-21 eklendi.
 
 > **Onay durumu:** Yalnızca kullanıcı yönetimi planındaki görevler (`USR-T1`…`USR-T16`, plan: `docs/superpowers/plans/2026-10-28-user-management.md`) ve merge edilmiş işler (INF-01…08, USR-01, USR-02, DSH-01) **onaylı plandır**. Diğer tüm modüller, görevler, tahminler ve tarihler **öneridir, kullanıcı onayı beklemektedir**. Her görevin kaynağı `TASK_REGISTER.md`'deki "Kaynak" sütunundadır.
 

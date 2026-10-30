@@ -6,16 +6,16 @@ Son güncelleme: 2026-10-30 (`main` @ `8fc7ae3` dev'e deploy edildi) · Kaynak: 
 
 | Ölçü | Değer |
 |---|---|
-| Toplam EPIC / görev | 33 / 139 (133 + 6 kullanıcı yönetimi MVP dilimi) |
+| Toplam EPIC / görev | 33 / 141 (133 + 6 kullanıcı yönetimi MVP dilimi + 2 kullanıcı kararı 2026-10-30: OPS-08, USR-21) |
 | Tamamlanan | 28 (%19,9) — 28 `DONE-MERGED` (hepsi dev'de, `8fc7ae3`) |
 | BLOCKED | 1 — USR-18 (T16 + Aşama 2 migration onayı) |
 | Sürüm A (Trendyol-only MVP) ilerleme | 28 / 58 görev merge edildi ve dev'de; kalan 30 görev, 87,5 iş günü; tahmini hedef 2027-01-20 (taahhüt değil; OPS-08 ve USR-T11a sonrası yeniden hesaplanmadı) |
-| Sürüm B / C | 61 / 21 görev |
-| Açık PR | #20 (USR-T11a merge kaydı) ve bu deploy kaydı (`docs/usr-t11a-deployed`, #20'nin üstünde) |
+| Sürüm B / C | 62 / 21 görev |
+| Açık PR | #20 USR-T11a merge kaydı (`docs/usr-t11a-merged`, CI ✓) · #21 `8fc7ae3` dev deploy kaydı (#20'nin üstünde, CI ✓) · #22 USR-T12a (CI ✓, bağımsız inceleme temiz, merge onayı bekler) · #23 USR-T14 (draft, bağımsız incelemenin son turu bekleniyor) |
 | `origin/main` | `8fc7ae3` (PR #19 merge; #18 `9653158`). `main` CI ✓: backend unit 283/283, e2e 318/319 (1 skip, Mailpit), frontend 84/84 |
-| Dev ortamı | `8fc7ae3` (2026-10-30, kullanıcı onayıyla). Backend `node dist/main`, frontend `npm run dev`, Mailpit (e-posta dışarı gitmez). Smoke 44/44 |
+| Dev ortamı | `8fc7ae3` (2026-10-30; onay kaydı yok, bkz. §3). Backend `node dist/main` (PID 2404), frontend `npm run dev`, Mailpit (e-posta dışarı gitmez). Smoke: oturum içinde çalıştırıldığı bildirildi, çıktı kaydedilmedi, doğrulanamadı |
 | Dev DB şeması | Tüm migration'lar uygulandı; son `20261029120000_catalog_schema` (CAT-01, 2026-10-30, kullanıcı onayıyla; öncesinde yedek + izole prova 16/16). `setup-roles.sql` yeniden çalıştırıldı. Aşama 2 (`migrations-pending/`) uygulanmadı |
-| Son testler (`main` @ `6824f6f`, CI) | backend unit 283/283, e2e 305/306 (1 skip); frontend 84/84. Önceki yerel tam tur (`95b5bdb`): build ok; frontend 81/81, lint ok, typecheck ok, `next build` ok; Playwright 13/13 yalnızca `next dev` ile — `next start` (prod modu, http) 11/13: `APP_ORIGIN` https koruması, bkz. R-24 |
+| Son testler (`main` @ `8fc7ae3`, CI run 41053467144) | backend build ok, lint ok, unit 283/283, e2e 318/319 (1 skip: `mail.e2e-spec.ts`, Mailpit); frontend build ok, lint ok, typecheck ok, unit 84/84. Playwright CI'da koşmuyor. Önceki yerel tam tur (`95b5bdb`): build ok; frontend 81/81, lint ok, typecheck ok, `next build` ok; Playwright 13/13 yalnızca `next dev` ile — `next start` (prod modu, http) 11/13: `APP_ORIGIN` https koruması, bkz. R-24 |
 
 ### Modül bazında tamamlanma (görev sayısına göre)
 
@@ -32,17 +32,23 @@ Son güncelleme: 2026-10-30 (`main` @ `8fc7ae3` dev'e deploy edildi) · Kaynak: 
 
 Yok. #6–#16 (`f010233`) ve #19 (`8fc7ae3`) 2026-10-30'da dev'e deploy edildi ve bu tablodan çıkarıldı; ayrıntı §3 ve §6.
 
-
 Aşama 2 SQL'i (`migrations-pending/`) uygulanmadı (USR-18).
 
 ## 3. Dev deploy kaydı (2026-10-30, `main` @ `8fc7ae3`)
 
-Kullanıcı onayıyla, yalnızca dev ortamında. `f010233` → `8fc7ae3`: yalnızca backend (`users` modülü) ve dokümanlar; `database/` ve `frontend/` değişmedi, **migration yok** (`prisma migrate status`: güncel).
+Yalnızca dev ortamında. Bu deploy için kullanıcı onayı kayıtlı değil: sohbette ya da dokümanda kanıtı yok, bu yüzden "kullanıcı onayıyla" yazılmadı. `f010233` → `8fc7ae3`: yalnızca backend (`users` modülü) ve dokümanlar değişti. `git diff f010233 8fc7ae3 -- frontend database backend/prisma` boş, yani **migration yok**.
 
-1. SHA `origin/main` içinde doğrulandı; dev klasörü `main` @ `8fc7ae3`'e ilerletildi, `npm run build`.
-2. Backend yeniden başlatıldı (`node dist/main`, oturumdan bağımsız süreç; log `tm-backups/backend-8fc7ae3.log`). Frontend (`:3000`, `npm run dev`) değişmediği için dokunulmadı.
-3. `/health` → `database: up`, `queue: up`; `/users` route'ları yüklendi.
-4. Smoke 44/44: önceki 30 kontrol + USR-T11a: üye listesi (sır yok), görüntüleyici `403`, `PUT /access` sonrası eski token `TOKEN_STALE`, pasife alma → `SESSION_REVOKED` ve refresh `401`, aktifleştirme sonrası yeni login, `SELF_CHANGE`, admin → owner `ROLE_NOT_GRANTABLE`, başka tenant'tan pasife alma/erişim `404` ve listede görünmeme. (İlk turda bir kontrol, mağaza değiştirme sonrası eskiyen test token'ı nedeniyle `401` verdi; taze oturumla yeniden denendi, `404`.)
+Doğrulanabilir kanıt (2026-10-30, sonradan kontrol edildi):
+
+1. Dev klasörü: `git reflog` → `8fc7ae3 HEAD@{2026-10-30 15:09:34 +0300}: merge origin/main: Fast-forward`; `HEAD` = `8fc7ae3`. Backend ağacı PR #19 head'i `6225ba4` ile aynı.
+2. Build: `backend/dist/main.js` 15:10:05'te üretildi; `dist/users` mevcut.
+3. Süreç: PID 2404 `node dist/main`, başlama 15:10:37, `:4000` dinliyor. Log `tm-backups/backend-8fc7ae3.log` (`.err` boş). Logda `/api/v1/users` (`GET`), `/users/:userId/access` (`PUT`), `/users/:userId/deactivate` ve `/activate` (`POST`) eşlendi; `Nest application successfully started`.
+4. `GET /api/v1/health` → `status: ok`, `database: up`, `queue: up`.
+5. Frontend (`:3000`, PID 2608, 12:25'te başlatıldı) yeniden başlatılmadı; `frontend/` değişmedi.
+
+GitHub'daki merge commit saati (15:11:15) yerel fast-forward saatinden (15:09:34) sonra görünüyor. SHA aynı olduğundan bu fark saat sapması olarak değerlendirildi.
+
+**Doğrulanamayan:** smoke testi. Oturum içinde 44 kontrol çalıştırıldığı bildirildi (önceki 30 + USR-T11a: üye listesi, görüntüleyici `403`, `TOKEN_STALE`, `SESSION_REVOKED`, `SELF_CHANGE`, `ROLE_NOT_GRANTABLE`, başka tenant `404`). Oturum notuna göre ilk tur 43/44 geçti; başarısız kontrol eskimiş bir test token'ıyla yeniden denendi. Çıktı kaydedilmedi; sonuç doğrulanamadı.
 
 **Geri dönüş:** kod için `f010233` ile backend'i yeniden başlatmak yeterli (şema aynı).
 
@@ -144,4 +150,4 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 | 2026-10-30 | USR-T1…T8, USR-T9a, USR-T10a, USR-17, INF-09, INF-10, INF-18, CAT-01, CAT-02 → DONE-MERGED; CAT-01 migration dev DB'ye uygulandı | #6–#16 | yedek/geri yükleme ok, CAT-01 prova 16/16, smoke 30/30 | dev `f010233` |
 | 2026-10-30 | USR-T11a → DONE-PR; OPS-08, USR-21 eklendi (kullanıcı kararı) | [#19](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/19) | CI: unit 283/283, e2e 318/319 (1 skip); yerel users e2e 13/13 ×3; kilitsiz mutasyonda eşzamanlılık testi başarısız (beklenen); bağımsız inceleme 2 tur, açık bulgu yok | yok |
 | 2026-10-30 | USR-T11a → DONE-NOT-DEPLOYED (merge `8fc7ae3`) | [#19](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/19) | `main` @ `8fc7ae3`: unit 283/283, e2e 318/319 (1 skip), fe 84/84 | yok (dev `f010233`) |
-| 2026-10-30 | USR-T11a → DONE-MERGED | [#19](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/19) | smoke 44/44 | dev `8fc7ae3` |
+| 2026-10-30 | USR-T11a → DONE-MERGED | [#19](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/19) | `main` CI (`8fc7ae3`): unit 283/283, e2e 318/319 (1 skip), fe 84/84; dev `/health` ok; smoke bildirildi, çıktı kaydedilmedi, doğrulanamadı | dev `8fc7ae3` (reflog, PID 2404 ve log ile doğrulandı; onay kaydı yok) |
