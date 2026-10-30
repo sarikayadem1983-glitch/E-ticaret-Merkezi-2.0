@@ -11,7 +11,7 @@ Son güncelleme: 2026-10-30 (`main` @ `f010233` dev'e deploy edildi) · Kaynak: 
 | BLOCKED | 1 — USR-18 (T16 + Aşama 2 migration onayı) |
 | Sürüm A (Trendyol-only MVP) ilerleme | 27 / 57 görev merge edildi ve dev'de; kalan 30 görev, 89 iş günü; tahmini hedef 2027-01-20 (taahhüt değil; önceki 2027-02-03) |
 | Sürüm B / C | 61 / 21 görev |
-| Açık PR | #19 USR-T11a (CI ✓, CRITICAL bağımsız inceleme temiz, merge kullanıcı onayı bekler) · #22 USR-T12a (BFF route'ları; CI ✓, CRITICAL bağımsız inceleme temiz) |
+| Açık PR | #20, #21 roadmap (USR-T11a merge/deploy kaydı) · #22 USR-T12a (BFF route'ları; CI ✓, CRITICAL bağımsız inceleme temiz) |
 | `origin/main` | `f010233` (PR #17 merge; #7 `23926b1`). `main` CI ✓. Son tam test turu (`6824f6f`, CI): backend unit 283/283, e2e 305/306 (1 skip, Mailpit), frontend 84/84; sonraki commit'ler yalnızca doküman |
 | Dev ortamı | `f010233` (2026-10-30, kullanıcı onayıyla). Backend `node dist/main`, frontend `npm run dev`, Mailpit (e-posta dışarı gitmez). Smoke 30/30 |
 | Dev DB şeması | Tüm migration'lar uygulandı; son `20261029120000_catalog_schema` (CAT-01, 2026-10-30, kullanıcı onayıyla; öncesinde yedek + izole prova 16/16). `setup-roles.sql` yeniden çalıştırıldı. Aşama 2 (`migrations-pending/`) uygulanmadı |
