@@ -11,7 +11,7 @@ Son güncelleme: 2026-10-30 (`main` @ `f010233` dev'e deploy edildi) · Kaynak: 
 | BLOCKED | 1 — USR-18 (T16 + Aşama 2 migration onayı) |
 | Sürüm A (Trendyol-only MVP) ilerleme | 27 / 57 görev merge edildi ve dev'de; kalan 30 görev, 89 iş günü; tahmini hedef 2027-01-20 (taahhüt değil; önceki 2027-02-03) |
 | Sürüm B / C | 61 / 21 görev |
-| Açık PR | #19 USR-T11a (CI ✓, CRITICAL bağımsız inceleme temiz, merge kullanıcı onayı bekler) |
+| Açık PR | #20, #21 roadmap (USR-T11a merge/deploy kaydı) · #22 USR-T12a (BFF route'ları) · #23 USR-T14 (güvenlik test paketi). Hepsinde CI ✓; CRITICAL olanlarda bağımsız inceleme temiz |
 | `origin/main` | `f010233` (PR #17 merge; #7 `23926b1`). `main` CI ✓. Son tam test turu (`6824f6f`, CI): backend unit 283/283, e2e 305/306 (1 skip, Mailpit), frontend 84/84; sonraki commit'ler yalnızca doküman |
 | Dev ortamı | `f010233` (2026-10-30, kullanıcı onayıyla). Backend `node dist/main`, frontend `npm run dev`, Mailpit (e-posta dışarı gitmez). Smoke 30/30 |
 | Dev DB şeması | Tüm migration'lar uygulandı; son `20261029120000_catalog_schema` (CAT-01, 2026-10-30, kullanıcı onayıyla; öncesinde yedek + izole prova 16/16). `setup-roles.sql` yeniden çalıştırıldı. Aşama 2 (`migrations-pending/`) uygulanmadı |
@@ -131,3 +131,4 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 | 2026-10-30 | USR-T9a (#12 `f9b5889`), USR-T10a (#15 `bc37227`), CAT-01 (#13 `aa02144`), INF-09 (#14 `6fef239`), CAT-02 (#16 `6824f6f`) → DONE-NOT-DEPLOYED | #12–#16 | `main` @ `6824f6f`: unit 283/283, e2e 305/306 (1 skip), fe 84/84 | yok (dev `eda38da`; CAT-01 migration dev DB'ye uygulanmadı) |
 | 2026-10-30 | USR-T1…T8, USR-T9a, USR-T10a, USR-17, INF-09, INF-10, INF-18, CAT-01, CAT-02 → DONE-MERGED; CAT-01 migration dev DB'ye uygulandı | #6–#16 | yedek/geri yükleme ok, CAT-01 prova 16/16, smoke 30/30 | dev `f010233` |
 | 2026-10-30 | USR-T11a → DONE-PR; OPS-08, USR-21 eklendi (kullanıcı kararı) | [#19](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/19) | CI: unit 283/283, e2e 318/319 (1 skip); yerel users e2e 13/13 ×3; kilitsiz mutasyonda eşzamanlılık testi başarısız (beklenen); bağımsız inceleme 2 tur, açık bulgu yok | yok |
+| 2026-10-30 | USR-T14 → DONE-PR | [#23](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/23) | privilege-escalation e2e 12/12 ×3, invitations e2e 40/40; ürün kodu değişmedi (açık bulunmadı); bağımsız inceleme 3 tur | yok |

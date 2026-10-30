@@ -503,11 +503,13 @@ describe('Privilege escalation and tenant isolation (e2e)', () => {
     await http()
       .post('/api/v1/auth/refresh')
       .send({ refreshToken: s.refreshToken })
-      .expect(401);
+      .expect(401)
+      .expect((r) => expect(r.body.error.code).toBe('INVALID_REFRESH_TOKEN'));
     await http()
       .post('/api/v1/auth/login')
       .send({ email: s.email, password: PASSWORD })
-      .expect(401);
+      .expect(401)
+      .expect((r) => expect(r.body.error.code).toBe('INVALID_CREDENTIALS'));
   });
 
   it('a forged or foreign-tenant JWT is refused', async () => {
@@ -521,6 +523,8 @@ describe('Privilege escalation and tenant isolation (e2e)', () => {
     const foreign = jwt.sign({ ...payload, tid: tenantB });
     const res = await http().get('/api/v1/users').set(bearer(foreign));
     expect(res.status).toBe(401);
+    // Refused by the membership check, not by token verification.
+    expect(res.body.error.code).toBe('SESSION_REVOKED');
     expect(JSON.stringify(res.body)).not.toContain(ownerB.email);
   });
 
