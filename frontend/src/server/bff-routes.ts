@@ -6,7 +6,7 @@
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 
 interface BffRoute {
-  method: 'GET' | 'POST' | 'PATCH';
+  method: 'GET' | 'POST' | 'PATCH' | 'PUT';
   path: RegExp;
   /** Allowed query parameters (GET only). */
   query?: readonly string[];
@@ -27,6 +27,14 @@ const ROUTES: readonly BffRoute[] = [
   { method: 'POST', path: new RegExp(`^companies/${UUID}/(de)?activate$`) },
   { method: 'GET', path: /^auth\/me$/ },
   { method: 'GET', path: /^auth\/memberships$/ },
+  // User management (USR-T11a/T12a). Session-less invitation lookup/accept
+  // have their own routes under /api/invitations and are not proxied here.
+  { method: 'GET', path: /^users$/ },
+  { method: 'PUT', path: new RegExp(`^users/${UUID}/access$`), body: true },
+  { method: 'POST', path: new RegExp(`^users/${UUID}/(de)?activate$`) },
+  { method: 'GET', path: /^invitations$/ },
+  { method: 'POST', path: /^invitations$/, body: true },
+  { method: 'POST', path: new RegExp(`^invitations/${UUID}/revoke$`) },
 ];
 
 const SEGMENT = /^[a-z0-9-]{1,64}$/;

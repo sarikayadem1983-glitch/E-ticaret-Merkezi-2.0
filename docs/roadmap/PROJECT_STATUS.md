@@ -11,7 +11,7 @@ Son güncelleme: 2026-10-30 (`main` @ `8fc7ae3` dev'e deploy edildi) · Kaynak: 
 | BLOCKED | 1 — USR-18 (T16 + Aşama 2 migration onayı) |
 | Sürüm A (Trendyol-only MVP) ilerleme | 28 / 58 görev merge edildi ve dev'de; kalan 30 görev, 87,5 iş günü; tahmini hedef 2027-01-20 (taahhüt değil; OPS-08 ve USR-T11a sonrası yeniden hesaplanmadı) |
 | Sürüm B / C | 62 / 21 görev |
-| Açık PR | #20 USR-T11a merge kaydı (`docs/usr-t11a-merged`, CI ✓) · #21 `8fc7ae3` dev deploy kaydı (#20'nin üstünde, CI ✓) · #22 USR-T12a (CI ✓, bağımsız inceleme temiz, merge onayı bekler) · #23 USR-T14 (draft, bağımsız incelemenin son turu bekleniyor) |
+| Açık PR | #22 USR-T12a (`DONE-PR`; CI ✓, CRITICAL bağımsız inceleme 2 tur temiz) · #23 USR-T14 (draft, bağımsız incelemenin son turu bekleniyor) |
 | `origin/main` | `8fc7ae3` (PR #19 merge; #18 `9653158`). `main` CI ✓: backend unit 283/283, e2e 318/319 (1 skip, Mailpit), frontend 84/84 |
 | Dev ortamı | `8fc7ae3` (2026-10-30; onay kaydı yok, bkz. §3). Backend `node dist/main` (PID 2404), frontend `npm run dev`, Mailpit (e-posta dışarı gitmez). Smoke: oturum içinde çalıştırıldığı bildirildi, çıktı kaydedilmedi, doğrulanamadı |
 | Dev DB şeması | Tüm migration'lar uygulandı; son `20261029120000_catalog_schema` (CAT-01, 2026-10-30, kullanıcı onayıyla; öncesinde yedek + izole prova 16/16). `setup-roles.sql` yeniden çalıştırıldı. Aşama 2 (`migrations-pending/`) uygulanmadı |
@@ -151,3 +151,4 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 | 2026-10-30 | USR-T11a → DONE-PR; OPS-08, USR-21 eklendi (kullanıcı kararı) | [#19](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/19) | CI: unit 283/283, e2e 318/319 (1 skip); yerel users e2e 13/13 ×3; kilitsiz mutasyonda eşzamanlılık testi başarısız (beklenen); bağımsız inceleme 2 tur, açık bulgu yok | yok |
 | 2026-10-30 | USR-T11a → DONE-NOT-DEPLOYED (merge `8fc7ae3`) | [#19](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/19) | `main` @ `8fc7ae3`: unit 283/283, e2e 318/319 (1 skip), fe 84/84 | yok (dev `f010233`) |
 | 2026-10-30 | USR-T11a → DONE-MERGED | [#19](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/19) | `main` CI (`8fc7ae3`): unit 283/283, e2e 318/319 (1 skip), fe 84/84; dev `/health` ok; smoke bildirildi, çıktı kaydedilmedi, doğrulanamadı | dev `8fc7ae3` (reflog, PID 2404 ve log ile doğrulandı; onay kaydı yok) |
+| 2026-10-30 | USR-T12a → DONE-PR | [#22](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/22) | frontend unit 124/124, typecheck ok; CI ✓; bağımsız inceleme 2 tur, açık bulgu yok | yok |

@@ -73,4 +73,4 @@ async function handle(req: Request, { params }: Context): Promise<Response> {
   });
 }
 
-export { handle as GET, handle as POST, handle as PATCH };
+export { handle as GET, handle as POST, handle as PATCH, handle as PUT };

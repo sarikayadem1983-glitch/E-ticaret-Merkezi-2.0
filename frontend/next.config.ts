@@ -34,7 +34,15 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      // The invitation token is in the URL (/invite/<token>): never leak it
+      // through the Referer header. Later rules win, so this comes last.
+      {
+        source: "/invite/:path*",
+        headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
+      },
+    ];
   },
   turbopack: {
     rules: {
