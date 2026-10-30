@@ -88,6 +88,28 @@ export class ProductsService {
     return product;
   }
 
+  /** Loads a product for a write: its company must also be active (409 COMPANY_INACTIVE). */
+  private async loadForWrite(
+    user: AuthUser,
+    id: string,
+    tx: PrismaTx,
+  ): Promise<ProductRow> {
+    const product = await this.load(user, id, 'products:write', tx);
+    await this.assertCompanyActive(product.companyId, tx);
+    return product;
+  }
+
+  /** The catalog of an inactive company is frozen: readable, not writable. */
+  private async assertCompanyActive(companyId: string, tx: PrismaTx) {
+    const [active] = await this.companies.activeByIds([companyId], tx);
+    if (!active) {
+      throw conflict(
+        'COMPANY_INACTIVE',
+        'Firma pasif; ürünleri değiştirilemez',
+      );
+    }
+  }
+
   async get(user: AuthUser, id: string) {
     return { data: await this.load(user, id, 'products:read') };
   }
@@ -124,6 +146,7 @@ export class ProductsService {
     await this.companies.get(user, dto.companyId);
     const { variants, ...fields } = dto;
     const product = await catalogWrite(this.repository.prisma, async (tx) => {
+      await this.assertCompanyActive(dto.companyId, tx);
       await this.assertLinks(tx, fields);
       const created = await this.repository.createProduct(tx, fields, variants);
       await this.audit.record(
@@ -155,7 +178,7 @@ export class ProductsService {
 
   async update(user: AuthUser, id: string, dto: UpdateProductDto) {
     const product = await catalogWrite(this.repository.prisma, async (tx) => {
-      const before = await this.load(user, id, 'products:write', tx);
+      const before = await this.loadForWrite(user, id, tx);
       await this.assertLinks(tx, dto);
       const after = await this.repository.updateProduct(tx, id, dto);
       await this.audit.record(
@@ -177,7 +200,7 @@ export class ProductsService {
   /** Soft-deletes the product and its active variants. SKUs/barcodes stay reserved. */
   async remove(user: AuthUser, id: string): Promise<void> {
     await catalogWrite(this.repository.prisma, async (tx) => {
-      const before = await this.load(user, id, 'products:write', tx);
+      const before = await this.loadForWrite(user, id, tx);
       const deletedAt = new Date();
       for (const v of before.variants) {
         await this.repository.updateVariant(tx, v.id, { deletedAt });
@@ -210,7 +233,7 @@ export class ProductsService {
 
   async addVariant(user: AuthUser, productId: string, dto: CreateVariantDto) {
     const variant = await catalogWrite(this.repository.prisma, async (tx) => {
-      const product = await this.load(user, productId, 'products:write', tx);
+      const product = await this.loadForWrite(user, productId, tx);
       const created = await this.repository.createVariant(tx, product, dto);
       await this.audit.record(
         {
@@ -234,7 +257,7 @@ export class ProductsService {
     dto: UpdateVariantDto,
   ) {
     const variant = await catalogWrite(this.repository.prisma, async (tx) => {
-      await this.load(user, productId, 'products:write', tx);
+      await this.loadForWrite(user, productId, tx);
       const before = await this.repository.findVariant(productId, id, tx);
       if (!before) throw missingVariant();
       const after = await this.repository.updateVariant(tx, id, dto);
@@ -261,7 +284,7 @@ export class ProductsService {
     id: string,
   ): Promise<void> {
     await catalogWrite(this.repository.prisma, async (tx) => {
-      await this.load(user, productId, 'products:write', tx);
+      await this.loadForWrite(user, productId, tx);
       const before = await this.repository.findVariant(productId, id, tx);
       if (!before) throw missingVariant();
       if ((await this.repository.countVariants(tx, productId)) <= 1) {

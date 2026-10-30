@@ -845,5 +845,197 @@ describe('Catalog API (e2e)', () => {
         .send({ name: `Admin ${run}` })
         .expect(201);
     });
+
+    it('rejects companyId in a product PATCH (400): products cannot change company', async () => {
+      const p = await createProduct(tokenA, productBody('move'));
+      await http()
+        .patch(`/api/v1/products/${p.id}`)
+        .set(bearer(tokenA))
+        .send({ companyId: companyY })
+        .expect(400);
+      const after = await http()
+        .get(`/api/v1/products/${p.id}`)
+        .set(bearer(tokenA))
+        .expect(200);
+      expect(after.body.data.companyId).toBe(companyX);
+    });
+
+    it('a variant id of another product is 404 on PATCH and DELETE', async () => {
+      const p = await createProduct(
+        tokenA,
+        productBody('vown', {
+          variants: [{ sku: sku('vown-1') }, { sku: sku('vown-2') }],
+        }),
+      );
+      const other = await createProduct(tokenA, productBody('vother'));
+      const foreign = other.variants[0].id;
+      await http()
+        .patch(`/api/v1/products/${p.id}/variants/${foreign}`)
+        .set(bearer(tokenA))
+        .send({ barcode: `BC-${run}` })
+        .expect(404);
+      await http()
+        .delete(`/api/v1/products/${p.id}/variants/${foreign}`)
+        .set(bearer(tokenA))
+        .expect(404);
+      // Tenant B cannot PATCH a tenant A variant either.
+      await http()
+        .patch(`/api/v1/products/${other.id}/variants/${foreign}`)
+        .set(bearer(tokenB))
+        .send({ barcode: `BC2-${run}` })
+        .expect(404);
+      const still = await http()
+        .get(`/api/v1/products/${other.id}`)
+        .set(bearer(tokenA))
+        .expect(200);
+      expect(still.body.data.variants).toEqual([
+        expect.objectContaining({ id: foreign, barcode: null }),
+      ]);
+    });
+
+    it("refuses another tenant's category or brand on create and update (422)", async () => {
+      const catB = (
+        await http()
+          .post('/api/v1/categories')
+          .set(bearer(tokenB))
+          .send({ name: 'B kategori', slug: `b-cat-${run}` })
+          .expect(201)
+      ).body.data.id as string;
+      const brandB = (
+        await http()
+          .post('/api/v1/brands')
+          .set(bearer(tokenB))
+          .send({ name: `B marka ${run}` })
+          .expect(201)
+      ).body.data.id as string;
+
+      for (const [field, id, code] of [
+        ['categoryId', catB, 'CATEGORY_UNAVAILABLE'],
+        ['brandId', brandB, 'BRAND_UNAVAILABLE'],
+      ] as const) {
+        const created = await http()
+          .post('/api/v1/products')
+          .set(bearer(tokenA))
+          .send(productBody(`xt-${field}`, { [field]: id }))
+          .expect(422);
+        expect(created.body.error.code).toBe(code);
+      }
+      const p = await createProduct(tokenA, productBody('xt-upd'));
+      for (const [field, id, code] of [
+        ['categoryId', catB, 'CATEGORY_UNAVAILABLE'],
+        ['brandId', brandB, 'BRAND_UNAVAILABLE'],
+      ] as const) {
+        const res = await http()
+          .patch(`/api/v1/products/${p.id}`)
+          .set(bearer(tokenA))
+          .send({ [field]: id })
+          .expect(422);
+        expect(res.body.error.code).toBe(code);
+      }
+      // A category of tenant B cannot be a parent in tenant A either.
+      await http()
+        .post('/api/v1/categories')
+        .set(bearer(tokenA))
+        .send({ name: 'Alt', slug: `xt-sub-${run}`, parentId: catB })
+        .expect(422);
+    });
+
+    it('freezes the catalog of an inactive company: reads work, writes are 409 COMPANY_INACTIVE', async () => {
+      const companyZ = await createCompany(tokenA, `Z ${run}`);
+      const p = await createProduct(
+        tokenA,
+        productBody('frz', {
+          companyId: companyZ,
+          variants: [{ sku: sku('frz-1') }, { sku: sku('frz-2') }],
+        }),
+      );
+      const ops = await memberWith('frz-ops', 'operations', [companyZ]);
+      await http()
+        .post(`/api/v1/companies/${companyZ}/deactivate`)
+        .set(bearer(tokenA))
+        .expect(200);
+
+      const inactive = (res: request.Response) =>
+        expect(res.body.error.code).toBe('COMPANY_INACTIVE');
+      for (const token of [tokenA, ops]) {
+        await http()
+          .get(`/api/v1/products/${p.id}`)
+          .set(bearer(token))
+          .expect(200);
+        inactive(
+          await http()
+            .post('/api/v1/products')
+            .set(bearer(token))
+            .send(
+              productBody(`frz-new-${token === ops}`, { companyId: companyZ }),
+            )
+            .expect(409),
+        );
+        inactive(
+          await http()
+            .patch(`/api/v1/products/${p.id}`)
+            .set(bearer(token))
+            .send({ name: 'Donmuş' })
+            .expect(409),
+        );
+        inactive(
+          await http()
+            .post(`/api/v1/products/${p.id}/variants`)
+            .set(bearer(token))
+            .send({ sku: sku(`frz-3-${token === ops}`) })
+            .expect(409),
+        );
+        inactive(
+          await http()
+            .patch(`/api/v1/products/${p.id}/variants/${p.variants[0].id}`)
+            .set(bearer(token))
+            .send({ barcode: `FRZ-${run}` })
+            .expect(409),
+        );
+        inactive(
+          await http()
+            .delete(`/api/v1/products/${p.id}/variants/${p.variants[1].id}`)
+            .set(bearer(token))
+            .expect(409),
+        );
+        inactive(
+          await http()
+            .delete(`/api/v1/products/${p.id}`)
+            .set(bearer(token))
+            .expect(409),
+        );
+      }
+      // A viewer still gets 403 first; no role still gets 404 (no company state leak).
+      const viewer = await memberWith('frz-view', 'viewer', [companyZ]);
+      await http()
+        .patch(`/api/v1/products/${p.id}`)
+        .set(bearer(viewer))
+        .send({ name: 'x' })
+        .expect(403);
+      await http()
+        .patch(`/api/v1/products/${p.id}`)
+        .set(bearer(tokenB))
+        .send({ name: 'x' })
+        .expect(404);
+
+      const unchanged = await http()
+        .get(`/api/v1/products/${p.id}`)
+        .set(bearer(tokenA))
+        .expect(200);
+      expect(unchanged.body.data.name).toBe(p.name);
+      expect(unchanged.body.data.variants).toHaveLength(2);
+      expect(await auditRows(p.id)).toHaveLength(1);
+
+      // Reactivated: writes work again.
+      await http()
+        .post(`/api/v1/companies/${companyZ}/activate`)
+        .set(bearer(tokenA))
+        .expect(200);
+      await http()
+        .patch(`/api/v1/products/${p.id}`)
+        .set(bearer(ops))
+        .send({ name: 'Çözüldü' })
+        .expect(200);
+    });
   });
 });

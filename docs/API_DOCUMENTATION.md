@@ -257,38 +257,38 @@ Açıklama: Ürünü en az bir varyantla oluşturur. Audit: ürün ve her varyan
 Yetki: Bearer token + `products:write` + firmada `products:write` veren rol
 İstek: `{ "companyId", "name" (1–250), "description"?, "status"? (varsayılan `draft`), "categoryId"?, "brandId"?, "variants": [ { "sku" (1–100), "barcode"? (en çok 50) } ] (1–100 adet) }`. Baş/son boşluk kırpılır; boş barkod `null` sayılır.
 Yanıt: `201` `{ "data": Product }`
-Hatalar: `403`, `404` (firma yok veya firmada rol yok), `409 SKU_TAKEN` / `409 BARCODE_TAKEN` (tenant içinde, tüm firmalarda ve **silinen varyantlar dahil** kullanılmış; aynı istekte tekrar eden SKU/barkod da), `422 CATEGORY_UNAVAILABLE` / `422 BRAND_UNAVAILABLE` (yok veya silinmiş), `422`
+Hatalar: `403`, `404` (firma yok veya firmada rol yok), `409 COMPANY_INACTIVE` (firma pasif), `409 SKU_TAKEN` / `409 BARCODE_TAKEN` (tenant içinde, tüm firmalarda ve **silinen varyantlar dahil** kullanılmış; aynı istekte tekrar eden SKU/barkod da), `422 CATEGORY_UNAVAILABLE` / `422 BRAND_UNAVAILABLE` (yok veya silinmiş), `422`
 
 ### PATCH /api/v1/products/:id
 Açıklama: `name`, `description`, `status`, `categoryId`, `brandId` (yalnızca gönderilenler; `null` bağlantıyı kaldırır). Firma değiştirilemez. Arşivleme: `{ "status": "archived" }`. Audit `UPDATE`.
 Yetki: Bearer token + `products:write` + firmada `products:write`
 Yanıt: `200` `{ "data": Product }`
-Hatalar: `403`, `404`, `422 CATEGORY_UNAVAILABLE` / `BRAND_UNAVAILABLE`, `422`
+Hatalar: `403`, `404`, `409 COMPANY_INACTIVE` (firma pasif), `422 CATEGORY_UNAVAILABLE` / `BRAND_UNAVAILABLE`, `422`
 
 ### DELETE /api/v1/products/:id
 Açıklama: Ürünü ve silinmemiş varyantlarını soft-delete eder. SKU ve barkodlar yeniden kullanılamaz. Audit: her varyant ve ürün için `DELETE`.
 Yetki: Bearer token + `products:write` + firmada `products:write`
 Yanıt: `204`
-Hatalar: `403`, `404`
+Hatalar: `403`, `404`, `409 COMPANY_INACTIVE` (firma pasif)
 
 ### POST /api/v1/products/:id/variants
 Açıklama: Varyant ekler. Audit `CREATE`.
 Yetki: Bearer token + `products:write` + firmada `products:write`
 İstek: `{ "sku", "barcode"? }`
 Yanıt: `201` `{ "data": Variant }`
-Hatalar: `403`, `404`, `409 SKU_TAKEN` / `BARCODE_TAKEN`, `422`
+Hatalar: `403`, `404`, `409 COMPANY_INACTIVE` (firma pasif), `409 SKU_TAKEN` / `BARCODE_TAKEN`, `422`
 
 ### PATCH /api/v1/products/:id/variants/:variantId
 Açıklama: SKU veya barkodu değiştirir (`barcode: null` kaldırır). Eski değer silinen varyantlarınki gibi rezerve kalmaz. Audit `UPDATE`.
 Yetki: Bearer token + `products:write` + firmada `products:write`
 Yanıt: `200` `{ "data": Variant }`
-Hatalar: `403`, `404` (ürün veya varyant), `409 SKU_TAKEN` / `BARCODE_TAKEN`, `422`
+Hatalar: `403`, `404` (ürün veya varyant), `409 COMPANY_INACTIVE` (firma pasif), `409 SKU_TAKEN` / `BARCODE_TAKEN`, `422`
 
 ### DELETE /api/v1/products/:id/variants/:variantId
 Açıklama: Varyantı soft-delete eder. Audit `DELETE`.
 Yetki: Bearer token + `products:write` + firmada `products:write`
 Yanıt: `204`
-Hatalar: `403`, `404`, `409 LAST_VARIANT` (ürünün son varyantı; ürünü silin veya arşivleyin)
+Hatalar: `403`, `404`, `409 COMPANY_INACTIVE` (firma pasif), `409 LAST_VARIANT` (ürünün son varyantı; ürünü silin veya arşivleyin)
 
 ### GET /api/v1/audit-logs
 Açıklama: Tenant'ın işlem geçmişi, yeniden eskiye.
@@ -353,6 +353,7 @@ Hatalar: `401` `INVALID_CREDENTIALS` (mevcut hesabın şifresi yanlış veya hes
 | `FORBIDDEN` | 403 | İzin yok |
 | `CONFLICT` | 409 | Tekil alan çakışması |
 | `SKU_TAKEN`, `BARCODE_TAKEN`, `CATEGORY_SLUG_TAKEN`, `BRAND_NAME_TAKEN` | 409 | Katalogda tekil alan çakışması (bkz. Katalog) |
+| `COMPANY_INACTIVE` | 409 | Pasif firmanın ürün/varyantları yazılamaz; okuma çalışır. Rol/izin kontrolü önce yapılır (rol yok `404`, izin yok `403`) |
 | `CATEGORY_IN_USE`, `BRAND_IN_USE`, `LAST_VARIANT`, `CONCURRENT_UPDATE` | 409 | Katalog kaydı silinemez veya aynı anda değiştirildi |
 | `CATEGORY_CYCLE`, `CATEGORY_UNAVAILABLE`, `BRAND_UNAVAILABLE` | 422 | Kategori döngüsü; bağlanan kategori/marka yok veya silinmiş |
 | `TENANT_CONTEXT_MISSING` | 500 | Sorgu tenant bağlamı olmadan çalıştırıldı (geliştirici hatası) |
