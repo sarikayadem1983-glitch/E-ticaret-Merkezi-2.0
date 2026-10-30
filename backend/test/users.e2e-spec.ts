@@ -442,7 +442,7 @@ describe('Users API (e2e)', () => {
       .expect(200);
   });
 
-  it('a non-last owner can be deactivated by another owner; the last active owner cannot', async () => {
+  it('a non-last owner can be deactivated by another owner; an admin cannot touch owners', async () => {
     const slug = `usr-c-${run}`;
     slugs.push(slug);
     const solo = await register(slug);
@@ -494,21 +494,40 @@ describe('Users API (e2e)', () => {
       await http().get('/api/v1/auth/me').set(bearer(o1.accessToken))
     ).body.data.tenantId as string;
     const o2 = await member(tenantE, 'owner');
-    // Each owner removes the other at the same time: at most one may succeed.
-    const results = await Promise.all([
-      http()
-        .post(`/api/v1/users/${o2.userId}/deactivate`)
-        .set(bearer(o1.accessToken)),
-      http()
-        .post(`/api/v1/users/${o1.userId}/deactivate`)
-        .set(bearer(o2.accessToken)),
-    ]);
-    const codes = results.map((r) => r.status).sort((a, b) => a - b);
-    // The loser is refused: LAST_OWNER (409) or, once the winner committed, as an inactive actor (401/403).
-    expect(codes[0]).toBe(200);
-    expect([401, 403, 409]).toContain(codes[1]);
+    // Hold both owner rows locked so both requests are in flight at the same
+    // time and must queue on the lock; without FOR UPDATE in the service they
+    // would not wait here and could both succeed.
     const pool = ownerPool();
+    const holder = await pool.connect();
     try {
+      await holder.query('BEGIN');
+      await holder.query(
+        `SELECT 1 FROM tenant_memberships WHERE tenant_id = $1 AND user_id = ANY($2::uuid[]) FOR UPDATE`,
+        [tenantE, [o1.userId, o2.userId]],
+      );
+      const pending = Promise.all([
+        http()
+          .post(`/api/v1/users/${o2.userId}/deactivate`)
+          .set(bearer(o1.accessToken))
+          .then((r) => r),
+        http()
+          .post(`/api/v1/users/${o1.userId}/deactivate`)
+          .set(bearer(o2.accessToken))
+          .then((r) => r),
+      ]);
+      // Both requests reach the lock (the guard has already passed).
+      for (let i = 0; i < 40; i++) {
+        const { rows } = await pool.query<{ n: string }>(
+          `SELECT count(*) n FROM pg_locks WHERE NOT granted`,
+        );
+        if (Number(rows[0].n) >= 2) break;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      await holder.query('COMMIT');
+      const results = await pending;
+      const codes = results.map((r) => r.status).sort((x, y) => x - y);
+      // The winner commits; the loser re-reads after the lock and sees itself inactive.
+      expect(codes).toEqual([200, 403]);
       const { rows } = await pool.query<{ n: string }>(
         `SELECT count(*) n FROM tenant_memberships m JOIN user_roles ur USING (tenant_id, user_id)
          JOIN roles r ON r.id = ur.role_id
@@ -517,9 +536,10 @@ describe('Users API (e2e)', () => {
       );
       expect(Number(rows[0].n)).toBe(1);
     } finally {
+      holder.release();
       await pool.end();
     }
-  });
+  }, 20_000);
 
   it('company roles must name active companies of this tenant', async () => {
     const ops = await member(tenantA, 'operations', [companyX]);

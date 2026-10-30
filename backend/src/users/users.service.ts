@@ -154,6 +154,8 @@ export class UsersService {
       const current = locked.get(userId)!;
       if (current === status) return;
       if (status === 'inactive') {
+        // Defence in depth: an active owner other than the target always acts here, so
+        // sequential requests cannot reach this; concurrent ones are serialised by the lock.
         const activeOwners = owners.filter((id) => locked.get(id) === 'active');
         assertNotLastOwner(targetKey, activeOwners.length);
       }
@@ -196,15 +198,16 @@ export class UsersService {
       userId,
       ...owners,
     ]);
-    if (!locked.has(userId)) throw notFound();
+    // The actor first: without the right, membership of the target is not revealed (403, not 404).
     const actorKey = await this.access.tenantRoleKey(actor.sub, tx);
     if (
       locked.get(actor.sub) !== 'active' ||
       !actorKey ||
       !(await this.access.hasTenantPermission(actor.sub, 'users:manage', tx))
     ) {
-      throw new ForbiddenException('Yetki yok');
+      throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Yetki yok' });
     }
+    if (!locked.has(userId)) throw notFound();
     const targetKey = await this.access.tenantRoleKey(userId, tx);
     if (
       (targetKey === 'owner' || targetKey === 'admin') &&
