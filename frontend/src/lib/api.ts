@@ -58,7 +58,9 @@ export async function request<T>(
   });
   if (res.status === 401 && typeof window !== 'undefined') {
     const onAuthPage = ['/login', '/register'].includes(window.location.pathname);
-    if (!onAuthPage && !url.startsWith('/api/auth/')) {
+    // Session-less invitation calls answer 401 for a wrong password, not for a lost session.
+    const sessionless = url.startsWith('/api/auth/') || url.startsWith('/api/invitations/');
+    if (!onAuthPage && !sessionless) {
       hardNavigate(`/login?next=${encodeURIComponent(window.location.pathname)}`);
     }
   }
