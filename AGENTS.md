@@ -39,7 +39,8 @@ Yol haritası `docs/roadmap/` altındadır. Görevlerin tek kaynağı `TASK_REGI
 
 `PLANNED` → `IN-PROGRESS` → `DONE-PR` → `DONE-NOT-DEPLOYED` → `DONE-MERGED`. Herhangi bir aşamadan `BLOCKED`'a geçilebilir (neden "Durum" hücresine yazılır).
 
-- `DONE-MERGED` yalnızca merge edilmiş **ve** dev'e deploy edilmiş görev içindir. Merge edilip deploy edilmeyen görev `DONE-NOT-DEPLOYED` kalır.
+- `DONE-NOT-DEPLOYED`: PR merge edildi, dev'e deploy edilmedi.
+- `DONE-MERGED`: PR merge edildi **ve** dev'e deploy edildi. Deploy edilmeyen iş `DONE-MERGED` yazılmaz.
 - PR'da olup merge edilmemiş iş hiçbir zaman "tamamlandı/merge edildi" diye raporlanmaz.
 
 ### Kim, ne zaman günceller
@@ -47,9 +48,9 @@ Yol haritası `docs/roadmap/` altındadır. Görevlerin tek kaynağı `TASK_REGI
 Görevi yürüten ajan, aynı dalda ve aynı PR içinde:
 
 1. **Başlarken:** `TASK_REGISTER.md`'de durumu `IN-PROGRESS` yapar.
-2. **Görev bitince (testler yeşil, CRITICAL'de inceleme temiz):** durumu `DONE-PR (PR #N)` yapar; `PROJECT_STATUS.md`'de §1 özet sayıları, modül yüzdeleri, §2 (açık PR içeriği), §4 sıradaki görevler ve §6 durum geçmişine bir satır (tarih, görev, PR bağlantısı, test sonuçları geçen/toplam, deploy durumu) ekler. Yeni risk bulunduysa §5'e eklenir; kapanan risk "Bugünkü durum" sütununda kapatılır.
-3. **Merge sonrası** (yalnızca kullanıcı onayıyla yapılan merge): durumu `DONE-NOT-DEPLOYED` yapar.
-4. **Dev deploy sonrası:** `DONE-MERGED (PR #N)` yapar; `PROJECT_STATUS.md`'deki "Dev ortamında çalışan kod" satırını commit SHA ile günceller.
+2. **Görev bitince (testler yeşil, CRITICAL'de inceleme temiz):** durumu `DONE-PR (PR #N)` yapar; `PROJECT_STATUS.md`'de §1 özet sayıları, "Açık PR" satırı ve modül bazında tamamlanma tablosu, §4 sıradaki görevler ve §6 durum geçmişine bir satır (tarih, görev, PR bağlantısı, test sonuçları geçen/toplam, deploy durumu) ekler. Yeni risk bulunduysa §5'e eklenir; kapanan risk "Bugünkü durum" sütununda kapatılır.
+3. **Merge sonrası** (yalnızca kullanıcı onayıyla yapılan merge): durumu `DONE-NOT-DEPLOYED (PR #N, merge <SHA>)` yapar; `PROJECT_STATUS.md` §2 "Merge edilen, deploy edilmemiş PR'lar" tablosuna PR satırı ekler.
+4. **Dev deploy sonrası:** `DONE-MERGED (PR #N)` yapar; `PROJECT_STATUS.md` §1'deki "Dev ortamı" satırını commit SHA ile günceller ve PR'ı §2 tablosundan çıkarır.
 
 Merge ve deploy sonrası güncellemeler küçük bir `docs/` dalında yapılır. Test sonuçları her zaman o anda gerçekten koşulan sonuçlardır; eski sonuç yeni diye yazılmaz.
 
