@@ -121,7 +121,7 @@ Tenant filtresi geliştiriciye bırakılmaz; Prisma seviyesinde zorunludur ve **
 | `auth` | Kullanıcı, rol, yetki, oturum |
 | `invitations` | E-posta davetleri: oluşturma, yeniden gönderme, iptal, lookup, kabul. Rol/firma atamalarını `AccessService`, üyeliği `MembershipsRepository`, global hesabı `AccountsService` (auth), firmaları `CompaniesService` üzerinden yazar/okur |
 | `mail` | E-posta gönderimi: `MailService.send({ to, subject, html, text })`, SMTP veya log taşıyıcısı. Diğer modüller içeriği kendisi üretir, taşıyıcıya dokunmaz |
-| `catalog` | Ürün, kategori, marka, varyant |
+| `catalog` | Ürün, kategori, marka, varyant (CAT-02: `/categories`, `/brands`, `/products` REST API; firmalar `CompaniesService`, izinler `AccessService.companyScope` / `assertCompanyPermission` üzerinden) |
 | `inventory` | Stok, depo, stok hareketleri |
 | `orders` | Sipariş, sipariş kalemi, durum akışı |
 | `channels` | Pazaryeri ve satış kanalı entegrasyonları |

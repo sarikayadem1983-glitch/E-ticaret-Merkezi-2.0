@@ -109,6 +109,31 @@ export class AccessService {
   }
 
   /**
+   * Tenant context. Companies where the member's role grants `permission`,
+   * read from the database: `null` means every company (a tenant role with
+   * `companies:all` and the permission).
+   */
+  async companyScope(
+    user: AuthUser,
+    permission: string,
+  ): Promise<string[] | null> {
+    const [tenant, companies] = await Promise.all([
+      this.repository.findTenantRole(user.sub),
+      this.repository.findCompanyRoles(user.sub),
+    ]);
+    if (
+      tenant &&
+      allows(tenant, permission) &&
+      allows(tenant, 'companies:all')
+    ) {
+      return null;
+    }
+    return companies
+      .filter((c) => allows(c, permission))
+      .map((c) => c.companyId);
+  }
+
+  /**
    * Tenant context. UI flags for `auth/me`, read from the database. A tenant
    * role writes every company (`canWriteAllCompanies`); company roles are
    * listed per company.

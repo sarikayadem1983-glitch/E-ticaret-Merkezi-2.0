@@ -137,6 +137,11 @@ Sayaçlar Redis'te tutulur (`rl:` önekli anahtarlar). Her kontrol tek bir atomi
 
 Production'da Redis yüksek erişilebilirlik (replika + otomatik failover) ile çalıştırılmalı ve izlenmelidir.
 
+### Katalog yetkileri (CAT-02)
+- Ürün ve varyant işlemleri her istekte kullanıcının ürünün firmasındaki rolünü veritabanından okur (`AccessService.assertCompanyPermission`): rol yoksa `404`, `products:write` yoksa `403`. Liste `AccessService.companyScope(user, 'products:read')` ile yalnızca erişilebilen firmalara daraltılır; `companies:all` olan mağaza rolü tüm firmaları görür.
+- Pasif firmanın kataloğu dondurulur: ürün ve varyant oluşturma, değiştirme ve silme `409 COMPANY_INACTIVE` verir; firma durumu yazma transaction'ı içinde okunur. Rol yoksa yine `404`, izin yoksa `403` döner, firma durumu sızdırılmaz.
+- Kategori ve marka tüm firmalarca paylaşıldığı için yalnızca mağaza rolü (Owner, Admin: `products:write` + `companies:all`) yazar; Operasyon yalnızca okur. JWT kontrolüne ek olarak servis izni veritabanından yeniden okur.
+
 ### Kuyruk işlerinde tenant bağlamı
 
 Ayrıntı: [ARCHITECTURE.md → Kuyruk](ARCHITECTURE.md#kuyruk-arka-plan-işleri).
