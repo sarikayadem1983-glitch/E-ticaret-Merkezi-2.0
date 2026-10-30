@@ -7,13 +7,13 @@ Son güncelleme: 2026-10-30 (`main` @ `8fc7ae3` dev'e deploy edildi) · Kaynak: 
 | Ölçü | Değer |
 |---|---|
 | Toplam EPIC / görev | 33 / 141 (133 + 6 kullanıcı yönetimi MVP dilimi + 2 kullanıcı kararı 2026-10-30: OPS-08, USR-21) |
-| Tamamlanan | 28 (%19,9) — 28 `DONE-MERGED` (hepsi dev'de, `8fc7ae3`) |
+| Tamamlanan | 30 (%21,3) — 30 `DONE-MERGED` (hepsi dev'de, `0437c16`) |
 | BLOCKED | 1 — USR-18 (T16 + Aşama 2 migration onayı) |
-| Sürüm A (Trendyol-only MVP) ilerleme | 28 / 58 görev merge edildi ve dev'de; kalan 30 görev, 87,5 iş günü; tahmini hedef 2027-01-20 (taahhüt değil; OPS-08 ve USR-T11a sonrası yeniden hesaplanmadı) |
+| Sürüm A (Trendyol-only MVP) ilerleme | 30 / 58 görev merge edildi ve dev'de; kalan 28 görev, 85 iş günü; tahmini hedef 2027-01-20 (taahhüt değil; OPS-08 ve USR-T11a sonrası yeniden hesaplanmadı) |
 | Sürüm B / C | 62 / 21 görev |
-| Açık PR | #23 USR-T14 (`DONE-PR`; CI ✓, CRITICAL bağımsız inceleme 2 tur temiz) |
-| `origin/main` | `8fc7ae3` (PR #19 merge; #18 `9653158`). `main` CI ✓: backend unit 283/283, e2e 318/319 (1 skip, Mailpit), frontend 84/84 |
-| Dev ortamı | `8fc7ae3` (2026-10-30; onay kaydı yok, bkz. §3). Backend `node dist/main` (PID 2404), frontend `npm run dev`, Mailpit (e-posta dışarı gitmez). Smoke: oturum içinde çalıştırıldığı bildirildi, çıktı kaydedilmedi, doğrulanamadı |
+| Açık PR | bu doküman PR'ı (dev deploy `0437c16` kaydı) |
+| `origin/main` | `0437c16` (PR #23 merge; #22 `f41c88e`). `main` CI ✓: backend unit 283/283, e2e 331/332 (1 skip, Mailpit), frontend 124/124 |
+| Dev ortamı | `0437c16` (2026-10-30, kullanıcı onayıyla, bkz. §3). Backend `node dist/main`, frontend `npm run dev`, Mailpit (e-posta dışarı gitmez). Smoke 43/44 + tenant izolasyonu yeniden kontrolü ok; çıktı `tm-backups/smoke-0437c16.log` |
 | Dev DB şeması | Tüm migration'lar uygulandı; son `20261029120000_catalog_schema` (CAT-01, 2026-10-30, kullanıcı onayıyla; öncesinde yedek + izole prova 16/16). `setup-roles.sql` yeniden çalıştırıldı. Aşama 2 (`migrations-pending/`) uygulanmadı |
 | Son testler (`main` @ `8fc7ae3`, CI run 41053467144) | backend build ok, lint ok, unit 283/283, e2e 318/319 (1 skip: `mail.e2e-spec.ts`, Mailpit); frontend build ok, lint ok, typecheck ok, unit 84/84. Playwright CI'da koşmuyor. Önceki yerel tam tur (`95b5bdb`): build ok; frontend 81/81, lint ok, typecheck ok, `next build` ok; Playwright 13/13 yalnızca `next dev` ile — `next start` (prod modu, http) 11/13: `APP_ORIGIN` https koruması, bkz. R-24 |
 
@@ -22,7 +22,7 @@ Son güncelleme: 2026-10-30 (`main` @ `8fc7ae3` dev'e deploy edildi) · Kaynak: 
 | Modül | Tamamlanan / Toplam | % | Not |
 |---|---|---|---|
 | M01 INF | 11 / 20 | 55 | Hepsi dev'de |
-| M02 USR | 14 / 28 | 50 | Hepsi dev'de |
+| M02 USR | 16 / 28 | 57 | Hepsi dev'de |
 | M03 DSH | 1 / 3 | 33 | İskelet |
 | M04 CAT | 2 / 6 | 33 | Dev'de; CAT-01 migration'ı uygulandı |
 | M05–M20 | 0 / 82 | 0 | Başlanmadı |
@@ -30,15 +30,21 @@ Son güncelleme: 2026-10-30 (`main` @ `8fc7ae3` dev'e deploy edildi) · Kaynak: 
 
 ## 2. Merge edilen, deploy edilmemiş PR'lar
 
-| PR | Görev | Merge commit | Not |
-|---|---|---|---|
-| [#22](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/22) | USR-T12a | `f41c88e` | frontend değişti (`next.config`); deploy'da frontend yeniden başlatılmalı |
-
-#6–#16 (`f010233`) ve #19 (`8fc7ae3`) 2026-10-30'da dev'e deploy edildi ve bu tablodan çıkarıldı; ayrıntı §3 ve §6.
+Yok. #6–#16 (`f010233`), #19 (`8fc7ae3`), #22 ve #23 (`0437c16`) 2026-10-30'da dev'e deploy edildi ve bu tablodan çıkarıldı; ayrıntı §3 ve §6.
 
 Aşama 2 SQL'i (`migrations-pending/`) uygulanmadı (USR-18).
 
-## 3. Dev deploy kaydı (2026-10-30, `main` @ `8fc7ae3`)
+## 3. Dev deploy kaydı (2026-10-30, `main` @ `0437c16`)
+
+Yalnızca dev ortamında, kullanıcı onayıyla. `8fc7ae3` → `0437c16`: #22 (frontend BFF route'ları, `next.config` içinde `/invite/*` için `Referrer-Policy: no-referrer`) ve #23 (yalnızca testler). `git diff 8fc7ae3 0437c16 -- database backend/prisma` ve lock dosyaları boş, yani **migration yok**.
+
+- Deploy öncesi `main` CI (`0437c16`) ✓: fe 124/124, unit 283/283, e2e 331/332 (1 skip).
+- Backend `npm run build` ok, `node dist/main` yeniden başlatıldı; frontend `npm run dev` yeniden başlatıldı.
+- `GET /api/v1/health` 200; `/invite/x` yanıtında `Referrer-Policy: no-referrer` var.
+- Smoke (run `mvv8euz4`): 43/44. Tek FAIL `other_tenant_users_403_or_404` 401: script bayat B token'ı kullanıyor (önceki deploy'daki bilinen script hatası). Taze B oturumuyla yeniden kontrol: A üyesine deactivate 404, access PUT 404, listede sızıntı yok.
+- Geri alma: `git checkout 8fc7ae3`, backend build + yeniden başlatma, frontend yeniden başlatma. DB değişmediği için dump gerekmez.
+
+### Önceki deploy (`8fc7ae3`)
 
 Yalnızca dev ortamında. Bu deploy için kullanıcı onayı kayıtlı değil: sohbette ya da dokümanda kanıtı yok, bu yüzden "kullanıcı onayıyla" yazılmadı. `f010233` → `8fc7ae3`: yalnızca backend (`users` modülü) ve dokümanlar değişti. `git diff f010233 8fc7ae3 -- frontend database backend/prisma` boş, yani **migration yok**.
 
@@ -74,7 +80,7 @@ Kullanıcı onayıyla, yalnızca dev ortamında (`localhost:5432/ticaret_merkezi
 
 | # | ID | Başlık | Not |
 |---|---|---|---|
-| 1 | USR-T11a | Users modülü çekirdeği | Dev'de (`8fc7ae3`) |
+| 1 | USR-T13a | Kullanıcılar sayfası, davet diyaloğu, davet kabul sayfası | USR-T12a dev'de (`0437c16`) |
 | 2 | CAT-03 | Varyant ve özellik yönetimi | CAT-02 tamam; CAT-06 ile paralel |
 | 3 | CAT-05 | Fiyat yönetimi | CAT-02 tamam |
 | 4 | INT-01 | `ChannelAdapter`, kimlik bilgisi şifreleme | INF-13 (B) bağımlılığı için bkz. R-25 |
@@ -158,3 +164,4 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 | 2026-10-30 | USR-T12a → DONE-PR | [#22](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/22) | frontend unit 124/124, typecheck ok; CI ✓; bağımsız inceleme 2 tur, açık bulgu yok | yok |
 | 2026-10-30 | USR-T12a → DONE-NOT-DEPLOYED (merge `f41c88e`, kullanıcı onayı) | [#22](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/22) | PR CI ✓ (`6fde946`) | yok (dev `8fc7ae3`) |
 | 2026-10-30 | USR-T14 → DONE-PR | [#23](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/23) | CI (`42c82e6` sonrası): bkz. PR; ürün kodu değişmedi; bağımsız inceleme 2 tur, 2. turdaki Low bulgular (hata kodu sabitleme, rol geri yükleme) kapatıldı | yok |
+| 2026-10-30 | USR-T12a, USR-T14 → DONE-MERGED (#23 merge `0437c16`, kullanıcı onayı) | [#22](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/22), [#23](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/23) | `main` CI (`0437c16`): fe 124/124, unit 283/283, e2e 331/332 (1 skip); dev smoke 43/44 + izolasyon yeniden kontrolü ok | dev `0437c16` (kullanıcı onayıyla) |
