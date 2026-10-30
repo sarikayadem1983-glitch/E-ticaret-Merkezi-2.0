@@ -558,7 +558,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | Görev | 139 (133 + 6 MVP dilimi: USR-T9a, T10a, T11a, T12a, T13a, T15a) |
 | DONE-MERGED | 27 |
 | DONE-PR | 0 |
-| DONE-MERGED (dev `f010233`, 2026-10-30) | 16 (USR-T1…T8, USR-17; PR #6, #8, #9; INF-10 #11, INF-18 #10, USR-T9a #12, CAT-01 #13, INF-09 #14, USR-T10a #15, CAT-02 #16) |
+| DONE-NOT-DEPLOYED | 0 |
 | IN-PROGRESS | 0 |
 | BLOCKED | 1 (USR-18) |
 | PLANNED | 111 |
