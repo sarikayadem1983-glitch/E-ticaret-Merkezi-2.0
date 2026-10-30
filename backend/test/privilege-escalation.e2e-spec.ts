@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { hash } from '@node-rs/argon2';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
@@ -151,6 +152,12 @@ describe('Privilege escalation and tenant isolation (e2e)', () => {
     return login(email);
   };
 
+  /** A 422 from the ValidationPipe that names `field` (not some other field error). */
+  const expectFieldError = (res: request.Response, field: string) => {
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    expect(JSON.stringify(res.body.error.details)).toContain(field);
+  };
+
   const createInvitation = async (
     token: string,
     email: string,
@@ -241,7 +248,8 @@ describe('Privilege escalation and tenant isolation (e2e)', () => {
         .put(`/api/v1/users/${ops.userId}/access`)
         .set(bearer(actor.accessToken))
         .send({ tenantRole: 'owner' })
-        .expect(422);
+        .expect(422)
+        .expect((r) => expectFieldError(r, 'tenantRole'));
       await http()
         .post('/api/v1/invitations')
         .set(bearer(actor.accessToken))
@@ -249,12 +257,14 @@ describe('Privilege escalation and tenant isolation (e2e)', () => {
           email: `pe-own-${label++}-${run}@test.local`,
           tenantRole: 'owner',
         })
-        .expect(422);
+        .expect(422)
+        .expect((r) => expectFieldError(r, 'tenantRole'));
       await http()
         .put(`/api/v1/users/${ops.userId}/access`)
         .set(bearer(actor.accessToken))
         .send({ companyRoles: [{ companyId: companyA, roleKey: 'owner' }] })
-        .expect(422);
+        .expect(422)
+        .expect((r) => expectFieldError(r, 'roleKey'));
     }
     // Unknown fields are refused, not ignored.
     await http()
@@ -264,7 +274,8 @@ describe('Privilege escalation and tenant isolation (e2e)', () => {
         companyRoles: [{ companyId: companyA, roleKey: 'viewer' }],
         permissions: ['*'],
       })
-      .expect(422);
+      .expect(422)
+      .expect((r) => expectFieldError(r, 'permissions'));
   });
 
   it('nobody can edit their own access', async () => {
@@ -427,7 +438,8 @@ describe('Privilege escalation and tenant isolation (e2e)', () => {
     const ids = users.body.data.map((u: { userId: string }) => u.userId);
     expect(ids).not.toContain(opsA.userId);
     expect(ids).not.toContain(ownerA.userId);
-    expect(JSON.stringify(users.body)).not.toContain(`pe-a-${run}`);
+    expect(JSON.stringify(users.body)).not.toContain(ownerA.email);
+    expect(JSON.stringify(users.body)).not.toContain(opsA.email);
     const invitations = await http()
       .get('/api/v1/invitations')
       .set(bearer(ownerB.accessToken))
@@ -464,15 +476,87 @@ describe('Privilege escalation and tenant isolation (e2e)', () => {
         }),
       ),
     ).rejects.toBeInstanceOf(TenantViolationError);
-    // Not through a nested write either.
+    // Not through a nested write either (a valid Prisma call; only the extension refuses it).
     await expect(
       TenantContext.run(tenantA, () =>
-        prisma.tenantMembership.updateMany({
-          where: { userId: ownerA.userId },
-          data: { user: { update: { name: 'x' } } } as never,
+        prisma.tenantMembership.update({
+          where: {
+            tenantId_userId: { tenantId: tenantA, userId: ownerA.userId },
+          },
+          data: { user: { update: { name: 'x' } } },
         }),
       ),
-    ).rejects.toThrow();
+    ).rejects.toBeInstanceOf(TenantViolationError);
+  });
+
+  it('deactivation ends the access token (SESSION_REVOKED) and the refresh token', async () => {
+    const s = await member(tenantA, 'operations', [companyA]);
+    await http()
+      .post(`/api/v1/users/${s.userId}/deactivate`)
+      .set(bearer(ownerA.accessToken))
+      .expect(200);
+    const next = await http()
+      .get(`/api/v1/companies/${companyA}`)
+      .set(bearer(s.accessToken));
+    expect(next.status).toBe(401);
+    expect(next.body.error.code).toBe('SESSION_REVOKED');
+    await http()
+      .post('/api/v1/auth/refresh')
+      .send({ refreshToken: s.refreshToken })
+      .expect(401);
+    await http()
+      .post('/api/v1/auth/login')
+      .send({ email: s.email, password: PASSWORD })
+      .expect(401);
+  });
+
+  it('a forged or foreign-tenant JWT is refused', async () => {
+    const jwt = app.get(JwtService, { strict: false });
+    const claims = jwt.decode<Record<string, unknown>>(ownerA.accessToken);
+    const { iat: _iat, exp: _exp, ...payload } = claims;
+    // Signed with another key.
+    const forged = new JwtService({ secret: 'x'.repeat(48) }).sign(payload);
+    await http().get('/api/v1/users').set(bearer(forged)).expect(401);
+    // Correctly signed, but for a tenant where the user has no membership.
+    const foreign = jwt.sign({ ...payload, tid: tenantB });
+    const res = await http().get('/api/v1/users').set(bearer(foreign));
+    expect(res.status).toBe(401);
+    expect(JSON.stringify(res.body)).not.toContain(ownerB.email);
+  });
+
+  it('a member of two tenants is shown per tenant: no roles from the other tenant', async () => {
+    const both = await member(
+      tenantA,
+      'operations',
+      [companyA],
+      [{ tenantId: tenantB }],
+    );
+    const pool = ownerPool();
+    try {
+      await pool.query(
+        `INSERT INTO user_company_roles (tenant_id, user_id, company_id, role_id)
+         VALUES ($1, $2, $3, $4)`,
+        [tenantB, both.userId, companyB, await systemRoleId(tenantB, 'viewer')],
+      );
+    } finally {
+      await pool.end();
+    }
+    await http()
+      .post(`/api/v1/users/${both.userId}/deactivate`)
+      .set(bearer(ownerA.accessToken))
+      .expect(200);
+    const fromB = await http()
+      .get('/api/v1/users')
+      .set(bearer(ownerB.accessToken))
+      .expect(200);
+    const row = fromB.body.data.find(
+      (u: { userId: string }) => u.userId === both.userId,
+    );
+    expect(row).toMatchObject({
+      status: 'active',
+      access: { companyRoles: [{ companyId: companyB, roleKey: 'viewer' }] },
+    });
+    expect(JSON.stringify(row)).not.toContain(companyA);
   });
 
   it('audit:read is denied to every company role', async () => {
