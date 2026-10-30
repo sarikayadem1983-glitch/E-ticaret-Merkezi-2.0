@@ -62,11 +62,27 @@
   - Adımlar: `pg_dump -Fc` → `pg_restore --list` → `tm_restore_check`'e geri yükleme ve tablo satır sayısı karşılaştırması → `tm_migration_rehearsal`'a geri yükleme → `snapshot-before.sql` → `prisma migrate deploy` (prisma'ya verilen URL'nin `current_database()`'i önce doğrulanır) → `verify-after.sql` + kullanıcı sayısı/id kümesi, üyelik eşleşmesi, owner ve rol atamaları, e-posta çakışmaları (yalnızca raporlanır) → ikinci `migrate deploy` no-op, `migration.sql`'in doğrudan tekrarı veri değiştirmeden hata verir → `rollback.sql` ayrı kopyada (`tm_rollback_rehearsal`) başarılı; ikinci üyelik eklenmiş kopyada (`tm_rollback_stop_rehearsal`) ve `tenant_id`siz kullanıcı eklenmiş kopyada (`tm_rollback_null_rehearsal`) veri değiştirmeden durur.
   - Çıktı: `<POSTGRES_DB>-<ts>.dump`, `restore-check.txt`, `rehearsal-verify.txt` (yalnızca sayılar ve kontrol adları). Prova veritabanları sonunda silinir. Çıkış 0 = tüm kontroller `ok=t`.
 
-### catalog
-- `categories` — id, parent_id, name, slug
-- `brands` — id, name
-- `products` — id, brand_id, category_id, name, description, status
-- `product_variants` — id, product_id, sku (unique), barcode, price, currency
+### catalog (CAT-01 yazıldı ve izole veritabanında denendi — migration `catalog_schema`; geliştirme veritabanına henüz uygulanmadı)
+- Kapsam: kategori ve marka **tenant** genelidir (tüm firmalar paylaşır); ürün ve varyant bir **firmaya** aittir (`company_id` zorunlu). Firma bazlı yetki CAT-02'de `assertCompanyPermission(user, product.companyId, 'products:write')` ile uygulanır.
+- `categories` — id, tenant_id, parent_id, name (150), slug (160), created_at, updated_at, deleted_at
+  - Ağaç: `(tenant_id, parent_id)` → `categories(tenant_id, id)` (ON DELETE NO ACTION). `(tenant_id, slug)` yalnızca silinmemiş satırlar arasında tekil (kısmi indeks `categories_tenant_id_slug_active_key`): soft-delete edilen kategorinin slug'ı yeniden kullanılabilir.
+  - CHECK `categories_no_self_parent` (kendi ebeveyni olamaz), `categories_slug_format` (`^[a-z0-9]+(-[a-z0-9]+)*$`; yalnızca küçük harf, bu yüzden slug tekilliği fiilen büyük/küçük harf duyarsız). Daha derin döngü kontrolü uygulamada (CAT-02).
+- `brands` — id, tenant_id, name (150), created_at, updated_at, deleted_at
+  - Ad tenant içinde büyük/küçük harf duyarsız ve yalnızca silinmemiş satırlar arasında tekil: kısmi ifade indeksi `brands_tenant_id_name_active_key` `(tenant_id, lower(btrim(name))) WHERE deleted_at IS NULL`. CHECK `brands_name_trimmed`: baş/son boşluk yok, boş değil.
+- `products` — id, tenant_id, company_id, category_id?, brand_id?, name (250), description, status (`product_status`: `draft`|`active`|`archived`, varsayılan `draft`), created_at, updated_at, deleted_at
+  - Composite FK'ler: `(tenant_id, company_id)` → `companies`, `(tenant_id, category_id)` → `categories`, `(tenant_id, brand_id)` → `brands` (hepsi RESTRICT).
+  - Tekil `(tenant_id, company_id, id)`: varyant FK'sinin hedefi.
+  - İndeksler: `(tenant_id, company_id, status)`, `(tenant_id, category_id)`, `(tenant_id, brand_id)`.
+- `product_variants` — id, tenant_id, company_id, product_id, sku (100), barcode? (50), created_at, updated_at, deleted_at
+  - FK `(tenant_id, company_id, product_id)` → `products(tenant_id, company_id, id)`: varyant başka tenant'ın ürününe ve ürününün firmasından başka firmaya bağlanamaz.
+  - `(tenant_id, sku)` ve `(tenant_id, barcode)` tekil: tenant içinde, firmalar arası ve **soft-delete edilmiş satırlar dahil**. Karar: silinen varyantın SKU'su/barkodu **yeniden kullanılamaz**, çünkü sipariş, stok ve pazaryeri geçmişi onlara başvurur. Barkodsuz varyantlar çakışmaz (NULL).
+  - SKU ve barkod büyük/küçük harf **duyarlıdır** (pazaryeri barkodları birebir karşılaştırılır). CHECK `product_variants_sku_not_blank`, `product_variants_barcode_not_blank`, `product_variants_sku_trimmed`, `product_variants_barcode_trimmed` (baş/son boşluk yok).
+  - Tek varyantlı ürün de bir varyant satırı taşır (SKU her zaman varyanttadır); bu kural uygulamada (CAT-02).
+- Fiyat, para birimi ve KDV oranı bu tablolarda **yoktur**: CAT-05 ayrı tabloda (`NUMERIC` + `currency`) varyanta `(tenant_id, id)` ile bağlanır. Özellik/eksen (renk, beden) CAT-03'te ayrı tablolarla eklenir; kanal kategori eşlemesi (CAT-06) `categories(tenant_id, id)`'ye bağlanır. Mevcut kolonlar değişmez.
+- Silme yok: tüm katalog tabloları `deleted_at` ile soft-delete edilir; `tm_app`'te `DELETE`/`TRUNCATE` yok (`SELECT, INSERT, UPDATE`).
+- İzinler (`roles.catalog.ts`): `products:read` (Admin, Operasyon, Muhasebe, Görüntüleyici), `products:write` (Admin, Operasyon); Owner `*`. Migration, sistem rollerinin `roles.permissions` kopyasına da ekler.
+- Prisma şemasında gösterilemeyenler (yalnızca SQL'de; `schema.prisma`'da karşılığı olan `@@unique` yoktur): kısmi tekil indeksler `brands_tenant_id_name_active_key`, `categories_tenant_id_slug_active_key` ve yukarıdaki CHECK'ler. `prisma migrate diff` (migrate edilmiş veritabanı → şema) bunları silmeye çalışmaz; yalnızca önceki migration'lardan bilinen `role_scope` farkını gösterir.
+- Geri dönüş: `down.sql` (tek transaction; yalnızca sistem rollerinin (`key IS NOT NULL`) izinlerini geri alır; katalog tablolarında satır varsa hiçbir şey değiştirmeden durur; veri varsa geri dönüş yalnızca yedekten). Testler: `backend/test/catalog-schema.e2e-spec.ts` (izolasyon, composite FK, tekillik), `migration-catalog.e2e-spec.ts` (boş ve veri içeren veritabanında uygulama, ikinci uygulama, `down.sql`), `db-privileges.e2e-spec.ts` (yetkiler).
 
 ### inventory
 - `warehouses` — id, name

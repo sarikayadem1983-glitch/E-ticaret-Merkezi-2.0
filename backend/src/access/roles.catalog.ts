@@ -1,7 +1,8 @@
 /**
  * System roles. The single source of truth for their permissions: at runtime a
  * role with a `key` takes its permissions from here, not from roles.permissions.
- * `name` matches the rows seeded by migration 20261029090000_tenant_memberships.
+ * `name` matches the rows seeded by migration 20261029090000_tenant_memberships;
+ * `products:*` were added to the stored copies by 20261029120000_catalog_schema.
  */
 export type RoleKey =
   'owner' | 'admin' | 'operations' | 'accounting' | 'viewer';
@@ -25,22 +26,24 @@ export const ROLE_CATALOG: Record<RoleKey, CatalogRole> = {
       'users:invite',
       'users:manage',
       'audit:read',
+      'products:read',
+      'products:write',
     ],
   },
   operations: {
     scope: 'company',
     name: 'Operasyon',
-    permissions: ['companies:read'],
+    permissions: ['companies:read', 'products:read', 'products:write'],
   },
   accounting: {
     scope: 'company',
     name: 'Muhasebe',
-    permissions: ['companies:read'],
+    permissions: ['companies:read', 'products:read'],
   },
   viewer: {
     scope: 'company',
     name: 'Görüntüleyici',
-    permissions: ['companies:read'],
+    permissions: ['companies:read', 'products:read'],
   },
 };
 

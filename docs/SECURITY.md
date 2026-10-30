@@ -10,7 +10,7 @@ Uygulama PostgreSQL'e **superuser ile bağlanmaz**.
 |---|---|---|
 | `postgres` (superuser) | Yalnızca bootstrap: rolleri oluşturmak (`database/roles/setup-roles.sql`) | Tümü. Uygulama veya CI bu hesabı kullanmaz. |
 | `tm_migrator` | `prisma migrate deploy` / `migrate diff` (`MIGRATION_DATABASE_URL`) | `public` şemasının ve tüm nesnelerin sahibi. Superuser değil, rol/veritabanı oluşturamaz. |
-| `tm_app` | Çalışan uygulama (`DATABASE_URL`) | `CONNECT`, şemada `USAGE` (CREATE yok). İş tablolarında `SELECT, INSERT, UPDATE, DELETE`. `audit_logs`'ta yalnızca `SELECT, INSERT`. `_prisma_migrations`'a erişim yok. `TRUNCATE`, `REFERENCES`, `TRIGGER` yok. |
+| `tm_app` | Çalışan uygulama (`DATABASE_URL`) | `CONNECT`, şemada `USAGE` (CREATE yok). İş tablolarında `SELECT, INSERT, UPDATE, DELETE`. `audit_logs`'ta yalnızca `SELECT, INSERT`. `tenant_memberships`, `invitations` ve katalog tabloları (`categories`, `brands`, `products`, `product_variants`) silinmez: `SELECT, INSERT, UPDATE`. `_prisma_migrations`'a erişim yok. `TRUNCATE`, `REFERENCES`, `TRIGGER` yok. |
 
 - Yeni tablolar `tm_migrator` tarafından oluşturulur. `ALTER DEFAULT PRIVILEGES`, `tm_app`'e otomatik olarak `SELECT, INSERT, UPDATE, DELETE` verir. **Append-only** olması gereken yeni tablolar için migration içinde açıkça `REVOKE UPDATE, DELETE` yazılmalıdır.
 - `PUBLIC` rolünden veritabanı ve şema üzerindeki `CREATE`/`TEMP` yetkileri alınır.

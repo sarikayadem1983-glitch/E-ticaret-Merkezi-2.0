@@ -26,6 +26,10 @@ model Tenant {
   auditLogs        AuditLog[]
   companies        Company[]
   userCompanyRoles UserCompanyRole[]
+  categories       Category[]
+  brands           Brand[]
+  products         Product[]
+  productVariants  ProductVariant[]
 
   @@map("tenants")
 }
@@ -145,6 +149,7 @@ model Company {
 
   tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   userRoles UserCompanyRole[]
+  products  Product[]
 
   @@unique([tenantId, taxNumber])
   @@unique([tenantId, id])
@@ -301,4 +306,111 @@ model AuditLog {
   @@index([tenantId, entityType, entityId])
   @@index([tenantId, actorUserId])
   @@map("audit_logs")
+}
+
+// Catalog (CAT-01). Soft delete only: tm_app has no DELETE on these tables.
+// SQL-only (never declare them here; `prisma migrate dev` / `db push` are not used):
+//   partial unique indexes brands_tenant_id_name_active_key, categories_tenant_id_slug_active_key;
+//   CHECKs categories_no_self_parent, categories_slug_format, brands_name_trimmed,
+//   product_variants_sku_not_blank, product_variants_sku_trimmed,
+//   product_variants_barcode_not_blank, product_variants_barcode_trimmed.
+
+enum ProductStatus {
+  draft
+  active
+  archived
+
+  @@map("product_status")
+}
+
+/// Tenant-wide category tree (shared by every company of the tenant).
+model Category {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  parentId  String?   @map("parent_id") @db.Uuid
+  name      String    @db.VarChar(150)
+  /// Lowercase, hyphen-separated; unique within the tenant among non-deleted rows.
+  slug      String    @db.VarChar(160)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+
+  tenant   Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  parent   Category?  @relation("CategoryTree", fields: [tenantId, parentId], references: [tenantId, id], onDelete: NoAction)
+  children Category[] @relation("CategoryTree")
+  products Product[]
+
+  @@unique([tenantId, id])
+  // SQL-only: unique (tenant_id, slug) WHERE deleted_at IS NULL.
+  @@index([tenantId, parentId])
+  @@map("categories")
+}
+
+/// Tenant-wide brand list. Name is trimmed and unique per tenant case-insensitively among non-deleted rows.
+model Brand {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  name      String    @db.VarChar(150)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  products Product[]
+
+  @@unique([tenantId, id])
+  // SQL-only: unique (tenant_id, lower(btrim(name))) WHERE deleted_at IS NULL.
+  @@map("brands")
+}
+
+/// A product of one company. Sellable units are its variants (at least one; enforced by the application).
+model Product {
+  id          String        @id @default(uuid()) @db.Uuid
+  tenantId    String        @map("tenant_id") @db.Uuid
+  companyId   String        @map("company_id") @db.Uuid
+  categoryId  String?       @map("category_id") @db.Uuid
+  brandId     String?       @map("brand_id") @db.Uuid
+  name        String        @db.VarChar(250)
+  description String?
+  status      ProductStatus @default(draft)
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime?     @map("deleted_at") @db.Timestamptz
+
+  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  company  Company          @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict)
+  category Category?        @relation(fields: [tenantId, categoryId], references: [tenantId, id], onDelete: Restrict)
+  brand    Brand?           @relation(fields: [tenantId, brandId], references: [tenantId, id], onDelete: Restrict)
+  variants ProductVariant[]
+
+  @@unique([tenantId, id])
+  /// Target of the variant FK: a variant always belongs to its product's company.
+  @@unique([tenantId, companyId, id])
+  @@index([tenantId, companyId, status])
+  @@index([tenantId, categoryId])
+  @@index([tenantId, brandId])
+  @@map("products")
+}
+
+/// Sellable unit. SKU and barcode are trimmed, case-sensitive and unique within the tenant
+/// (across companies, soft-deleted rows included: never reused, history refers to them).
+model ProductVariant {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  companyId String    @map("company_id") @db.Uuid
+  productId String    @map("product_id") @db.Uuid
+  sku       String    @db.VarChar(100)
+  barcode   String?   @db.VarChar(50)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  product Product @relation(fields: [tenantId, companyId, productId], references: [tenantId, companyId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, sku])
+  @@unique([tenantId, barcode])
+  @@index([tenantId, companyId, productId])
+  @@map("product_variants")
 }

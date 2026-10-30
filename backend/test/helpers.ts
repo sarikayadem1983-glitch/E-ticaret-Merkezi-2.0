@@ -62,6 +62,10 @@ export async function purgeTenants(slugs: string[]): Promise<void> {
         'user_roles',
         'refresh_tokens',
         'tenant_memberships',
+        'product_variants',
+        'products',
+        'categories',
+        'brands',
         'companies',
         'roles',
       ]) {
