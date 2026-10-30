@@ -1,72 +1,52 @@
 # Proje Durumu
 
-Son güncelleme: 2026-10-30 (PR #10–#16 merge edildi) · Kaynak: `origin/main` @ `6824f6f` · Güncelleme kuralları: `AGENTS.md` → "Yol haritası ve durum takibi".
+Son güncelleme: 2026-10-30 (`main` @ `f010233` dev'e deploy edildi) · Kaynak: `origin/main` @ `f010233` · Güncelleme kuralları: `AGENTS.md` → "Yol haritası ve durum takibi".
 
 ## 1. Özet
 
 | Ölçü | Değer |
 |---|---|
 | Toplam EPIC / görev | 33 / 139 (133 + 6 kullanıcı yönetimi MVP dilimi) |
-| Tamamlanan | 27 (%19,4) — 11 `DONE-MERGED` (dev'de), 16 `DONE-NOT-DEPLOYED` (USR-T1…T8, USR-17, INF-09, INF-10, INF-18, USR-T9a, USR-T10a, CAT-01, CAT-02; `main`'de, dev'e deploy edilmedi) |
+| Tamamlanan | 27 (%19,4) — 27 `DONE-MERGED` (hepsi dev'de, `f010233`) |
 | BLOCKED | 1 — USR-18 (T16 + Aşama 2 migration onayı) |
-| Sürüm A (Trendyol-only MVP) ilerleme | 27 / 57 görev merge edildi (16'sı dev'de değil); kalan 30 görev, 89 iş günü; tahmini hedef 2027-01-20 (taahhüt değil; önceki 2027-02-03) |
+| Sürüm A (Trendyol-only MVP) ilerleme | 27 / 57 görev merge edildi ve dev'de; kalan 30 görev, 89 iş günü; tahmini hedef 2027-01-20 (taahhüt değil; önceki 2027-02-03) |
 | Sürüm B / C | 61 / 21 görev |
-| Açık PR | #7 roadmap (draft). #12–#16 merge edildi |
-| `origin/main` | `6824f6f` (PR #16 merge; #15 `bc37227`, #13 `aa02144`, #14 `6fef239`). `main` CI ✓: backend unit 283/283, e2e 305/306 (1 skip, Mailpit), frontend 84/84 |
-| Dev ortamı | Son deploy edilen kod `eda38da` (Task 4). `main` dev'e deploy edilmedi (kullanıcı onayı gerekir) |
-| Dev DB şeması | Aşama 1 migration `20261029090000_tenant_memberships` uygulanmış (kullanıcı onayıyla); PR #6/#8/#9 yeni migration getirmez. CAT-01 migration'ı `20261029120000_catalog_schema` `main`'de, dev DB'ye **uygulanmadı** (kullanıcı onayı gerekir) |
+| Açık PR | #18 bu roadmap güncellemesi (deploy sonrası) · #19 USR-T11a (CRITICAL inceleme temiz, merge kullanıcı onayı bekler) |
+| `origin/main` | `f010233` (PR #17 merge; #7 `23926b1`). `main` CI ✓. Son tam test turu (`6824f6f`, CI): backend unit 283/283, e2e 305/306 (1 skip, Mailpit), frontend 84/84; sonraki commit'ler yalnızca doküman |
+| Dev ortamı | `f010233` (2026-10-30, kullanıcı onayıyla). Backend `node dist/main`, frontend `npm run dev`, Mailpit (e-posta dışarı gitmez). Smoke 30/30 |
+| Dev DB şeması | Tüm migration'lar uygulandı; son `20261029120000_catalog_schema` (CAT-01, 2026-10-30, kullanıcı onayıyla; öncesinde yedek + izole prova 16/16). `setup-roles.sql` yeniden çalıştırıldı. Aşama 2 (`migrations-pending/`) uygulanmadı |
 | Son testler (`main` @ `6824f6f`, CI) | backend unit 283/283, e2e 305/306 (1 skip); frontend 84/84. Önceki yerel tam tur (`95b5bdb`): build ok; frontend 81/81, lint ok, typecheck ok, `next build` ok; Playwright 13/13 yalnızca `next dev` ile — `next start` (prod modu, http) 11/13: `APP_ORIGIN` https koruması, bkz. R-24 |
 
 ### Modül bazında tamamlanma (görev sayısına göre)
 
 | Modül | Tamamlanan / Toplam | % | Not |
 |---|---|---|---|
-| M01 INF | 11 / 20 | 55 | 8'i dev'de; INF-09, INF-10, INF-18 `main`'de, deploy edilmedi |
-| M02 USR | 13 / 28 | 46 | 2'si dev'de; 11'i `main`'de, deploy edilmedi |
+| M01 INF | 11 / 20 | 55 | Hepsi dev'de |
+| M02 USR | 13 / 28 | 46 | Hepsi dev'de |
 | M03 DSH | 1 / 3 | 33 | İskelet |
-| M04 CAT | 2 / 6 | 33 | CAT-01, CAT-02 `main`'de, deploy edilmedi; migration dev DB'ye uygulanmadı |
+| M04 CAT | 2 / 6 | 33 | Dev'de; CAT-01 migration'ı uygulandı |
 | M05–M20 | 0 / 82 | 0 | Başlanmadı |
-| **Toplam** | **27 / 139** | **19,4** | Dev'e deploy edilmiş: 11 / 139 (%7,9) |
+| **Toplam** | **27 / 139** | **19,4** | Dev'e deploy edilmiş: 27 / 139 (%19,4) |
 
 ## 2. Merge edilen, deploy edilmemiş PR'lar
 
-Hepsi merge commit ile, kullanıcının PR başına ayrı onayıyla merge edildi. **Hiçbiri dev'e deploy edilmedi** (dev `eda38da`).
+Yok. #6–#16 2026-10-30'da dev'e deploy edildi (`f010233`) ve bu tablodan çıkarıldı; ayrıntı §6.
 
-| PR | Merge | Görevler | İçerik |
-|---|---|---|---|
-| [#6](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/6) | `f1be19a` | USR-T1…T6, USR-17 | Aşama 1 migration, yedek/prova betiği, global kullanıcı + üyelik, mağaza değiştirme, `auth_version` ile oturum iptali, pasif kullanıcıya token verilmemesi, `setup-roles.sql` boş parola koruması |
-| [#8](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/8) | `cc8b72a` | USR-T7 | Rol kataloğu, `AccessService`, `canGrant`, son owner koruması |
-| [#9](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/9) | `95b5bdb` | USR-T8 | Companies modülünde firma başına rol kontrolü |
-| [#11](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/11) | `9c405bd` | INF-10 | GitHub Actions CI: backend lint/typecheck/unit/e2e (servis PG/Redis), frontend test/lint/typecheck |
-| [#10](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/10) | `113b522` | INF-18 | Mağaza değiştirmede Redis hatası: istek 503, refresh zinciri korunur, sahte `REFRESH_REUSE` audit'i yok; reuse işleme kullanıcı satırında serileştirildi |
-| [#12](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/12) | `f9b5889` | USR-T9a | `mail` modülü: `MailService.send`, SMTP/log transport, `mail.config` (prod'da `log` yasak, TLS zorunlu), Mailpit (docker) |
-| [#15](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/15) | `bc37227` | USR-T10a | `invitations` modülü: oluştur, iptal, yeniden gönder, lookup, kabul; hız sınırı; audit |
-| [#13](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/13) | `aa02144` | CAT-01 | Katalog şeması (kategori, marka, ürün, varyant; tenant içinde tekil SKU/barkod) — migration `20261029120000_catalog_schema` + `down.sql`; `setup-roles.sql` katalog yetkileri |
-| [#14](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/14) | `6fef239` | INF-09 | `queue` modülü (BullMQ/Redis): tenant context'li job, retry/backoff, ölü kuyruk; `/health` `queue` alanı |
-| [#16](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/16) | `6824f6f` | CAT-02 | `catalog` API: `/categories`, `/brands`, `/products` (+ varyantlar); firma rolü izinleri; pasif firma `409 COMPANY_INACTIVE` |
+Aşama 2 SQL'i (`migrations-pending/`) uygulanmadı (USR-18).
 
-Migration getiren tek PR #13'tür (CAT-01); dev DB'ye **uygulanmadı**. Aşama 2 SQL'i (`migrations-pending/`) uygulanmadı (USR-18).
+## 3. Dev deploy kaydı (2026-10-30, `main` @ `f010233`)
 
-## 3. Dev deploy önkoşulları (`main` @ `6824f6f`)
+Kullanıcı onayıyla, yalnızca dev ortamında (`localhost:5432/ticaret_merkezi`, `tm-postgres`).
 
-Her adım kullanıcı onayı gerektirir; deploy ve migration ayrı onaylardır.
+1. Yedek: `backup-and-rehearse.sh` — yedek okunabilir, geri yükleme satır sayıları eşit (16 tablo). Betiğin Aşama 1'e özgü kontrolleri (başlangıç `companies` bekler) dev artık Aşama 1'de olduğu için başarısız (16/36); CAT-01'i doğrulamaz.
+2. CAT-01 izole provası (aynı yedekten `tm_` kopya, sonra silindi): 16/16 — yalnızca CAT-01 bekliyor, uygulama 281 ms, diğer 15 tablonun satırları değişmedi, `tm_app` = `SELECT, INSERT, UPDATE`, rol izinleri doğru, ikinci deploy boş, boş katalogda `down.sql` başarılı.
+3. Hedef doğrulandı (`current_database` = `ticaret_merkezi`, `tm_migrator`), `migrate deploy` → CAT-01 uygulandı; `setup-roles.sql` yeniden çalıştırıldı.
+4. `.env`'e Mailpit ayarları eklendi (`MAIL_TRANSPORT=smtp`, `127.0.0.1:1025`, `INVITATION_TTL_HOURS`, `QUEUE_*`).
+5. Backend ve frontend `f010233` ile başlatıldı; `/health` → `database: up`, `queue: up`.
+6. Smoke 30/30: kayıt, `auth/me`, `auth/memberships`, firma, kategori, marka, ürün/varyant, `409 SKU_TAKEN`, davet → Mailpit → lookup → kabul, görüntüleyici `403`, iptal edilmiş davet reddi, başka tenant `404`, mevcut hesapla davet kabulü, mağaza değiştirme, pasif firma `409 COMPANY_INACTIVE`, yeniden aktifleştirme.
+   - Dev'de denenmedi (e2e'de kapsanıyor): INF-18 Redis hata enjeksiyonu; pasife alınan üyenin `SESSION_REVOKED` alması (personel pasife alma endpoint'i USR-T11a ile gelir).
 
-1. Dev DB yedeği: `bash database/scripts/backup-and-rehearse.sh <out-dir>` → çıkış 0 (CAT-01 migration'ı yedek üzerinde prova edilir).
-2. `cd backend && npx prisma migrate status` → yalnızca `20261029120000_catalog_schema` bekler. Kullanıcı onayıyla `npx prisma migrate deploy` (`MIGRATION_DATABASE_URL`, `tm_migrator`). Aşama 2 **uygulanmaz**.
-3. `database/roles/setup-roles.sql` migration'dan sonra yeniden çalıştırılır: `tm_app` katalog tablolarında yalnızca `SELECT, INSERT, UPDATE` alır (silme yok).
-4. Dev `.env`'e yeni ayarlar (değerler commit edilmez, `.env.example`'a bakın):
-   - `mail`: `MAIL_TRANSPORT`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_REQUIRE_TLS`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM` (dev'de Mailpit veya `log`).
-   - `invitations`: `INVITATION_TTL_HOURS`.
-   - `queue`: `QUEUE_WORKERS`, `QUEUE_SHUTDOWN_TIMEOUT_MS` (Redis `REDIS_URL` üzerinden).
-5. Backend'in (`:4000`) ve frontend'in yeni kodla başlatılması için kullanıcı onayı.
-6. Smoke test:
-   - Önceki: login, `auth/memberships`, mağaza değiştirme, pasife alınan üyenin `SESSION_REVOKED` alması, pasif kullanıcının login/refresh reddi, firma rolüne göre erişim (T8).
-   - INF-18: mağaza değiştirme sırasında Redis hatası → `503`, oturum korunur.
-   - INF-09: `/health` → `queue: "up"`.
-   - USR-T9a/T10a: davet oluştur → e-posta Mailpit'te → kabul; iptal edilen davet kabul edilemez.
-   - CAT-02: kategori/marka/ürün oluştur, listele, sil; firma dışı ürün `404`, pasif firmada yazma `409 COMPANY_INACTIVE`.
-7. Geri dönüş planı: `eda38da` kodunu yeniden başlat. CAT-01 uygulandıysa önce `down.sql` (`tm_migrator`; katalogda satır varken çalışmaz) ve `_prisma_migrations` satırının silinmesi; gerekirse 1. adımdaki yedekten geri yükleme.
-8. Deploy sonrası USR-T1…T8, USR-T9a, USR-T10a, USR-17, INF-09, INF-10, INF-18, CAT-01, CAT-02 `DONE-MERGED` olur; bu dosya ve `TASK_REGISTER.md` güncellenir.
+**Geri dönüş:** kod için önceki sürümü yeniden başlatmak yeterli (eski kod yeni tabloları kullanmaz). Smoke testi katalogda satır oluşturduğundan `down.sql` artık kendini durdurur; şemayı geri almak için 1. adımdaki yedekten geri yükleme gerekir (yedekten sonraki dev verisi kaybolur).
 
 ## 4. Sıradaki görevler (önerilen sıra, 2 akış)
 
@@ -99,7 +79,7 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 | R-01 | Kritik | Aşama 2 migration'ı (`users.is_active`, `users.tenant_id` kaldırma) guard ve login/refresh hâlâ `users.is_active` okurken çalıştırılırsa tüm girişler bozulur veya pasif kullanıcı kontrolü kaybolur (`backend/src/auth/user-state.ts`, `auth.repository.ts`) | Aşama 2 uygulanmadı, `migrations-pending/`'de | USR-18 (önce kod, sonra migration, onay) |
 | R-02 | Kritik | Prod öncesi otomatik yedek, PITR ve geri yükleme tatbikatı yok; şu an yalnızca elle çalışan betik var | Açık | OPS-03 |
 | R-03 | Yüksek | Firma rolü yetki sınırları henüz uygulanmıyor: `user_company_roles` var ama companies modülü firma bazlı izin kontrol etmiyor; davet/kullanıcı yönetimi gelince yetki yükseltme yüzeyi açılır | USR-T7/T8 `main`'de (firma rolü kontrolü var); davet/kullanıcı yönetimi gelince yüzey açılır | USR-T14 |
-| R-04 | Yüksek | (Kapandı: PR #10 merge `113b522`, dev'e deploy edilmedi) Mağaza değiştirme sırasında Redis çökerse refresh zinciri yeniden kullanım (token hırsızlığı) olarak algılanabilir → sahte audit kaydı ve kullanıcının tüm cihazlardan çıkışı | Açık | INF-18 |
+| R-04 | Yüksek | (Kapandı: PR #10 merge `113b522`; dev'e deploy edildi `f010233`, 2026-10-30) Mağaza değiştirme sırasında Redis çökerse refresh zinciri yeniden kullanım (token hırsızlığı) olarak algılanabilir → sahte audit kaydı ve kullanıcının tüm cihazlardan çıkışı | Açık | INF-18 |
 | R-05 | Yüksek | Redis tek nokta: rate limiting ve BFF oturumu fail-closed; Redis kesintisinde kimse giriş yapamaz | Dev'de tek Redis | INF-14 |
 | R-06 | Yüksek | Tenant izolasyonu yeni modüllerde ihlal edilebilir (her yeni tablo/sorgu, kuyruk job'ları, ai-engine istekleri) | Prisma eklentisi + izin listesi testi var; job'lar için yok | INF-09, her modülde S testleri, USR-T14 |
 | R-07 | Yüksek | Prod ağ/TLS/proxy yapılandırması yanlışsa IP rate limit herkesi birlikte engeller veya backend internete açılır | Prod yok | INF-17 |
@@ -107,7 +87,7 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 | R-09 | Orta | Kayıtta `409` yanıtı e-postanın kayıtlı olduğunu sızdırır (kullanıcı numaralandırma) | Açık | INF-20 |
 | R-10 | Orta | CSP `script-src 'unsafe-inline'` | Açık | INF-16 |
 | R-11 | Orta | CI var (PR #11); zorunlu kontrol (branch protection) henüz açık değil — depo ayarı, kullanıcı | Kısmen | INF-10 + depo ayarı |
-| R-12 | Orta | Dev ortamı `main`'in gerisinde (`eda38da`; T5–T8 ve USR-17 dev'de yok) | Açık | §3 dev deploy (onay) |
+| R-12 | Orta | (Kapandı: 2026-10-30 dev `f010233`'e geçti) Dev ortamı `main`'in gerisinde | Kapandı | — |
 | R-13 | Orta | CAPTCHA ve sızmış şifre kontrolü yok | Açık | INF-15 |
 | R-14 | Düşük | `origin/HEAD` `feature/backend-setup`'a işaret ediyor, PR'lar `main`'e gidiyor; yerel `main` dalı `origin/main`'in gerisinde — yanlış hedef dal riski | Açık | Depo ayarı: varsayılan dalı `main` yap (kullanıcı) |
 | R-15 | Kritik (gelecek) | Pazaryeri / entegratör / ödeme kimlik bilgilerinin sızması | Henüz kod yok | INT-01, EFT-01, SUB-02 |
@@ -149,3 +129,4 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 | 2026-10-29 | MVP Trendyol-only olarak sadeleştirildi (kullanıcı kararı): 18 görev B'ye, USR-T9…T15'ten 6 MVP dilimi, INT-TY-03'e yerel stok iadesi | #7 | — | — |
 | 2026-10-29 | USR-T1…T6, USR-17 → DONE-NOT-DEPLOYED (merge `f1be19a`); USR-T7 → DONE-NOT-DEPLOYED (#8, `cc8b72a`); USR-T8 → DONE-NOT-DEPLOYED (#9, `95b5bdb`) | #6, #8, #9 | `main`: unit 211/211, e2e 173/173, fe 81/81, Playwright 13/13 (`next dev`) | yok (dev `eda38da`) |
 | 2026-10-30 | USR-T9a (#12 `f9b5889`), USR-T10a (#15 `bc37227`), CAT-01 (#13 `aa02144`), INF-09 (#14 `6fef239`), CAT-02 (#16 `6824f6f`) → DONE-NOT-DEPLOYED | #12–#16 | `main` @ `6824f6f`: unit 283/283, e2e 305/306 (1 skip), fe 84/84 | yok (dev `eda38da`; CAT-01 migration dev DB'ye uygulanmadı) |
+| 2026-10-30 | USR-T1…T8, USR-T9a, USR-T10a, USR-17, INF-09, INF-10, INF-18, CAT-01, CAT-02 → DONE-MERGED; CAT-01 migration dev DB'ye uygulandı | #6–#16 | yedek/geri yükleme ok, CAT-01 prova 16/16, smoke 30/30 | dev `f010233` |
