@@ -2,6 +2,7 @@ import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayMinSize,
+  ArrayUnique,
   IsArray,
   IsIn,
   IsInt,
@@ -102,6 +103,15 @@ export class BrandDto {
   name: string;
 }
 
+/** One axis value of a variant (CAT-03). */
+export class VariantAttributeDto {
+  @IsUUID()
+  attributeId: string;
+
+  @IsUUID()
+  valueId: string;
+}
+
 export class CreateVariantDto {
   @Transform(trim)
   @IsString()
@@ -113,6 +123,14 @@ export class CreateVariantDto {
   @IsString()
   @MaxLength(50)
   barcode?: string | null;
+
+  /** At most one value per attribute (checked by the service: ATTRIBUTE_DUPLICATE). */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(5)
+  @ValidateNested({ each: true })
+  @Type(() => VariantAttributeDto)
+  attributes?: VariantAttributeDto[];
 }
 
 export class UpdateVariantDto {
@@ -127,6 +145,14 @@ export class UpdateVariantDto {
   @IsString()
   @MaxLength(50)
   barcode?: string | null;
+
+  /** At most one value per attribute (checked by the service: ATTRIBUTE_DUPLICATE). */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(5)
+  @ValidateNested({ each: true })
+  @Type(() => VariantAttributeDto)
+  attributes?: VariantAttributeDto[];
 }
 
 export class CreateProductDto {
@@ -208,4 +234,86 @@ export class ListProductsQuery extends PageQuery {
   @IsOptional()
   @IsUUID()
   brand_id?: string;
+}
+
+// ---- attributes (CAT-03) ----
+
+export class CreateAttributeDto {
+  @Transform(trim)
+  @IsString()
+  @Length(1, 100)
+  name: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @Transform(({ value }: { value: unknown }) =>
+    Array.isArray(value)
+      ? value.map((v) => (typeof v === 'string' ? v.trim() : v))
+      : value,
+  )
+  @IsString({ each: true })
+  @Length(1, 100, { each: true })
+  values?: string[];
+}
+
+export class UpdateAttributeDto {
+  @Transform(trim)
+  @IsString()
+  @Length(1, 100)
+  name: string;
+}
+
+export class CreateAttributeValueDto {
+  @Transform(trim)
+  @IsString()
+  @Length(1, 100)
+  value: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(10000)
+  sortOrder?: number;
+}
+
+export class UpdateAttributeValueDto {
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @Length(1, 100)
+  value?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(10000)
+  sortOrder?: number;
+}
+
+export class GenerateAxisDto {
+  @IsUUID()
+  attributeId: string;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(50)
+  @ArrayUnique()
+  @IsUUID('all', { each: true })
+  valueIds: string[];
+}
+
+export class GenerateVariantsDto {
+  @Transform(trim)
+  @IsString()
+  @Length(1, 60)
+  @Matches(/^\S+$/, { message: 'SKU öneki boşluk içeremez' })
+  skuPrefix: string;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(3)
+  @ValidateNested({ each: true })
+  @Type(() => GenerateAxisDto)
+  axes: GenerateAxisDto[];
 }
