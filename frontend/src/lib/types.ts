@@ -46,3 +46,67 @@ export interface Membership {
   slug: string;
   current: boolean;
 }
+
+// ---- catalog (CAT-04) ----
+
+export type ProductStatus = 'draft' | 'active' | 'archived';
+
+export interface VariantAttribute {
+  attributeId: string;
+  attributeName: string;
+  valueId: string;
+  value: string;
+}
+
+/** Amounts are decimal strings ("199.90"), never numbers. */
+export interface VariantPrice {
+  channel: string;
+  amount: string;
+  currency: string;
+  netAmount: string | null;
+  vatAmount: string | null;
+  updatedAt: string;
+}
+
+export interface Variant {
+  id: string;
+  productId: string;
+  sku: string;
+  barcode: string | null;
+  attributes: VariantAttribute[];
+  prices: VariantPrice[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Product {
+  id: string;
+  companyId: string;
+  categoryId: string | null;
+  brandId: string | null;
+  name: string;
+  description: string | null;
+  status: ProductStatus;
+  vatRate: string | null;
+  variants: Variant[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Category {
+  id: string;
+  parentId: string | null;
+  name: string;
+  slug: string;
+}
+
+export interface Brand {
+  id: string;
+  name: string;
+}
+
+export interface Attribute {
+  id: string;
+  name: string;
+  values: { id: string; value: string; sortOrder: number }[];
+}

@@ -6,13 +6,18 @@
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 
 interface BffRoute {
-  method: 'GET' | 'POST' | 'PATCH' | 'PUT';
+  method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   path: RegExp;
   /** Allowed query parameters (GET only). */
   query?: readonly string[];
   /** Whether a JSON body is forwarded. */
   body?: boolean;
 }
+
+const CHANNEL = '[a-z0-9]+(?:-[a-z0-9]+)*';
+const PRODUCT = `products/${UUID}`;
+const VARIANT = `${PRODUCT}/variants/${UUID}`;
+const LIST_QUERY = ['page', 'per_page', 'search'] as const;
 
 const ROUTES: readonly BffRoute[] = [
   {
@@ -35,6 +40,33 @@ const ROUTES: readonly BffRoute[] = [
   { method: 'GET', path: /^invitations$/ },
   { method: 'POST', path: /^invitations$/, body: true },
   { method: 'POST', path: new RegExp(`^invitations/${UUID}/revoke$`) },
+  // Catalog (CAT-04). Category/brand writes are not exposed yet.
+  {
+    method: 'GET',
+    path: /^products$/,
+    query: [...LIST_QUERY, 'status', 'company_id', 'category_id', 'brand_id'],
+  },
+  { method: 'POST', path: /^products$/, body: true },
+  { method: 'GET', path: new RegExp(`^${PRODUCT}$`) },
+  { method: 'PATCH', path: new RegExp(`^${PRODUCT}$`), body: true },
+  { method: 'DELETE', path: new RegExp(`^${PRODUCT}$`) },
+  { method: 'POST', path: new RegExp(`^${PRODUCT}/variants$`), body: true },
+  {
+    method: 'POST',
+    path: new RegExp(`^${PRODUCT}/variants/generate$`),
+    body: true,
+  },
+  { method: 'PATCH', path: new RegExp(`^${VARIANT}$`), body: true },
+  { method: 'DELETE', path: new RegExp(`^${VARIANT}$`) },
+  {
+    method: 'PUT',
+    path: new RegExp(`^${VARIANT}/prices/${CHANNEL}$`),
+    body: true,
+  },
+  { method: 'DELETE', path: new RegExp(`^${VARIANT}/prices/${CHANNEL}$`) },
+  { method: 'GET', path: /^(categories|brands|attributes)$/, query: LIST_QUERY },
+  { method: 'POST', path: /^attributes$/, body: true },
+  { method: 'POST', path: new RegExp(`^attributes/${UUID}/values$`), body: true },
 ];
 
 const SEGMENT = /^[a-z0-9-]{1,64}$/;

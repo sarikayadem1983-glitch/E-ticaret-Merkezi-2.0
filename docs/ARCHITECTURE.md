@@ -109,6 +109,7 @@ Tenant filtresi geliştiriciye bırakılmaz; Prisma seviyesinde zorunludur ve **
 - **Tarayıcı backend'e doğrudan erişmez.** Next.js sunucusu BFF (Backend for Frontend) olarak çalışır: oturumu tutar, isteği doğrular ve izin verilen backend endpoint'ine iletir. Backend JWT, RBAC ve tenant kontrollerini her istekte yine kendisi yapar.
 - Token'lar yalnızca BFF'in Redis oturum deposunda (şifreli) durur; tarayıcıda yalnızca rastgele oturum kimliği cookie'si vardır. Ayrıntılar: [SECURITY.md §5](SECURITY.md#5-frontend-bff-oturum-güvenliği).
 - `frontend/server.mjs` giriş noktasıdır (geliştirme ve production): gerçek istemci IP'sini ve protokolü güvenilir proxy listesine göre belirler, production'da HTTPS zorunlu kılar.
+- **Katalog arayüzü (CAT-04):** `/products` (liste: arama, durum/firma/kategori/marka filtresi, sayfalama; masaüstünde tablo, mobilde kart), `/products/new` (ürün formu + ilk varyant ve liste fiyatı), `/products/:id` (ürün bilgileri, KDV oranı, varyant editörü: SKU/barkod/özellik, liste ve kanal fiyatları, eksenlerden varyant üretimi, silme onaylı) ve `/attributes` (özellik ve değerleri). Tutarlar arayüzde virgüllü yazılabilir; API'ye nokta ayırıcılı **metin** gider (`lib/money.ts`), `number`'a çevrilmez. Varyant editörü dar ekranda kart düzenine geçer; dokunma hedefleri en az 40 px.
 - Kurumsal renkler: lacivert `#142C50` (ana renk), turuncu `#F47B20` (vurgu), beyaz. Turuncu üzerindeki metin laciverttir: beyaz metin turuncu zeminde WCAG AA kontrastını sağlamaz.
 
 ## Modüller

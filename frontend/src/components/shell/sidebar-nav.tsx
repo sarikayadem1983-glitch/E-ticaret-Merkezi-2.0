@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Boxes,
   Building2,
   FileText,
   LayoutDashboard,
@@ -17,13 +18,14 @@ import { cn } from '@/lib/utils';
 const NAV = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/companies', label: 'Firmalar', icon: Building2 },
+  { href: '/products', label: 'Ürünler', icon: Package },
   { href: '/profile', label: 'Profil', icon: UserRound },
 ] as const;
 
 /** Planned modules, shown so the menu reflects the roadmap; not clickable yet. */
 const SOON = [
   { label: 'Siparişler', icon: ShoppingCart },
-  { label: 'Ürünler ve Stok', icon: Package },
+  { label: 'Stok', icon: Boxes },
   { label: 'Pazaryerleri', icon: Store },
   { label: 'e-Fatura', icon: FileText },
 ] as const;
