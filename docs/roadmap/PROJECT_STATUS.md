@@ -11,11 +11,11 @@ Son güncelleme: 2026-10-30 (`main` @ `8fc7ae3` dev'e deploy edildi) · Kaynak: 
 | BLOCKED | 1 — USR-18 (T16 + Aşama 2 migration onayı) |
 | Sürüm A (Trendyol-only MVP) ilerleme | 30 / 58 görev merge edildi ve dev'de; kalan 28 görev, 85 iş günü; tahmini hedef 2027-01-20 (taahhüt değil; OPS-08 ve USR-T11a sonrası yeniden hesaplanmadı) |
 | Sürüm B / C | 62 / 21 görev |
-| Açık PR | bu doküman PR'ı (dev deploy `0437c16` kaydı) |
+| Açık PR | #24 bu doküman PR'ı (dev deploy `0437c16` kaydı) · [#25](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/25) USR-T13a (`DONE-PR`, merge edilmedi; CI ✓) |
 | `origin/main` | `0437c16` (PR #23 merge; #22 `f41c88e`). `main` CI ✓: backend unit 283/283, e2e 331/332 (1 skip, Mailpit), frontend 124/124 |
 | Dev ortamı | `0437c16` (2026-10-30, kullanıcı onayıyla, bkz. §3). Backend `node dist/main`, frontend `npm run dev`, Mailpit (e-posta dışarı gitmez). Smoke 43/44 + tenant izolasyonu yeniden kontrolü ok; çıktı `tm-backups/smoke-0437c16.log` |
 | Dev DB şeması | Tüm migration'lar uygulandı; son `20261029120000_catalog_schema` (CAT-01, 2026-10-30, kullanıcı onayıyla; öncesinde yedek + izole prova 16/16). `setup-roles.sql` yeniden çalıştırıldı. Aşama 2 (`migrations-pending/`) uygulanmadı |
-| Son testler (`main` @ `8fc7ae3`, CI run 41053467144) | backend build ok, lint ok, unit 283/283, e2e 318/319 (1 skip: `mail.e2e-spec.ts`, Mailpit); frontend build ok, lint ok, typecheck ok, unit 84/84. Playwright CI'da koşmuyor. Önceki yerel tam tur (`95b5bdb`): build ok; frontend 81/81, lint ok, typecheck ok, `next build` ok; Playwright 13/13 yalnızca `next dev` ile — `next start` (prod modu, http) 11/13: `APP_ORIGIN` https koruması, bkz. R-24 |
+| Son testler (`main` @ `0437c16`, CI run 41096842266) | backend unit 283/283, e2e 331/332 (1 skip: `mail.e2e-spec.ts`, Mailpit); frontend unit 124/124. Önceki tam tur (`8fc7ae3`, CI run 41053467144): build, lint, typecheck ok. Playwright CI'da koşmuyor. Önceki yerel tam tur (`95b5bdb`): build ok; frontend 81/81, lint ok, typecheck ok, `next build` ok; Playwright 13/13 yalnızca `next dev` ile — `next start` (prod modu, http) 11/13: `APP_ORIGIN` https koruması, bkz. R-24 |
 
 ### Modül bazında tamamlanma (görev sayısına göre)
 
@@ -165,3 +165,4 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 | 2026-10-30 | USR-T12a → DONE-NOT-DEPLOYED (merge `f41c88e`, kullanıcı onayı) | [#22](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/22) | PR CI ✓ (`6fde946`) | yok (dev `8fc7ae3`) |
 | 2026-10-30 | USR-T14 → DONE-PR | [#23](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/23) | CI (`42c82e6` sonrası): bkz. PR; ürün kodu değişmedi; bağımsız inceleme 2 tur, 2. turdaki Low bulgular (hata kodu sabitleme, rol geri yükleme) kapatıldı | yok |
 | 2026-10-30 | USR-T12a, USR-T14 → DONE-MERGED (#23 merge `0437c16`, kullanıcı onayı) | [#22](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/22), [#23](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/23) | `main` CI (`0437c16`): fe 124/124, unit 283/283, e2e 331/332 (1 skip); dev smoke 43/44 + izolasyon yeniden kontrolü ok | dev `0437c16` (kullanıcı onayıyla) |
+| 2026-11-11 | USR-T13a → DONE-PR (merge edilmedi) | [#25](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/25) | CI ✓: unit 283/283, e2e 331/332 (1 skip), fe 132/132 | yok |
