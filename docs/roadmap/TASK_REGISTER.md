@@ -142,7 +142,7 @@ Kaynak: `docs/superpowers/plans/2026-10-28-user-management.md` (T1–T16 numaral
 | CAT-02 | Ürün CRUD API (liste, filtre, sayfalama, soft-delete, audit) | P0 | CAT-01; merge öncesi USR-T8 (firma izin kontrolü) | 3 | STANDARD | A | DONE-MERGED (PR #16, merge `6824f6f`; dev `f010233`, 2026-10-30) | Firma rolü izinleri uygulanır; pasif firmanın ürünleri yazılamaz (`409 COMPANY_INACTIVE`) | E, S | Orta | Öneri (onay bekliyor) |
 | CAT-03 | Varyant ve özellik (attribute) yönetimi | P0 | CAT-02 | 4 | STANDARD | A | DONE-PR (PR #27) | Renk/beden gibi eksenlerden varyant üretimi | U, E | Düşük | Öneri (onay bekliyor) |
 | CAT-04 | Katalog UI: liste, filtre, ürün formu, varyant editörü | P0 | CAT-03 | 4 | STANDARD | A | PLANNED | Mobilde kullanılabilir | F, P | Düşük | Öneri (onay bekliyor) |
-| CAT-05 | Fiyat yönetimi: liste fiyatı, kanal fiyatı, KDV oranı (`decimal` + para birimi) | P0 | CAT-02 | 2 | STANDARD | A | IN-PROGRESS | Float yok; yuvarlama kuralı belgelendi | U, E | Orta (finansal doğruluk) | Öneri (onay bekliyor) |
+| CAT-05 | Fiyat yönetimi: liste fiyatı, kanal fiyatı, KDV oranı (`decimal` + para birimi) | P0 | CAT-02 | 2 | STANDARD | A | DONE-PR (PR #29) | Float yok; yuvarlama kuralı belgelendi | U, E | Orta (finansal doğruluk) | Öneri (onay bekliyor) |
 
 ### CAT-E2 Pazaryeri kategori/özellik eşleme
 
@@ -436,7 +436,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | CAT-02 | Ürün CRUD API (liste, filtre, sayfalama, soft-delete, audit) | DONE-MERGED (PR #16, merge `6824f6f`; dev `f010233`, 2026-10-30) | 3 | STANDARD | Öneri (onay bekliyor) |
 | CAT-03 | Varyant ve özellik (attribute) yönetimi | DONE-PR (PR #27) | 4 | STANDARD | Öneri (onay bekliyor) |
 | CAT-04 | Katalog UI: liste, filtre, ürün formu, varyant editörü | PLANNED | 4 | STANDARD | Öneri (onay bekliyor) |
-| CAT-05 | Fiyat yönetimi: liste fiyatı, kanal fiyatı, KDV oranı (`decimal` + para birimi) | IN-PROGRESS | 2 | STANDARD | Öneri (onay bekliyor) |
+| CAT-05 | Fiyat yönetimi: liste fiyatı, kanal fiyatı, KDV oranı (`decimal` + para birimi) | DONE-PR (PR #29) | 2 | STANDARD | Öneri (onay bekliyor) |
 | CAT-06 | Kanal kategori ağacı ve zorunlu özellik eşleme modeli + UI | PLANNED | 4 | STANDARD | Öneri (onay bekliyor) |
 | IMP-01 | Excel/CSV şablonu, satır doğrulama, deneme (dry-run) raporu | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
 | IMG-01 | Görsel yükleme, sıralama, ürün/varyanta bağlama | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
