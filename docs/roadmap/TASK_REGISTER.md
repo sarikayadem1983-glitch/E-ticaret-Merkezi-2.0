@@ -111,7 +111,7 @@ Kaynak: `docs/superpowers/plans/2026-10-28-user-management.md` (T1–T16 numaral
 | USR-T14 | Yetki yükseltme ve tenant izolasyonu test paketi | P0 | USR-T11a, USR-T10a | 2 | CRITICAL | A | DONE-PR (PR #23) | Plan T14 maddeleri PASS (MVP dilimlerinin uçları: users, invitations, access, deactivate) | S, E | Yüksek | Onaylı plan |
 | USR-T15 | Playwright akışları (davet, erişim, mağaza değiştirme, mobil) | P1 | USR-T13 | 1 | STANDARD | B | PLANNED | Plan T15 testlerinin kalan kısmı. Kalan (USR-T15b): başka mağazadaki mevcut kullanıcının kabul + isteğe bağlı mağaza değiştirme, açık sekmede rol değişikliği, mobil kart testleri. MVP dilimi: USR-T15a | P | Düşük | Onaylı plan |
 | USR-T15a | Playwright çekirdek akışlar: owner muhasebeciyi A firmasına davet eder, davetli yalnızca A'yı görür; iptal edilen bağlantı geçersiz sayfası; pasife alınan kullanıcı sonraki işlemde çıkış yapar | P1 | USR-T13a | 1 | STANDARD | A | DONE-PR (PR #26) | 2 ardışık koşuda PASS | P | Düşük | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
-| USR-T16 | Tam doğrulama ve PR | P0 | USR-T14, USR-T15a | 1 | STANDARD | A | PLANNED | Plan T16 adımları (MVP dilimleri için; T9b–T15b B'de ayrı PR) | Tümü | Düşük | Onaylı plan |
+| USR-T16 | Tam doğrulama ve PR | P0 | USR-T14, USR-T15a | 1 | STANDARD | A | DONE-PR (PR #28) | Plan T16 adımları (MVP dilimleri için; T9b–T15b B'de ayrı PR) | Tümü | Düşük | Onaylı plan |
 | USR-18 | Aşama 2 migration: `users.tenant_id` / `users.is_active` eski kolonlarını kaldırma; önce guard ve login/refresh'in `users.is_active` okuması yeni modele taşınır | P1 | USR-T16, kullanıcı onayı | 3 | CRITICAL | B | BLOCKED (T16 + ayrı migration onayı) | `user-state.ts`, guard ve auth repository kolonu okumaz; prova + verify ok; rollback provası | M, U, E | Kritik (veri, erişim) | Öneri (onay bekliyor) |
 
 ### USR-E3 Hesap güvenliği
@@ -429,7 +429,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | USR-T13a | Kullanıcılar sayfası (masaüstü tablo), davet diyaloğu + erişim düzenleyici, pasife al/aktifleştir; davet kabul sayfası (`loading`, `invalid`, `newAccount`, `existingAccount`, `done`) | DONE-PR (PR #25) | 2 | STANDARD | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
 | USR-T14 | Yetki yükseltme ve tenant izolasyonu test paketi | DONE-PR (PR #23) | 2 | CRITICAL | Onaylı plan |
 | USR-T15a | Playwright çekirdek akışlar: owner muhasebeciyi A firmasına davet eder, davetli yalnızca A'yı görür; iptal edilen bağlantı geçersiz sayfası; pasife alınan kullanıcı sonraki işlemde çıkış yapar | DONE-PR (PR #26) | 1 | STANDARD | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
-| USR-T16 | Tam doğrulama ve PR | PLANNED | 1 | STANDARD | Onaylı plan |
+| USR-T16 | Tam doğrulama ve PR | DONE-PR (PR #28) | 1 | STANDARD | Onaylı plan |
 | USR-19 | Şifre sıfırlama ve e-posta doğrulama (hash'li tek kullanımlık token) | PLANNED | 3 | CRITICAL | Öneri (onay bekliyor) |
 | DSH-01 | Uygulama kabuğu ve dashboard iskeleti | DONE-MERGED (PR #4) | — | FAST | Onaylı plan |
 | CAT-01 | Katalog şeması: kategori, marka, ürün, varyant, barkod/SKU (tenant + firma kapsamlı) | DONE-MERGED (PR #13, merge `aa02144`; dev `f010233`, 2026-10-30) | 3 | CRITICAL | Öneri (onay bekliyor) |
@@ -561,7 +561,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | EPIC | 33 |
 | Görev | 141 (133 + 6 MVP dilimi: USR-T9a, T10a, T11a, T12a, T13a, T15a + 2 kullanıcı kararı 2026-10-30: OPS-08, USR-21) |
 | DONE-MERGED | 28 |
-| DONE-PR | 3 (USR-T14 #23, USR-T13a #25, USR-T15a #26) |
+| DONE-PR | 4 (USR-T14 #23, USR-T13a #25, USR-T15a #26, USR-T16 #28) |
 | DONE-NOT-DEPLOYED | 1 (USR-T12a #22) |
 | IN-PROGRESS | 0 |
 | BLOCKED | 1 (USR-18) |
