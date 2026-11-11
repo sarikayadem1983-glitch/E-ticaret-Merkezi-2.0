@@ -9,6 +9,7 @@ import type {
   CreateProductDto,
   CreateVariantDto,
   GenerateVariantsDto,
+  SetPriceDto,
   ListProductsQuery,
   UpdateProductDto,
   UpdateVariantDto,
@@ -22,6 +23,7 @@ import {
   type VariantRow,
 } from './catalog.repository.js';
 import { catalogWrite, MODULE } from './catalog.tx.js';
+import { CHANNEL_PATTERN, money } from './pricing.js';
 import {
   type AxisValue,
   cartesian,
@@ -33,17 +35,31 @@ import {
 
 const PRODUCT = 'Product';
 const VARIANT = 'ProductVariant';
+const PRICE = 'VariantPrice';
 const missing = () => notFound('Ürün bulunamadı');
 const missingVariant = () => notFound('Varyant bulunamadı');
-
-/** Product without its variants: what the audit log stores for the product row. */
-const productRow = ({ variants: _variants, ...row }: ProductRow) => row;
 
 /** API shape of a product: variants with flattened attributes. */
 export const toProduct = (p: ProductRow) => ({
   ...p,
-  variants: p.variants.map(toVariant),
+  vatRate: p.vatRate === null ? null : money(p.vatRate),
+  variants: p.variants.map((v) => toVariant(v, p.vatRate)),
 });
+
+/** Audit shape of the product row (VAT rate as a string, not a Decimal object). */
+const auditProduct = (p: ProductRow) => {
+  const { variants: _v, ...row } = toProduct(p);
+  return row;
+};
+
+const assertPriceChannels = (prices: { channel: string }[] = []) => {
+  if (new Set(prices.map((p) => p.channel)).size !== prices.length) {
+    throw unavailable(
+      'PRICE_CHANNEL_DUPLICATE',
+      'Bir varyantta aynı kanal için iki fiyat verilmiş',
+    );
+  }
+};
 
 const combinationTaken = () =>
   conflict(
@@ -257,6 +273,7 @@ export class ProductsService {
     const product = await catalogWrite(this.repository.prisma, async (tx) => {
       await this.assertCompanyActive(dto.companyId, tx);
       await this.assertLinks(tx, fields);
+      variants.forEach((v) => assertPriceChannels(v.prices));
       const sets = variants.map((v) => (v.attributes ?? []).map(asAxis));
       await this.assertAttributes(tx, sets);
       await this.assertCombinationsFree(
@@ -271,7 +288,7 @@ export class ProductsService {
           module: MODULE,
           entityType: PRODUCT,
           entityId: created.id,
-          after: productRow(created),
+          after: auditProduct(created),
         },
         tx,
       );
@@ -282,7 +299,7 @@ export class ProductsService {
             module: MODULE,
             entityType: VARIANT,
             entityId: v.id,
-            after: toVariant(v),
+            after: toVariant(v, created.vatRate),
           },
           tx,
         );
@@ -303,8 +320,8 @@ export class ProductsService {
           module: MODULE,
           entityType: PRODUCT,
           entityId: id,
-          before: productRow(before),
-          after: productRow(after),
+          before: auditProduct(before),
+          after: auditProduct(after),
         },
         tx,
       );
@@ -326,7 +343,7 @@ export class ProductsService {
             module: MODULE,
             entityType: VARIANT,
             entityId: v.id,
-            before: toVariant(v),
+            before: toVariant(v, before.vatRate),
           },
           tx,
         );
@@ -338,7 +355,7 @@ export class ProductsService {
           module: MODULE,
           entityType: PRODUCT,
           entityId: id,
-          before: productRow(before),
+          before: auditProduct(before),
         },
         tx,
       );
@@ -350,11 +367,13 @@ export class ProductsService {
   async addVariant(user: AuthUser, productId: string, dto: CreateVariantDto) {
     const variant = await catalogWrite(this.repository.prisma, async (tx) => {
       const product = await this.loadForWrite(user, productId, tx);
+      assertPriceChannels(dto.prices);
       const values = (dto.attributes ?? []).map(asAxis);
       await this.assertAttributes(tx, [values]);
       await this.assertCombinationsFree(tx, productId, [{ values }]);
       const created = toVariant(
         await this.repository.createVariant(tx, product, dto),
+        product.vatRate,
       );
       await this.audit.record(
         {
@@ -378,10 +397,10 @@ export class ProductsService {
     dto: UpdateVariantDto,
   ) {
     const variant = await catalogWrite(this.repository.prisma, async (tx) => {
-      await this.loadForWrite(user, productId, tx);
+      const product = await this.loadForWrite(user, productId, tx);
       const row = await this.repository.findVariant(productId, id, tx);
       if (!row) throw missingVariant();
-      const before = toVariant(row);
+      const before = toVariant(row, product.vatRate);
       const { attributes, ...fields } = dto;
       if (attributes?.length) {
         const changed = attributes.map(asAxis);
@@ -401,6 +420,7 @@ export class ProductsService {
       await this.repository.updateVariant(tx, id, fields);
       const after = toVariant(
         (await this.repository.findVariant(productId, id, tx)) as VariantRow,
+        product.vatRate,
       );
       await this.audit.record(
         {
@@ -503,6 +523,7 @@ export class ProductsService {
             sku,
             attributes: combo,
           }),
+          product.vatRate,
         );
         await this.audit.record(
           {
@@ -519,5 +540,113 @@ export class ProductsService {
       return { created, skipped };
     });
     return { data: result };
+  }
+
+  // ---- prices (CAT-05) ----
+
+  private async loadVariantForWrite(
+    user: AuthUser,
+    productId: string,
+    variantId: string,
+    channel: string,
+    tx: PrismaTx,
+  ) {
+    // An invalid channel code cannot name a price: 404 like a missing one.
+    if (channel.length > 50 || !CHANNEL_PATTERN.test(channel)) {
+      throw notFound('Fiyat bulunamadı');
+    }
+    const product = await this.loadForWrite(user, productId, tx);
+    const variant = await this.repository.findVariant(productId, variantId, tx);
+    if (!variant) throw missingVariant();
+    return product;
+  }
+
+  /** Sets the variant's price in one channel ("list" = list price); creates it when missing. */
+  async setPrice(
+    user: AuthUser,
+    productId: string,
+    variantId: string,
+    channel: string,
+    dto: SetPriceDto,
+  ) {
+    const variant = await catalogWrite(this.repository.prisma, async (tx) => {
+      const product = await this.loadVariantForWrite(
+        user,
+        productId,
+        variantId,
+        channel,
+        tx,
+      );
+      const before = await this.repository.findPrice(tx, variantId, channel);
+      const after = { channel, amount: dto.amount, currency: dto.currency };
+      let entityId: string;
+      if (before) {
+        await this.repository.updatePrice(tx, before.id, {
+          amount: dto.amount,
+          currency: dto.currency,
+        });
+        entityId = before.id;
+      } else {
+        entityId = (await this.repository.createPrice(tx, variantId, after)).id;
+      }
+      await this.audit.record(
+        {
+          action: before ? 'UPDATE' : 'CREATE',
+          module: MODULE,
+          entityType: PRICE,
+          entityId,
+          before: before
+            ? {
+                variantId,
+                channel,
+                amount: money(before.amount),
+                currency: before.currency,
+              }
+            : undefined,
+          after: { variantId, ...after, amount: money(dto.amount) },
+        },
+        tx,
+      );
+      return toVariant(
+        (await this.repository.findVariant(
+          productId,
+          variantId,
+          tx,
+        )) as VariantRow,
+        product.vatRate,
+      );
+    });
+    return { data: variant };
+  }
+
+  async removePrice(
+    user: AuthUser,
+    productId: string,
+    variantId: string,
+    channel: string,
+  ): Promise<void> {
+    await catalogWrite(this.repository.prisma, async (tx) => {
+      await this.loadVariantForWrite(user, productId, variantId, channel, tx);
+      const before = await this.repository.findPrice(tx, variantId, channel);
+      if (!before) throw notFound('Fiyat bulunamadı');
+      await this.repository.updatePrice(tx, before.id, {
+        deletedAt: new Date(),
+      });
+      await this.audit.record(
+        {
+          action: 'DELETE',
+          module: MODULE,
+          entityType: PRICE,
+          entityId: before.id,
+          before: {
+            variantId,
+            channel,
+            amount: money(before.amount),
+            currency: before.currency,
+          },
+        },
+        tx,
+      );
+    });
   }
 }

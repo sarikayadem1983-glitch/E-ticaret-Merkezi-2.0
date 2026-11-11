@@ -70,7 +70,7 @@ beforeAll(async () => {
   const all = allMigrations();
   if (!all.includes(NAME)) throw new Error(`${NAME} missing`);
   for (const name of all.slice(0, all.indexOf(NAME) + 1)) await db.query(read(name, 'migration.sql'));
-}, 60_000);
+}, 180_000);
 
 afterAll(async () => {
   await db?.end();

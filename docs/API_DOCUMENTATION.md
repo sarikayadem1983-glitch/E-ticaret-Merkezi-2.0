@@ -328,6 +328,25 @@ Yetki: Bearer token + `products:write` + firmada `products:write`
 Yanıt: `201` `{ "data": { "created": [Variant], "skipped": <sayı> } }`
 Hatalar: `403`, `404`, `409 COMPANY_INACTIVE`, `409 SKU_TAKEN` (üretilen bir SKU kullanılmış), `422 ATTRIBUTE_UNAVAILABLE`, `422 ATTRIBUTE_DUPLICATE`, `422 TOO_MANY_COMBINATIONS` (çarpım 100'den büyük), `422`
 
+### Fiyat ve KDV (CAT-05)
+Tutarlar ondalık **metin** olarak gönderilir ve döner (`"199.90"`); en çok 2 ondalık basamak, nokta ayırıcı; fazlası `422`. Fiyatlar KDV dahildir. Yuvarlama ve kurallar: `docs/DATABASE.md` "fiyat ve KDV".
+
+`Product` ek alanı: `"vatRate": "20.00" | null`. `Variant` ek alanı: `"prices": [Price]` (kanal koduna göre, `list` önce).
+`Price`: `{ "channel": "list" | "<kanal>", "amount": "199.90", "currency": "TRY", "netAmount": "166.58" | null, "vatAmount": "33.32" | null, "updatedAt" }` (`netAmount`/`vatAmount` ürünün `vatRate`'i yoksa `null`).
+
+`POST /products` ve `PATCH /products/:id` isteğine `"vatRate"?: "0" | "1" | "10" | "20" | null` eklenir (başka değer `422`). `POST /products` içindeki her varyant ve `POST /products/:id/variants` isteği `"prices"?: [ { "channel", "amount", "currency" } ]` (en çok 20, kanal başına bir) alabilir.
+
+### PUT /api/v1/products/:id/variants/:variantId/prices/:channel
+Açıklama: Varyantın o kanaldaki fiyatını yazar (yoksa oluşturur). `channel`: `list` (liste fiyatı) veya kanal kodu (`^[a-z0-9]+(-[a-z0-9]+)*$`, en çok 50). Audit: `entityType: "VariantPrice"`, `CREATE` veya `UPDATE` (`before`/`after` tutar ve para birimi).
+Yetki: Bearer token + `products:write` + firmada `products:write`
+İstek: `{ "amount": "199.90", "currency": "TRY" | "USD" | "EUR" }`
+Yanıt: `200` `{ "data": Variant }`
+Hatalar: `403`, `404` (ürün/varyant yok veya geçersiz kanal kodu), `409 COMPANY_INACTIVE`, `409 CONCURRENT_UPDATE`, `422` (tutar biçimi, para birimi)
+
+### DELETE /api/v1/products/:id/variants/:variantId/prices/:channel
+Açıklama: Fiyatı soft-delete eder. Audit `DELETE`. Yanıt `204`.
+Hatalar: `403`, `404` (fiyat yok), `409 COMPANY_INACTIVE`
+
 ### GET /api/v1/audit-logs
 Açıklama: Tenant'ın işlem geçmişi, yeniden eskiye.
 Yetki: Bearer token + `audit:read`

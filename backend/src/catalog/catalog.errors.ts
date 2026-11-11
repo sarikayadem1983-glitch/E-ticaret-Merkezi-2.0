@@ -16,6 +16,11 @@ export const conflict = (code: string, message: string) =>
 
 /** Unique violations, keyed by a word that appears in the field list or index name. */
 const UNIQUE_CONFLICTS: [RegExp, string, string][] = [
+  [
+    /variant_prices|VariantPrice/i,
+    'CONCURRENT_UPDATE',
+    'Fiyat aynı anda değiştirildi, tekrar deneyin',
+  ],
   [/sku/i, 'SKU_TAKEN', 'Bu SKU kullanılmış (silinen varyantlar dahil)'],
   [
     /attribute_?values|AttributeValue/i,
