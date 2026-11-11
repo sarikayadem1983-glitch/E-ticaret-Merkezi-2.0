@@ -12,7 +12,8 @@ export function proxy(req: NextRequest) {
     process.env.NODE_ENV === 'production' ? '__Host-tm_sid' : 'tm_sid';
   const hasSession = req.cookies.has(name);
   const { pathname } = req.nextUrl;
-  const isPublic = PUBLIC_PAGES.has(pathname);
+  // /invite/<token> works without a session; the token never goes into ?next=.
+  const isPublic = PUBLIC_PAGES.has(pathname) || pathname.startsWith('/invite/');
 
   if (!hasSession && !isPublic) {
     const url = new URL('/login', req.url);

@@ -8,17 +8,22 @@ import {
   ShoppingCart,
   Store,
   UserRound,
+  Users,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { BrandLogo } from '@/components/brand-logo';
+import { useSession } from '@/hooks/queries';
 import { cn } from '@/lib/utils';
 
 const NAV = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/companies', label: 'Firmalar', icon: Building2 },
   { href: '/profile', label: 'Profil', icon: UserRound },
-] as const;
+];
+
+/** Shown only to members who manage users; the backend checks again. */
+const USERS_ITEM = { href: '/users', label: 'Kullanıcılar', icon: Users };
 
 /** Planned modules, shown so the menu reflects the roadmap; not clickable yet. */
 const SOON = [
@@ -30,6 +35,10 @@ const SOON = [
 
 export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const session = useSession();
+  const items = session.data?.user.canManageUsers
+    ? [...NAV.slice(0, 2), USERS_ITEM, ...NAV.slice(2)]
+    : NAV;
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
       <div className="px-5 py-5">
@@ -37,7 +46,7 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
       </div>
       <nav aria-label="Ana menü" className="flex-1 space-y-6 px-3">
         <ul className="space-y-1">
-          {NAV.map(({ href, label, icon: Icon }) => {
+          {items.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || pathname.startsWith(`${href}/`);
             return (
               <li key={href}>
