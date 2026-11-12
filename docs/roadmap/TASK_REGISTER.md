@@ -118,7 +118,7 @@ Kaynak: `docs/superpowers/plans/2026-10-28-user-management.md` (T1–T16 numaral
 
 | ID | Görev | Öncelik | Bağımlılık | Tahmin | Mod | Sürüm | Durum | Kabul kriteri | Test | Güvenlik riski | Kaynak |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| USR-19 | Şifre sıfırlama ve e-posta doğrulama (hash'li tek kullanımlık token) | P0 | USR-T9a | 3 | CRITICAL | A | DONE-PR (taslak PR; runAsSystem izin listesi onayı bekliyor) | Token tek kullanımlık, süreli; sıfırlama tüm oturumları düşürür; yanıt hesap varlığını sızdırmaz | E, S | Yüksek | Öneri (onay bekliyor) |
+| USR-19 | Şifre sıfırlama ve e-posta doğrulama (hash'li tek kullanımlık token) | P0 | USR-T9a | 3 | CRITICAL | A | DONE-PR (PR #36) | Token tek kullanımlık, süreli; sıfırlama tüm oturumları düşürür; yanıt hesap varlığını sızdırmaz | E, S | Yüksek | Öneri (onay bekliyor) |
 | USR-20 | İki adımlı doğrulama (TOTP) ve kurtarma kodları | P2 | USR-19 | 3 | CRITICAL | B | PLANNED | Owner/admin için zorunlu kılınabilir | U, E | Orta | Öneri (onay bekliyor) |
 | USR-21 | Sahiplik devri: owner rolünü başka bir aktif üyeye devretme (devreden onayı, yeniden kimlik doğrulama, audit, son owner koruması) | P2 | USR-T11a | 1,5 | CRITICAL | B | PLANNED | Devir tek işlemde; devir sırasında mağaza hiçbir an owner'sız kalmaz; eşzamanlı devir/pasife alma güvenli | E, S | Yüksek | Kullanıcı kararı (2026-10-30) |
 
