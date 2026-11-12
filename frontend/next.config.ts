@@ -42,6 +42,15 @@ const nextConfig: NextConfig = {
         source: "/invite/:path*",
         headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
       },
+      // USR-19: password reset and e-mail verification links carry tokens too.
+      {
+        source: "/reset-password/:path*",
+        headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
+      },
+      {
+        source: "/verify-email/:path*",
+        headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
+      },
     ];
   },
   turbopack: {

@@ -21,6 +21,7 @@ import {
   AUTH_RATE_LIMITS,
   type AuthRateLimits,
 } from '../rate-limit/rate-limit.config.js';
+import { RateLimitedException } from '../rate-limit/rate-limit.errors.js';
 import { RateLimiterService } from '../rate-limit/rate-limiter.service.js';
 import { RecoveryService } from './recovery.service.js';
 
@@ -81,8 +82,9 @@ export class RecoveryController {
         `forgot:acct:${accountKey(dto.email)}`,
         this.limits.passwordForgotPerAccount,
       );
-    } catch {
-      return ACCEPTED;
+    } catch (error) {
+      if (error instanceof RateLimitedException) return ACCEPTED;
+      throw error;
     }
     this.recovery.requestPasswordReset(dto.email);
     return ACCEPTED;

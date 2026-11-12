@@ -308,6 +308,11 @@ export class AuthService {
       const next = this.tokens.newRefreshToken();
       const rotated = await prisma
         .$transaction(async (tx) => {
+          // Serializes with a password reset (USR-19), which locks the user
+          // row before revoking: a rotation cannot slip a live token past it.
+          await TenantContext.runAsSystem(() =>
+            this.repository.lockUser(tx, stored.userId),
+          );
           const created = await this.repository.createRefreshToken(tx, {
             userId: stored.userId,
             tokenHash: next.hash,

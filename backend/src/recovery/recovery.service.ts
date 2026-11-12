@@ -61,29 +61,47 @@ export class RecoveryService {
     return TenantContext.runAsSystem(fn);
   }
 
-  /** Issues a new token; earlier unused tokens of the same purpose stop working. */
+  /**
+   * Issues a new token. The user row is locked so concurrent requests are
+   * serialized. Earlier unused tokens of the same purpose are closed only by
+   * `closeOthers`, after the new link was mailed: a failed mail never kills
+   * the link the user already has.
+   */
   private async issue(userId: string, purpose: TokenPurpose) {
     const token = randomBytes(32).toString('base64url');
     const expiresAt = new Date(Date.now() + TOKEN_TTL_MS[purpose]);
-    await this.sys(() =>
+    const id = await this.sys(() =>
       this.prisma.$transaction(async (tx) => {
-        await tx.userToken.updateMany({
-          where: { userId, purpose, usedAt: null },
-          data: { usedAt: new Date() },
+        await tx.user.update({
+          where: { id: userId },
+          data: { updatedAt: new Date() },
+          select: { id: true },
         });
-        await tx.userToken.create({
+        const row = await tx.userToken.create({
           data: { userId, purpose, tokenHash: hashToken(token), expiresAt },
+          select: { id: true },
         });
+        return row.id;
       }),
     );
-    return { token, expiresAt };
+    return { token, expiresAt, id };
+  }
+
+  private closeOthers(userId: string, purpose: TokenPurpose, keepId: string) {
+    return this.sys(() =>
+      this.prisma.userToken.updateMany({
+        where: { userId, purpose, usedAt: null, id: { not: keepId } },
+        data: { usedAt: new Date() },
+      }),
+    );
   }
 
   /** Fire-and-forget: same response and timing whether the account exists or not. */
   requestPasswordReset(email: string): void {
     void this.sendPasswordReset(email).catch((error: unknown) => {
       this.logger.error(
-        `Şifre sıfırlama e-postası gönderilemedi: ${(error as Error).message}`,
+        // Error name only: messages may carry the recipient address.
+        `Şifre sıfırlama e-postası gönderilemedi: ${(error as Error).name}`,
       );
     });
   }
@@ -96,12 +114,16 @@ export class RecoveryService {
       }),
     );
     if (!user) return;
-    const { token, expiresAt } = await this.issue(user.id, 'password_reset');
+    const { token, expiresAt, id } = await this.issue(
+      user.id,
+      'password_reset',
+    );
     const msg = passwordResetMail(
       `${this.config.appOrigin}/reset-password/${token}`,
       expiresAt,
     );
     await this.mail.send({ to: user.email, ...msg });
+    await this.closeOthers(user.id, 'password_reset', id);
   }
 
   /** Signed-in user: sends a verification link unless already verified. */
@@ -113,12 +135,13 @@ export class RecoveryService {
       }),
     );
     if (!user || user.emailVerifiedAt) return;
-    const { token, expiresAt } = await this.issue(user.id, 'email_verify');
+    const { token, expiresAt, id } = await this.issue(user.id, 'email_verify');
     const msg = emailVerifyMail(
       `${this.config.appOrigin}/verify-email/${token}`,
       expiresAt,
     );
     await this.mail.send({ to: user.email, ...msg });
+    await this.closeOthers(user.id, 'email_verify', id);
   }
 
   /**

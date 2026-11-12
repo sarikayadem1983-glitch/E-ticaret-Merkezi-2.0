@@ -167,6 +167,21 @@ describe('Password reset and e-mail verification (e2e, USR-19)', () => {
     await reset(token).expect(400);
   });
 
+  it('an inactive account cannot reset, even with a valid link', async () => {
+    await forgot(email).expect(202);
+    const before = mail.sent.length;
+    for (let i = 0; i < 50 && mail.sent.length === before; i++) {
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    const token = await mail.tokenFor(email, 'reset-password');
+    await sql('UPDATE users SET is_active = false WHERE email = $1', [email]);
+    try {
+      await reset(token).expect(400);
+    } finally {
+      await sql('UPDATE users SET is_active = true WHERE email = $1', [email]);
+    }
+  });
+
   it('verifies the e-mail with a single-use link', async () => {
     await sql('UPDATE users SET email_verified_at = NULL WHERE email = $1', [
       email,

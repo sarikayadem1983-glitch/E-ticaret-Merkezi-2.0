@@ -33,6 +33,8 @@ DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'tm_app') THEN
     REVOKE ALL ON "user_tokens" FROM tm_app;
-    GRANT SELECT, INSERT, UPDATE ON "user_tokens" TO tm_app;
+    GRANT SELECT, INSERT ON "user_tokens" TO tm_app;
+    -- Only used_at may change: a closed token can never be reopened or re-pointed.
+    GRANT UPDATE ("used_at") ON "user_tokens" TO tm_app;
   END IF;
 END $$;
