@@ -28,6 +28,7 @@ export const ROLE_CATALOG: Record<RoleKey, CatalogRole> = {
       'audit:read',
       'products:read',
       'products:write',
+      'channels:manage',
     ],
   },
   operations: {

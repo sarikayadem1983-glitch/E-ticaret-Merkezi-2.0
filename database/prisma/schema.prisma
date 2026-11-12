@@ -34,6 +34,7 @@ model Tenant {
   attributeValues  AttributeValue[]
   variantAttrs     VariantAttributeValue[]
   variantPrices    VariantPrice[]
+  channelAccounts  ChannelAccount[]
 
   @@map("tenants")
 }
@@ -154,6 +155,7 @@ model Company {
   tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   userRoles UserCompanyRole[]
   products  Product[]
+  channelAccounts ChannelAccount[]
 
   @@unique([tenantId, taxNumber])
   @@unique([tenantId, id])
@@ -499,4 +501,35 @@ model VariantPrice {
   // SQL-only: unique (tenant_id, variant_id, channel) WHERE deleted_at IS NULL.
   @@index([tenantId, variantId])
   @@map("variant_prices")
+}
+
+/// INT-01: a marketplace account of a company. Credentials are envelope-encrypted
+/// (src/channels/credential-cipher.ts); plaintext never reaches the database.
+model ChannelAccount {
+  id                    String    @id @default(uuid()) @db.Uuid
+  tenantId              String    @map("tenant_id") @db.Uuid
+  companyId             String    @map("company_id") @db.Uuid
+  channel               String    @db.VarChar(50)
+  name                  String    @db.VarChar(100)
+  isActive              Boolean   @default(true) @map("is_active")
+  credentialsCiphertext Bytes     @map("credentials_ciphertext")
+  credentialsIv         Bytes     @map("credentials_iv")
+  credentialsTag        Bytes     @map("credentials_tag")
+  wrappedDek            Bytes     @map("wrapped_dek")
+  dekIv                 Bytes     @map("dek_iv")
+  dekTag                Bytes     @map("dek_tag")
+  kekId                 String    @map("kek_id") @db.VarChar(32)
+  /// Masked display values only ("••••1234"), never secrets.
+  credentialsHint       Json      @map("credentials_hint")
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt             DateTime? @map("deleted_at") @db.Timestamptz
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  // SQL-only: unique (tenant_id, company_id, channel, lower(name)) WHERE deleted_at IS NULL.
+  @@index([tenantId, companyId])
+  @@map("channel_accounts")
 }
