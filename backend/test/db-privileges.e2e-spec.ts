@@ -143,6 +143,7 @@ describe('Database privileges (e2e)', () => {
       'attributes',
       'attribute_values',
       'variant_attribute_values',
+      'variant_prices',
     ];
 
     it('app role has SELECT, INSERT, UPDATE and nothing else', async () => {

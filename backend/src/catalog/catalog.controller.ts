@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import {
@@ -26,6 +27,7 @@ import {
   CreateProductDto,
   CreateVariantDto,
   GenerateVariantsDto,
+  SetPriceDto,
   ListCatalogQuery,
   ListProductsQuery,
   UpdateAttributeDto,
@@ -186,6 +188,30 @@ export class ProductsController {
     @Body() dto: GenerateVariantsDto,
   ) {
     return this.products.generateVariants(user, id, dto);
+  }
+
+  @Put(':id/variants/:variantId/prices/:channel')
+  @RequirePermissions('products:write')
+  setPrice(
+    @CurrentUser() user: AuthUser,
+    @Param('id', uuid) id: string,
+    @Param('variantId', uuid) variantId: string,
+    @Param('channel') channel: string,
+    @Body() dto: SetPriceDto,
+  ) {
+    return this.products.setPrice(user, id, variantId, channel, dto);
+  }
+
+  @Delete(':id/variants/:variantId/prices/:channel')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePermissions('products:write')
+  removePrice(
+    @CurrentUser() user: AuthUser,
+    @Param('id', uuid) id: string,
+    @Param('variantId', uuid) variantId: string,
+    @Param('channel') channel: string,
+  ) {
+    return this.products.removePrice(user, id, variantId, channel);
   }
 
   @Patch(':id/variants/:variantId')

@@ -1,5 +1,11 @@
 import { Transform, Type } from 'class-transformer';
 import {
+  AMOUNT_PATTERN,
+  CHANNEL_PATTERN,
+  CURRENCIES,
+  VAT_RATES,
+} from './pricing.js';
+import {
   ArrayMaxSize,
   ArrayMinSize,
   ArrayUnique,
@@ -112,6 +118,26 @@ export class VariantAttributeDto {
   valueId: string;
 }
 
+const AMOUNT_MESSAGE =
+  'Tutar en çok 2 ondalık basamaklı ve noktalı olmalı (ör. 199.90)';
+
+/** A price to set: amount as a decimal string, never a JSON number (CAT-05). */
+export class SetPriceDto {
+  @IsString()
+  @Matches(AMOUNT_PATTERN, { message: AMOUNT_MESSAGE })
+  amount: string;
+
+  @IsIn(CURRENCIES)
+  currency: string;
+}
+
+export class PriceInputDto extends SetPriceDto {
+  @IsString()
+  @MaxLength(50)
+  @Matches(CHANNEL_PATTERN, { message: 'Geçersiz kanal kodu' })
+  channel: string;
+}
+
 export class CreateVariantDto {
   @Transform(trim)
   @IsString()
@@ -131,6 +157,14 @@ export class CreateVariantDto {
   @ValidateNested({ each: true })
   @Type(() => VariantAttributeDto)
   attributes?: VariantAttributeDto[];
+
+  /** One price per channel (checked by the service: PRICE_CHANNEL_DUPLICATE). */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => PriceInputDto)
+  prices?: PriceInputDto[];
 }
 
 export class UpdateVariantDto {
@@ -174,6 +208,11 @@ export class CreateProductDto {
   @IsIn(PRODUCT_STATUSES)
   status?: ProductStatusValue;
 
+  /** KDV rate in percent as a string; null clears it. */
+  @IsOptional()
+  @IsIn(VAT_RATES)
+  vatRate?: string | null;
+
   @IsOptional()
   @IsUUID()
   categoryId?: string | null;
@@ -208,6 +247,11 @@ export class UpdateProductDto {
   @IsOptional()
   @IsIn(PRODUCT_STATUSES)
   status?: ProductStatusValue;
+
+  /** KDV rate in percent as a string; null clears it. */
+  @IsOptional()
+  @IsIn(VAT_RATES)
+  vatRate?: string | null;
 
   @IsOptional()
   @IsUUID()

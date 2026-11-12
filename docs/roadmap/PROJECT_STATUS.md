@@ -11,7 +11,7 @@ Son güncelleme: 2026-10-30 (`main` @ `8fc7ae3` dev'e deploy edildi) · Kaynak: 
 | BLOCKED | 1 — USR-18 (T16 + Aşama 2 migration onayı) |
 | Sürüm A (Trendyol-only MVP) ilerleme | 28 / 58 görev merge edildi ve dev'de; kalan 30 görev, 87,5 iş günü; tahmini hedef 2027-01-20 (taahhüt değil; OPS-08 ve USR-T11a sonrası yeniden hesaplanmadı) |
 | Sürüm B / C | 62 / 21 görev |
-| Açık PR | #27 CAT-03 (`DONE-PR`). #25, #26, #28 (USR-T13a/T15a/T16) 2026-11-11'de kullanıcı onayıyla merge edildi |
+| Açık PR | #29 CAT-05 (`DONE-PR`). #27 CAT-03 2026-11-12'de kullanıcı onayıyla merge edildi (`1db22ae`); #25, #26, #28 (USR-T13a/T15a/T16) 2026-11-11'de merge edildi |
 | `origin/main` | `8fc7ae3` (PR #19 merge; #18 `9653158`). `main` CI ✓: backend unit 283/283, e2e 318/319 (1 skip, Mailpit), frontend 84/84 |
 | Dev ortamı | `8fc7ae3` (2026-10-30; onay kaydı yok, bkz. §3). Backend `node dist/main` (PID 2404), frontend `npm run dev`, Mailpit (e-posta dışarı gitmez). Smoke: oturum içinde çalıştırıldığı bildirildi, çıktı kaydedilmedi, doğrulanamadı |
 | Dev DB şeması | Tüm migration'lar uygulandı; son `20261029120000_catalog_schema` (CAT-01, 2026-10-30, kullanıcı onayıyla; öncesinde yedek + izole prova 16/16). `setup-roles.sql` yeniden çalıştırıldı. Aşama 2 (`migrations-pending/`) uygulanmadı |
@@ -24,7 +24,7 @@ Son güncelleme: 2026-10-30 (`main` @ `8fc7ae3` dev'e deploy edildi) · Kaynak: 
 | M01 INF | 11 / 20 | 55 | Hepsi dev'de |
 | M02 USR | 14 / 28 | 50 | Hepsi dev'de |
 | M03 DSH | 1 / 3 | 33 | İskelet |
-| M04 CAT | 2 / 6 | 33 | Dev'de; CAT-01 migration'ı uygulandı. CAT-03 DONE-PR (#27) |
+| M04 CAT | 2 / 6 | 33 | Dev'de; CAT-01 migration'ı uygulandı. CAT-03 DONE-PR (#27), CAT-05 DONE-PR (#29) |
 | M05–M20 | 0 / 82 | 0 | Başlanmadı |
 | **Toplam** | **28 / 141** | **19,9** | Dev'e deploy edilmiş: 28 / 141 (%19,9) |
 
@@ -76,7 +76,7 @@ Kullanıcı onayıyla, yalnızca dev ortamında (`localhost:5432/ticaret_merkezi
 |---|---|---|---|
 | 1 | USR-T11a | Users modülü çekirdeği | Dev'de (`8fc7ae3`) |
 | 2 | CAT-03 | Varyant ve özellik yönetimi | DONE-PR (#27); migration `catalog_variant_attributes` dev DB onayı bekliyor |
-| 3 | CAT-05 | Fiyat yönetimi | CAT-02 tamam |
+| 3 | CAT-05 | Fiyat yönetimi | DONE-PR (#29, #27 üstünde); migration `catalog_prices` dev DB onayı bekliyor |
 | 4 | INT-01 | `ChannelAdapter`, kimlik bilgisi şifreleme | INF-13 (B) bağımlılığı için bkz. R-25 |
 | 5 | ORD-01 / INV-01 | Sipariş ve stok şemaları | CAT-01 tamam; migration dev'e uygulanması onay gerektirir |
 | 6 | USR-19 | Şifre sıfırlama ve e-posta doğrulama | USR-T9a tamam |
@@ -162,3 +162,4 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 | 2026-11-11 | USR-T15a → DONE-PR | [#26](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/26) | Playwright (`next dev` :3100, backend :4100) ardışık 2 koşu 16/16, 16/16; frontend unit 132/132, lint ok, typecheck ok | yok |
 | 2026-11-11 | USR-T16 → DONE-PR | [#28](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/28) | backend unit 283/283, e2e 331/332 (1 skip; 3. tam koşu, önceki 2 koşuda yük kaynaklı hook zaman aşımları, tekil yeniden koşu PASS), lint ok, build ok; frontend 132/132, lint ok, typecheck ok, `next build` ok; Playwright 16/16 ×2 | yok |
 | 2026-11-11 | CAT-03 → DONE-PR | [#27](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/27) | yerel (izole `tm_e2e_cat`): unit 296/296, lint ok; e2e 347/350 (1 skip Mailpit, 2 flaky rate-limit/lockout — tek başına 54/54) | yok; migration dev DB'ye uygulanmadı |
+| 2026-11-11 | CAT-05 → DONE-PR | [#29](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/29) | yerel (izole `tm_e2e_cat`): unit 315/315, lint ok; e2e 357/358 (1 skip Mailpit) | yok; migration dev DB'ye uygulanmadı |

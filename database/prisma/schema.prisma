@@ -33,6 +33,7 @@ model Tenant {
   attributes       Attribute[]
   attributeValues  AttributeValue[]
   variantAttrs     VariantAttributeValue[]
+  variantPrices    VariantPrice[]
 
   @@map("tenants")
 }
@@ -376,6 +377,8 @@ model Product {
   name        String        @db.VarChar(250)
   description String?
   status      ProductStatus @default(draft)
+  /// Turkish VAT (KDV) rate in percent; null = not set. Prices are VAT-inclusive.
+  vatRate     Decimal?      @map("vat_rate") @db.Decimal(5, 2)
   createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime      @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt   DateTime?     @map("deleted_at") @db.Timestamptz
@@ -411,6 +414,7 @@ model ProductVariant {
   tenant          Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   product         Product                 @relation(fields: [tenantId, companyId, productId], references: [tenantId, companyId, id], onDelete: Restrict)
   attributeValues VariantAttributeValue[]
+  prices          VariantPrice[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, sku])
@@ -474,4 +478,25 @@ model VariantAttributeValue {
   @@id([variantId, attributeId])
   @@index([tenantId, attributeValueId])
   @@map("variant_attribute_values")
+}
+
+/// Price of a variant in one channel ("list" = list price). VAT-inclusive, NUMERIC(12,2) + currency.
+model VariantPrice {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  variantId String    @map("variant_id") @db.Uuid
+  channel   String    @db.VarChar(50)
+  amount    Decimal   @db.Decimal(12, 2)
+  currency  String    @db.Char(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+
+  tenant  Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  variant ProductVariant @relation(fields: [tenantId, variantId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  // SQL-only: unique (tenant_id, variant_id, channel) WHERE deleted_at IS NULL.
+  @@index([tenantId, variantId])
+  @@map("variant_prices")
 }
