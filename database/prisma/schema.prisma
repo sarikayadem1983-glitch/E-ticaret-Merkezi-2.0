@@ -66,6 +66,7 @@ model User {
 
   memberships         TenantMembership[]
   acceptedInvitations Invitation[]       @relation("InvitationAcceptedBy")
+  tokens              UserToken[]
 
   @@unique([tenantId, id])
   @@index([tenantId])
@@ -644,4 +645,22 @@ model ProductChannelAttributeValue {
 
   @@id([tenantId, productId, channelCategoryAttributeId])
   @@map("product_channel_attribute_values")
+}
+
+/// USR-19: single-use, expiring tokens for password reset and e-mail verification.
+/// Global (no tenant). Only the SHA-256 of the token is stored.
+model UserToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  /// password_reset | email_verify
+  purpose   String    @db.VarChar(20)
+  tokenHash String    @unique @map("token_hash") @db.Char(64)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  usedAt    DateTime? @map("used_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, purpose])
+  @@map("user_tokens")
 }

@@ -12,7 +12,7 @@ const TENANT_ROOT_MODEL = 'Tenant';
  * Global models have no tenant column (one identity across tenants). They are only
  * reachable in system context; inside a tenant, read them through TenantMembership.
  */
-export const GLOBAL_MODELS = new Set(['User']);
+export const GLOBAL_MODELS = new Set(['User', 'UserToken']);
 
 /**
  * Relation fields (on any model) whose target is a global model. Kept in sync
