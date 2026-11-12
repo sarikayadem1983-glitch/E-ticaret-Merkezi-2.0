@@ -278,3 +278,15 @@ Kod: `backend/src/users/`.
 - **Oturum:** pasife alma `auth_version`'ı artırır ve kullanıcının **yalnızca bu tenant'taki** refresh token'larını iptal eder; erişim değişikliği `auth_version`'ı artırır (eski izinli token `TOKEN_STALE`).
 - **Tenant izolasyonu:** hedef üyelik kilit sorgusunda tenant ile süzülür; başka tenant'ın üyesi ve bilinmeyen kimlik aynı `404`'ü alır. Firma kimlikleri bu tenant'ın aktif firmalarıyla doğrulanır.
 - **Audit:** `ROLE_CHANGED`, `COMPANY_ACCESS_CHANGED`, `MEMBERSHIP_DEACTIVATED`/`ACTIVATED`; içerikte yalnızca rol anahtarları, firma kimlikleri ve durum vardır (token, hash, e-posta yok).
+
+## Kanal kimlik bilgileri (INT-01)
+
+Pazaryeri API anahtarları `channel_accounts` tablosunda **zarf şifrelemesiyle** saklanır (`backend/src/channels/credential-cipher.ts`):
+
+- Her kayıt için rastgele bir veri anahtarı (DEK, AES-256-GCM) üretilir; kimlik bilgileri bu anahtarla şifrelenir. DEK, yapılandırmadaki anahtar şifreleme anahtarıyla (KEK) şifrelenip saklanır. Düz metin veritabanına hiç yazılmaz.
+- İki katman da `tenant_id`, hesap kimliği ve kanal kodunu doğrulanan ek veri (AAD) olarak bağlar: başka bir tenant'a veya hesaba kopyalanan şifreli veri çözülemez.
+- API kimlik bilgilerini yalnızca yazar. Yanıtlarda ve audit kayıtlarında yalnızca maskeli değer (`••••1234`) bulunur. Çözme yalnızca adapter'lar için `ChannelsService.credentialsFor` ile yapılır; sonuç loglanmaz ve HTTP'ye dönmez.
+- Yetki: yalnızca tenant rolü `channels:manage` izni verenler (Owner, Admin) görür ve değiştirir; firma rolleri `403`, başka tenant'ın firması `404`.
+- Anahtarlar: `CHANNEL_KEKS` (`kimlik:base64`, virgülle) ve `CHANNEL_KEK_ACTIVE`. Geçersiz değerle uygulama açılmaz; boşsa kayıt `503 CHANNEL_CRYPTO_UNAVAILABLE` döner, production'da açılmaz.
+- Rotasyon: yeni KEK'i ekleyip etkin yapın, `ChannelsService.rewrapAll` ile DEK'leri yeniden sarın (şifreli veri değişmez), tüm kayıtlar geçtikten sonra eski KEK'i kaldırın.
+- Sınır: Sürüm A'da KEK ortam değişkenindedir. Production öncesi KMS gerekir (INF-13, R-25).

@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AuditModule } from './audit/audit.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { CatalogModule } from './catalog/catalog.module.js';
+import { ChannelsModule } from './channels/channels.module.js';
 import { CompaniesModule } from './companies/companies.module.js';
 import { RequestContextMiddleware } from './common/request-context.middleware.js';
 import { DatabaseModule } from './database/database.module.js';
@@ -21,6 +22,7 @@ import { TenantContextMiddleware } from './tenancy/tenant-context.middleware.js'
     AuthModule,
     CompaniesModule,
     CatalogModule,
+    ChannelsModule,
     HealthModule,
     InvitationsModule,
     // Validates mail settings at startup; production refuses log/plain SMTP.
