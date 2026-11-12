@@ -6,6 +6,7 @@ import {
 import type { PrismaTx } from '../database/prisma.types.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { TenantContext } from '../tenancy/tenant-context.js';
+import { LIST_CHANNEL, money, splitVat } from './pricing.js';
 
 export const CATEGORY_FIELDS = {
   id: true,
@@ -30,7 +31,69 @@ export const VARIANT_FIELDS = {
   barcode: true,
   createdAt: true,
   updatedAt: true,
+  attributeValues: {
+    select: {
+      attributeId: true,
+      attributeValueId: true,
+      value: { select: { value: true, attribute: { select: { name: true } } } },
+    },
+  },
+  prices: {
+    where: { deletedAt: null },
+    select: { channel: true, amount: true, currency: true, updatedAt: true },
+  },
 } satisfies Prisma.ProductVariantSelect;
+
+export type VariantRow = Prisma.ProductVariantGetPayload<{
+  select: typeof VARIANT_FIELDS;
+}>;
+
+/**
+ * API shape of a variant: attribute links flattened (ordered by attribute
+ * name); prices as 2-digit strings, list price first, with net/VAT derived
+ * from the product's VAT rate (null when the product has none).
+ */
+export function toVariant(
+  { attributeValues, prices, ...row }: VariantRow,
+  vatRate: Prisma.Decimal | null = null,
+) {
+  return {
+    ...row,
+    prices: prices
+      .map((p) => {
+        const split = splitVat(p.amount, vatRate);
+        return {
+          channel: p.channel,
+          amount: money(p.amount),
+          currency: p.currency,
+          netAmount: split?.net ?? null,
+          vatAmount: split?.vat ?? null,
+          updatedAt: p.updatedAt,
+        };
+      })
+      .sort((a, b) =>
+        a.channel === LIST_CHANNEL
+          ? -1
+          : b.channel === LIST_CHANNEL
+            ? 1
+            : a.channel.localeCompare(b.channel),
+      ),
+    attributes: attributeValues
+      .map((a) => ({
+        attributeId: a.attributeId,
+        attributeName: a.value.attribute.name,
+        valueId: a.attributeValueId,
+        value: a.value.value,
+      }))
+      .sort(
+        (x, y) =>
+          x.attributeName.localeCompare(y.attributeName, 'tr') ||
+          x.attributeId.localeCompare(y.attributeId),
+      ),
+  };
+}
+
+export type Variant = ReturnType<typeof toVariant>;
 
 const ACTIVE = { deletedAt: null };
 
@@ -42,6 +105,7 @@ export const PRODUCT_FIELDS = {
   name: true,
   description: true,
   status: true,
+  vatRate: true,
   createdAt: true,
   updatedAt: true,
   variants: {
@@ -64,9 +128,17 @@ export interface ProductFilter {
   search?: string;
 }
 
-interface VariantInput {
+export interface VariantInput {
   sku: string;
   barcode?: string | null;
+  attributes?: { attributeId: string; valueId: string }[];
+  prices?: PriceInput[];
+}
+
+export interface PriceInput {
+  channel: string;
+  amount: string;
+  currency: string;
 }
 
 const paging = (page: number, perPage: number) => ({
@@ -273,15 +345,9 @@ export class CatalogRepository {
       data: { ...data, tenantId },
       select: { id: true },
     });
-    await tx.productVariant.createMany({
-      data: variants.map((v) => ({
-        tenantId,
-        companyId: data.companyId,
-        productId: id,
-        sku: v.sku,
-        barcode: v.barcode ?? null,
-      })),
-    });
+    for (const v of variants) {
+      await this.createVariant(tx, { id, companyId: data.companyId }, v);
+    }
     return (await this.findProduct(id, tx)) as ProductRow;
   }
 
@@ -307,20 +373,90 @@ export class CatalogRepository {
     return tx.productVariant.count({ where: { productId, ...ACTIVE } });
   }
 
-  createVariant(
+  async createVariant(
     tx: PrismaTx,
     product: { id: string; companyId: string },
     v: VariantInput,
-  ) {
-    return tx.productVariant.create({
+  ): Promise<VariantRow> {
+    const tenantId = TenantContext.requireTenantId();
+    const { id } = await tx.productVariant.create({
       data: {
-        tenantId: TenantContext.requireTenantId(),
+        tenantId,
         companyId: product.companyId,
         productId: product.id,
         sku: v.sku,
         barcode: v.barcode ?? null,
       },
-      select: VARIANT_FIELDS,
+      select: { id: true },
+    });
+    if (v.attributes?.length) {
+      await this.setVariantAttributes(tx, id, v.attributes);
+    }
+    if (v.prices?.length) {
+      await tx.variantPrice.createMany({
+        data: v.prices.map((p) => ({ tenantId, variantId: id, ...p })),
+      });
+    }
+    return (await this.findVariant(product.id, id, tx)) as VariantRow;
+  }
+
+  /** Adds or replaces the value of each listed axis; other axes stay. Link rows are never deleted. */
+  async setVariantAttributes(
+    tx: PrismaTx,
+    variantId: string,
+    values: { attributeId: string; valueId: string }[],
+  ) {
+    const tenantId = TenantContext.requireTenantId();
+    for (const { attributeId, valueId } of values) {
+      const updated = await tx.variantAttributeValue.updateMany({
+        where: { variantId, attributeId },
+        data: { attributeValueId: valueId },
+      });
+      if (updated.count === 0) {
+        await tx.variantAttributeValue.create({
+          data: { tenantId, variantId, attributeId, attributeValueId: valueId },
+          select: { variantId: true },
+        });
+      }
+    }
+  }
+
+  findPrice(tx: PrismaTx, variantId: string, channel: string) {
+    return tx.variantPrice.findFirst({
+      where: { variantId, channel, deletedAt: null },
+      select: { id: true, channel: true, amount: true, currency: true },
+    });
+  }
+
+  createPrice(tx: PrismaTx, variantId: string, p: PriceInput) {
+    return tx.variantPrice.create({
+      data: { tenantId: TenantContext.requireTenantId(), variantId, ...p },
+      select: { id: true },
+    });
+  }
+
+  updatePrice(
+    tx: PrismaTx,
+    id: string,
+    data: Prisma.VariantPriceUncheckedUpdateInput,
+  ) {
+    return tx.variantPrice.update({
+      where: { id },
+      data,
+      select: { id: true },
+    });
+  }
+
+  /** Attribute sets of the product's active variants (combination uniqueness check). */
+  findVariantCombinations(tx: PrismaTx, productId: string) {
+    return tx.productVariant.findMany({
+      where: { productId, ...ACTIVE },
+      select: {
+        id: true,
+        attributeValues: {
+          select: { attributeId: true, attributeValueId: true },
+        },
+      },
     });
   }
 

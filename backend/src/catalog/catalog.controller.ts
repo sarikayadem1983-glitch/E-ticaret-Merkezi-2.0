@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import {
@@ -16,14 +17,21 @@ import {
   CurrentUser,
   RequirePermissions,
 } from '../auth/decorators.js';
+import { AttributesService } from './attributes.service.js';
 import { BrandsService } from './brands.service.js';
 import {
   BrandDto,
+  CreateAttributeDto,
+  CreateAttributeValueDto,
   CreateCategoryDto,
   CreateProductDto,
   CreateVariantDto,
+  GenerateVariantsDto,
+  SetPriceDto,
   ListCatalogQuery,
   ListProductsQuery,
+  UpdateAttributeDto,
+  UpdateAttributeValueDto,
   UpdateCategoryDto,
   UpdateProductDto,
   UpdateVariantDto,
@@ -172,6 +180,40 @@ export class ProductsController {
     return this.products.addVariant(user, id, dto);
   }
 
+  @Post(':id/variants/generate')
+  @RequirePermissions('products:write')
+  generateVariants(
+    @CurrentUser() user: AuthUser,
+    @Param('id', uuid) id: string,
+    @Body() dto: GenerateVariantsDto,
+  ) {
+    return this.products.generateVariants(user, id, dto);
+  }
+
+  @Put(':id/variants/:variantId/prices/:channel')
+  @RequirePermissions('products:write')
+  setPrice(
+    @CurrentUser() user: AuthUser,
+    @Param('id', uuid) id: string,
+    @Param('variantId', uuid) variantId: string,
+    @Param('channel') channel: string,
+    @Body() dto: SetPriceDto,
+  ) {
+    return this.products.setPrice(user, id, variantId, channel, dto);
+  }
+
+  @Delete(':id/variants/:variantId/prices/:channel')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePermissions('products:write')
+  removePrice(
+    @CurrentUser() user: AuthUser,
+    @Param('id', uuid) id: string,
+    @Param('variantId', uuid) variantId: string,
+    @Param('channel') channel: string,
+  ) {
+    return this.products.removePrice(user, id, variantId, channel);
+  }
+
   @Patch(':id/variants/:variantId')
   @RequirePermissions('products:write')
   updateVariant(
@@ -192,5 +234,78 @@ export class ProductsController {
     @Param('variantId', uuid) variantId: string,
   ) {
     return this.products.removeVariant(user, id, variantId);
+  }
+}
+
+// Attributes (colour, size…) are tenant-wide like brands (CAT-03).
+@Controller('attributes')
+export class AttributesController {
+  constructor(private readonly attributes: AttributesService) {}
+
+  @Get()
+  @RequirePermissions('products:read')
+  list(@Query() q: ListCatalogQuery) {
+    return this.attributes.list(q);
+  }
+
+  @Get(':id')
+  @RequirePermissions('products:read')
+  get(@Param('id', uuid) id: string) {
+    return this.attributes.get(id);
+  }
+
+  @Post()
+  @RequirePermissions(...TENANT_WRITE)
+  create(@CurrentUser() user: AuthUser, @Body() dto: CreateAttributeDto) {
+    return this.attributes.create(user, dto);
+  }
+
+  @Patch(':id')
+  @RequirePermissions(...TENANT_WRITE)
+  update(
+    @CurrentUser() user: AuthUser,
+    @Param('id', uuid) id: string,
+    @Body() dto: UpdateAttributeDto,
+  ) {
+    return this.attributes.update(user, id, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePermissions(...TENANT_WRITE)
+  remove(@CurrentUser() user: AuthUser, @Param('id', uuid) id: string) {
+    return this.attributes.remove(user, id);
+  }
+
+  @Post(':id/values')
+  @RequirePermissions(...TENANT_WRITE)
+  addValue(
+    @CurrentUser() user: AuthUser,
+    @Param('id', uuid) id: string,
+    @Body() dto: CreateAttributeValueDto,
+  ) {
+    return this.attributes.addValue(user, id, dto);
+  }
+
+  @Patch(':id/values/:valueId')
+  @RequirePermissions(...TENANT_WRITE)
+  updateValue(
+    @CurrentUser() user: AuthUser,
+    @Param('id', uuid) id: string,
+    @Param('valueId', uuid) valueId: string,
+    @Body() dto: UpdateAttributeValueDto,
+  ) {
+    return this.attributes.updateValue(user, id, valueId, dto);
+  }
+
+  @Delete(':id/values/:valueId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePermissions(...TENANT_WRITE)
+  removeValue(
+    @CurrentUser() user: AuthUser,
+    @Param('id', uuid) id: string,
+    @Param('valueId', uuid) valueId: string,
+  ) {
+    return this.attributes.removeValue(user, id, valueId);
   }
 }

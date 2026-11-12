@@ -1,7 +1,14 @@
 import { Transform, Type } from 'class-transformer';
 import {
+  AMOUNT_PATTERN,
+  CHANNEL_PATTERN,
+  CURRENCIES,
+  VAT_RATES,
+} from './pricing.js';
+import {
   ArrayMaxSize,
   ArrayMinSize,
+  ArrayUnique,
   IsArray,
   IsIn,
   IsInt,
@@ -102,6 +109,35 @@ export class BrandDto {
   name: string;
 }
 
+/** One axis value of a variant (CAT-03). */
+export class VariantAttributeDto {
+  @IsUUID()
+  attributeId: string;
+
+  @IsUUID()
+  valueId: string;
+}
+
+const AMOUNT_MESSAGE =
+  'Tutar en çok 2 ondalık basamaklı ve noktalı olmalı (ör. 199.90)';
+
+/** A price to set: amount as a decimal string, never a JSON number (CAT-05). */
+export class SetPriceDto {
+  @IsString()
+  @Matches(AMOUNT_PATTERN, { message: AMOUNT_MESSAGE })
+  amount: string;
+
+  @IsIn(CURRENCIES)
+  currency: string;
+}
+
+export class PriceInputDto extends SetPriceDto {
+  @IsString()
+  @MaxLength(50)
+  @Matches(CHANNEL_PATTERN, { message: 'Geçersiz kanal kodu' })
+  channel: string;
+}
+
 export class CreateVariantDto {
   @Transform(trim)
   @IsString()
@@ -113,6 +149,22 @@ export class CreateVariantDto {
   @IsString()
   @MaxLength(50)
   barcode?: string | null;
+
+  /** At most one value per attribute (checked by the service: ATTRIBUTE_DUPLICATE). */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(5)
+  @ValidateNested({ each: true })
+  @Type(() => VariantAttributeDto)
+  attributes?: VariantAttributeDto[];
+
+  /** One price per channel (checked by the service: PRICE_CHANNEL_DUPLICATE). */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => PriceInputDto)
+  prices?: PriceInputDto[];
 }
 
 export class UpdateVariantDto {
@@ -127,6 +179,14 @@ export class UpdateVariantDto {
   @IsString()
   @MaxLength(50)
   barcode?: string | null;
+
+  /** At most one value per attribute (checked by the service: ATTRIBUTE_DUPLICATE). */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(5)
+  @ValidateNested({ each: true })
+  @Type(() => VariantAttributeDto)
+  attributes?: VariantAttributeDto[];
 }
 
 export class CreateProductDto {
@@ -147,6 +207,11 @@ export class CreateProductDto {
   @IsOptional()
   @IsIn(PRODUCT_STATUSES)
   status?: ProductStatusValue;
+
+  /** KDV rate in percent as a string; null clears it. */
+  @IsOptional()
+  @IsIn(VAT_RATES)
+  vatRate?: string | null;
 
   @IsOptional()
   @IsUUID()
@@ -183,6 +248,11 @@ export class UpdateProductDto {
   @IsIn(PRODUCT_STATUSES)
   status?: ProductStatusValue;
 
+  /** KDV rate in percent as a string; null clears it. */
+  @IsOptional()
+  @IsIn(VAT_RATES)
+  vatRate?: string | null;
+
   @IsOptional()
   @IsUUID()
   categoryId?: string | null;
@@ -208,4 +278,86 @@ export class ListProductsQuery extends PageQuery {
   @IsOptional()
   @IsUUID()
   brand_id?: string;
+}
+
+// ---- attributes (CAT-03) ----
+
+export class CreateAttributeDto {
+  @Transform(trim)
+  @IsString()
+  @Length(1, 100)
+  name: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @Transform(({ value }: { value: unknown }) =>
+    Array.isArray(value)
+      ? value.map((v) => (typeof v === 'string' ? v.trim() : v))
+      : value,
+  )
+  @IsString({ each: true })
+  @Length(1, 100, { each: true })
+  values?: string[];
+}
+
+export class UpdateAttributeDto {
+  @Transform(trim)
+  @IsString()
+  @Length(1, 100)
+  name: string;
+}
+
+export class CreateAttributeValueDto {
+  @Transform(trim)
+  @IsString()
+  @Length(1, 100)
+  value: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(10000)
+  sortOrder?: number;
+}
+
+export class UpdateAttributeValueDto {
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @Length(1, 100)
+  value?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(10000)
+  sortOrder?: number;
+}
+
+export class GenerateAxisDto {
+  @IsUUID()
+  attributeId: string;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(50)
+  @ArrayUnique()
+  @IsUUID('all', { each: true })
+  valueIds: string[];
+}
+
+export class GenerateVariantsDto {
+  @Transform(trim)
+  @IsString()
+  @Length(1, 60)
+  @Matches(/^\S+$/, { message: 'SKU öneki boşluk içeremez' })
+  skuPrefix: string;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(3)
+  @ValidateNested({ each: true })
+  @Type(() => GenerateAxisDto)
+  axes: GenerateAxisDto[];
 }

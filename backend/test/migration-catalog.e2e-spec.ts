@@ -90,8 +90,9 @@ beforeAll(async () => {
   const all = allMigrations();
   if (!all.includes(CATALOG)) throw new Error(`${CATALOG} missing`);
 
+  // Up to CAT-01 only: later migrations reference the catalog tables, and this file tests CAT-01's down.sql.
   fresh = await createDb(FRESH_DB);
-  await apply(fresh, all);
+  await apply(fresh, all.slice(0, all.indexOf(CATALOG) + 1));
 
   // Existing data: every earlier migration, a tenant with system roles and a company, then CAT-01.
   data = await createDb(DATA_DB);

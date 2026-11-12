@@ -23,6 +23,23 @@ describe('matchBffRoute', () => {
     ['GET', 'invitations', ''],
     ['POST', 'invitations', ''],
     ['POST', `invitations/${ID}/revoke`, ''],
+    ['GET', 'products', 'page=1&per_page=20&search=x&status=active&company_id=a&category_id=b&brand_id=c'],
+    ['POST', 'products', ''],
+    ['GET', `products/${ID}`, ''],
+    ['PATCH', `products/${ID}`, ''],
+    ['DELETE', `products/${ID}`, ''],
+    ['POST', `products/${ID}/variants`, ''],
+    ['POST', `products/${ID}/variants/generate`, ''],
+    ['PATCH', `products/${ID}/variants/${ID}`, ''],
+    ['DELETE', `products/${ID}/variants/${ID}`, ''],
+    ['PUT', `products/${ID}/variants/${ID}/prices/list`, ''],
+    ['PUT', `products/${ID}/variants/${ID}/prices/hepsi-burada`, ''],
+    ['DELETE', `products/${ID}/variants/${ID}/prices/trendyol`, ''],
+    ['GET', 'categories', 'search=a'],
+    ['GET', 'brands', 'page=2'],
+    ['GET', 'attributes', 'per_page=100'],
+    ['POST', 'attributes', ''],
+    ['POST', `attributes/${ID}/values`, ''],
   ])('allows %s %s', (method, path, query) => {
     expect(match(method, path, query)).toMatchObject({ ok: true, path });
   });
@@ -66,6 +83,12 @@ describe('matchBffRoute', () => {
     ['wrong method', 'POST', 'auth/memberships'],
     ['health', 'GET', 'health'],
     ['wrong method', 'DELETE', `companies/${ID}`],
+    ['category write (not exposed)', 'POST', 'categories'],
+    ['brand delete (not exposed)', 'DELETE', `brands/${ID}`],
+    ['attribute delete (not exposed)', 'DELETE', `attributes/${ID}`],
+    ['price channel with a leading dash', 'PUT', `products/${ID}/variants/${ID}/prices/-list`],
+    ['price without channel', 'PUT', `products/${ID}/variants/${ID}/prices`],
+    ['DELETE on products list', 'DELETE', 'products'],
     ['wrong method', 'PUT', 'companies'],
     ['non-uuid id', 'GET', 'companies/123'],
     ['uppercase uuid', 'GET', `companies/${ID.toUpperCase()}`],
@@ -83,6 +106,13 @@ describe('matchBffRoute', () => {
     ['empty', []],
   ])('refuses path tricks (%s)', (_name, segments) => {
     expect(matchBffRoute('GET', segments, q())).toEqual({ ok: false, status: 404 });
+  });
+
+  it('forwards bodies on catalog writes, never on DELETE', () => {
+    expect(match('POST', 'products')).toMatchObject({ body: true });
+    expect(match('PUT', `products/${ID}/variants/${ID}/prices/list`)).toMatchObject({ body: true });
+    expect(match('DELETE', `products/${ID}`)).toMatchObject({ body: false });
+    expect(match('GET', 'products', 'tenant_id=x')).toEqual({ ok: false, status: 400 });
   });
 
   it('refuses unknown or oversized query parameters', () => {

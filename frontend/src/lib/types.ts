@@ -36,6 +36,7 @@ export interface SessionInfo {
     email: string;
     permissions: string[];
     tenant: { id: string; name: string; slug: string } | null;
+    canManageUsers?: boolean;
   };
   selectedCompanyId: string | null;
 }
@@ -45,4 +46,105 @@ export interface Membership {
   name: string;
   slug: string;
   current: boolean;
+}
+
+// ---- catalog (CAT-04) ----
+
+export type ProductStatus = 'draft' | 'active' | 'archived';
+
+export interface VariantAttribute {
+  attributeId: string;
+  attributeName: string;
+  valueId: string;
+  value: string;
+}
+
+/** Amounts are decimal strings ("199.90"), never numbers. */
+export interface VariantPrice {
+  channel: string;
+  amount: string;
+  currency: string;
+  netAmount: string | null;
+  vatAmount: string | null;
+  updatedAt: string;
+}
+
+export interface Variant {
+  id: string;
+  productId: string;
+  sku: string;
+  barcode: string | null;
+  attributes: VariantAttribute[];
+  prices: VariantPrice[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Product {
+  id: string;
+  companyId: string;
+  categoryId: string | null;
+  brandId: string | null;
+  name: string;
+  description: string | null;
+  status: ProductStatus;
+  vatRate: string | null;
+  variants: Variant[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Category {
+  id: string;
+  parentId: string | null;
+  name: string;
+  slug: string;
+}
+
+export interface Brand {
+  id: string;
+  name: string;
+}
+
+export interface Attribute {
+  id: string;
+  name: string;
+  values: { id: string; value: string; sortOrder: number }[];
+}
+
+export type CompanyRoleKey = 'operations' | 'accounting' | 'viewer';
+
+/** A member's whole access: one tenant role or a list of company roles. */
+export type MemberAccess =
+  | { tenantRole: 'owner' | 'admin' }
+  | {
+      companyRoles: {
+        companyId: string;
+        companyName: string | null;
+        roleKey: CompanyRoleKey;
+      }[];
+    };
+
+export interface Member {
+  userId: string;
+  name: string;
+  email: string;
+  status: 'active' | 'inactive';
+  access: MemberAccess;
+}
+
+export interface CreatedInvitation {
+  id: string;
+  status: 'pending';
+  delivery: 'sent' | 'failed';
+  replacesInactiveMembership: boolean;
+}
+
+export interface InvitationLookup {
+  tenantName: string;
+  inviterName: string;
+  roleSummary: string;
+  maskedEmail: string;
+  accountExists: boolean;
+  replacesInactiveMembership: boolean;
 }

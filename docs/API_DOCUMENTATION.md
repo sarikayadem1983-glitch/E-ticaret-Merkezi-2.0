@@ -290,6 +290,63 @@ Yetki: Bearer token + `products:write` + firmada `products:write`
 Yanıt: `204`
 Hatalar: `403`, `404`, `409 COMPANY_INACTIVE` (firma pasif), `409 LAST_VARIANT` (ürünün son varyantı; ürünü silin veya arşivleyin)
 
+### Varyant özellikleri (CAT-03)
+Özellik (`Attribute`: renk, beden…) ve değerleri tenant genelidir; okuma `products:read`, yazma kategori/marka gibi `products:write` + `companies:all` (Owner, Admin). Audit `entityType`: `Attribute`, `AttributeValue`; varyantın özellik değişikliği `ProductVariant` `UPDATE` kaydında `attributes` alanıyla görünür.
+
+`Attribute`: `{ "id", "name", "values": [ { "id", "value", "sortOrder" } ], "createdAt", "updatedAt" }` (değerler `sortOrder`, sonra `value` sırasıyla; silinenler yok).
+`Variant` ek alanı: `"attributes": [ { "attributeId", "attributeName", "valueId", "value" } ]` (özellik adına göre sıralı).
+
+### GET /api/v1/attributes · GET /api/v1/attributes/:id
+Yetki: Bearer token + `products:read`
+İstek (sorgu, liste): `page`, `per_page` (en çok 100), `search` (ad içinde, büyük/küçük harf duyarsız)
+Yanıt: `200` `{ "data": [Attribute], "meta" }` · `{ "data": Attribute }`
+Hatalar: `401`, `403`, `404`
+
+### POST /api/v1/attributes · PATCH /api/v1/attributes/:id
+İstek: `{ "name" (1–100), "values"? (yalnızca POST; en çok 100 metin, 1–100 karakter) }` · PATCH `{ "name" }`
+Yetki: Bearer token + `products:write` + `companies:all`
+Yanıt: `201`/`200` `{ "data": Attribute }`
+Hatalar: `403`, `404`, `409 ATTRIBUTE_NAME_TAKEN` (büyük/küçük harf duyarsız), `409 ATTRIBUTE_VALUE_TAKEN` (istekte tekrar eden değer), `422`
+
+### DELETE /api/v1/attributes/:id
+Açıklama: Soft-delete; değerleri de silinir. Yanıt `204`.
+Hatalar: `403`, `404`, `409 ATTRIBUTE_IN_USE` (silinmemiş bir varyant bu özelliği taşıyor)
+
+### POST /api/v1/attributes/:id/values · PATCH /api/v1/attributes/:id/values/:valueId · DELETE …/values/:valueId
+İstek: `{ "value" (1–100), "sortOrder"? (0–10000) }` (PATCH'te ikisi de isteğe bağlı)
+Yanıt: `201`/`200` `{ "data": Attribute }` (güncel özellik) · DELETE `204`
+Hatalar: `403`, `404` (özellik veya değer), `409 ATTRIBUTE_VALUE_TAKEN`, `409 ATTRIBUTE_VALUE_IN_USE` (silme; silinmemiş varyant kullanıyor), `422`
+
+### Varyantlarda özellik
+`POST /products` (her varyantta) ve `POST /products/:id/variants` isteğine `"attributes"?: [ { "attributeId", "valueId" } ]` (en çok 5, her özellik bir kez) eklenir. `PATCH …/variants/:variantId` aynı alanı alır: listelenen eksenlerin değeri eklenir veya değiştirilir, listelenmeyen eksenler aynen kalır (eksen kaldırma yok; yeni varyant oluşturup eskisini silin).
+Ek hatalar: `422 ATTRIBUTE_UNAVAILABLE` (özellik/değer yok, silinmiş veya değer o özelliğe ait değil), `422 ATTRIBUTE_DUPLICATE` (aynı özellik iki kez), `409 VARIANT_COMBINATION_TAKEN` (ürünün silinmemiş başka bir varyantı aynı özellik-değer kümesini taşıyor; aynı istekteki varyantlar dahil).
+
+### POST /api/v1/products/:id/variants/generate
+Açıklama: Eksen değerlerinin kartezyen çarpımından varyant üretir. Ürünün silinmemiş varyantlarında zaten olan kombinasyonlar atlanır. SKU: `<skuPrefix>-<KOD1>-<KOD2>…`; kod değerin büyük harfe çevrilmiş, Türkçe karakterleri ASCII'ye indirgenmiş (`Ç→C, Ğ→G, İ/ı→I, Ö→O, Ş→S, Ü→U`), harf/rakam dışı karakterleri `-` olan ilk 20 karakteridir (ör. `TSHIRT-KIRMIZI-XL`). Barkod boş kalır. Tek transaction: bir SKU çakışırsa hiçbir varyant oluşmaz. Audit: her varyant için `CREATE`.
+Yetki: Bearer token + `products:write` + firmada `products:write`
+İstek: `{ "skuPrefix" (1–60), "axes": [ { "attributeId", "valueIds": [uuid] (1–50, tekrarsız) } ] (1–3 eksen, tekrarsız; çarpım en çok 100) }`
+Yanıt: `201` `{ "data": { "created": [Variant], "skipped": <sayı> } }`
+Hatalar: `403`, `404`, `409 COMPANY_INACTIVE`, `409 SKU_TAKEN` (üretilen bir SKU kullanılmış), `422 ATTRIBUTE_UNAVAILABLE`, `422 ATTRIBUTE_DUPLICATE`, `422 TOO_MANY_COMBINATIONS` (çarpım 100'den büyük), `422`
+
+### Fiyat ve KDV (CAT-05)
+Tutarlar ondalık **metin** olarak gönderilir ve döner (`"199.90"`); en çok 2 ondalık basamak, nokta ayırıcı; fazlası `422`. Fiyatlar KDV dahildir. Yuvarlama ve kurallar: `docs/DATABASE.md` "fiyat ve KDV".
+
+`Product` ek alanı: `"vatRate": "20.00" | null`. `Variant` ek alanı: `"prices": [Price]` (kanal koduna göre, `list` önce).
+`Price`: `{ "channel": "list" | "<kanal>", "amount": "199.90", "currency": "TRY", "netAmount": "166.58" | null, "vatAmount": "33.32" | null, "updatedAt" }` (`netAmount`/`vatAmount` ürünün `vatRate`'i yoksa `null`).
+
+`POST /products` ve `PATCH /products/:id` isteğine `"vatRate"?: "0" | "1" | "10" | "20" | null` eklenir (başka değer `422`). `POST /products` içindeki her varyant ve `POST /products/:id/variants` isteği `"prices"?: [ { "channel", "amount", "currency" } ]` (en çok 20, kanal başına bir) alabilir.
+
+### PUT /api/v1/products/:id/variants/:variantId/prices/:channel
+Açıklama: Varyantın o kanaldaki fiyatını yazar (yoksa oluşturur). `channel`: `list` (liste fiyatı) veya kanal kodu (`^[a-z0-9]+(-[a-z0-9]+)*$`, en çok 50). Audit: `entityType: "VariantPrice"`, `CREATE` veya `UPDATE` (`before`/`after` tutar ve para birimi).
+Yetki: Bearer token + `products:write` + firmada `products:write`
+İstek: `{ "amount": "199.90", "currency": "TRY" | "USD" | "EUR" }`
+Yanıt: `200` `{ "data": Variant }`
+Hatalar: `403`, `404` (ürün/varyant yok veya geçersiz kanal kodu), `409 COMPANY_INACTIVE`, `409 CONCURRENT_UPDATE`, `422` (tutar biçimi, para birimi)
+
+### DELETE /api/v1/products/:id/variants/:variantId/prices/:channel
+Açıklama: Fiyatı soft-delete eder. Audit `DELETE`. Yanıt `204`.
+Hatalar: `403`, `404` (fiyat yok), `409 COMPANY_INACTIVE`
+
 ### GET /api/v1/audit-logs
 Açıklama: Tenant'ın işlem geçmişi, yeniden eskiye.
 Yetki: Bearer token + `audit:read`
@@ -380,5 +437,7 @@ Hatalar: `401` `INVALID_CREDENTIALS` (mevcut hesabın şifresi yanlış veya hes
 | `COMPANY_INACTIVE` | 409 | Pasif firmanın ürün/varyantları yazılamaz; okuma çalışır. Rol/izin kontrolü önce yapılır (rol yok `404`, izin yok `403`) |
 | `CATEGORY_IN_USE`, `BRAND_IN_USE`, `LAST_VARIANT`, `CONCURRENT_UPDATE` | 409 | Katalog kaydı silinemez veya aynı anda değiştirildi |
 | `CATEGORY_CYCLE`, `CATEGORY_UNAVAILABLE`, `BRAND_UNAVAILABLE` | 422 | Kategori döngüsü; bağlanan kategori/marka yok veya silinmiş |
+| `ATTRIBUTE_NAME_TAKEN`, `ATTRIBUTE_VALUE_TAKEN`, `ATTRIBUTE_IN_USE`, `ATTRIBUTE_VALUE_IN_USE`, `VARIANT_COMBINATION_TAKEN` | 409 | Varyant özelliği çakışması veya kullanımda (bkz. Varyant özellikleri) |
+| `ATTRIBUTE_UNAVAILABLE`, `ATTRIBUTE_DUPLICATE`, `TOO_MANY_COMBINATIONS` | 422 | Özellik/değer yok veya silinmiş; aynı eksen iki kez; varyant üretiminde 100'den fazla kombinasyon |
 | `TENANT_CONTEXT_MISSING` | 500 | Sorgu tenant bağlamı olmadan çalıştırıldı (geliştirici hatası) |
 | `TENANT_VIOLATION` | 500 | Sorgu başka tenant'ın verisine dokunmaya çalıştı (geliştirici hatası) |
