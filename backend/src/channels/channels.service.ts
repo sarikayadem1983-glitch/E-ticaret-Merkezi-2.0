@@ -142,7 +142,8 @@ export class ChannelsService {
         continue;
       }
       values[f.key] = value;
-      hint[f.key] = maskSecret(value);
+      // Secret fields show no characters at all; others show the last 4.
+      hint[f.key] = f.secret ? '••••' : maskSecret(value);
     }
     if (errors.length) {
       throw new UnprocessableEntityException({
@@ -251,12 +252,13 @@ export class ChannelsService {
     }
     const row = await this.write(async (tx) => {
       if (!(await this.repository.find(companyId, id, tx))) throw notFound();
-      const updated = await this.repository.update(tx, id, {
+      const updated = await this.repository.update(tx, companyId, id, {
         name: dto.name,
         isActive: dto.isActive,
         encrypted,
         hint: secret?.hint,
       });
+      if (!updated) throw notFound();
       await this.audit.record(
         {
           action: 'UPDATE',
@@ -282,7 +284,8 @@ export class ChannelsService {
     await this.write(async (tx) => {
       const current = await this.repository.find(companyId, id, tx);
       if (!current) throw notFound();
-      await this.repository.softDelete(tx, id);
+      if (!(await this.repository.softDelete(tx, companyId, id)))
+        throw notFound();
       await this.audit.record(
         {
           action: 'DELETE',
@@ -336,12 +339,10 @@ export class ChannelsService {
             { tenantId: row.tenantId, accountId: row.id, channel: row.channel },
             toEncrypted(row),
           );
-          const { count } = await this.repository.saveRewrap(
-            row.id,
-            row.kekId,
-            wrapped,
-          );
+          const { count } = await this.repository.saveRewrap(row, wrapped);
           if (count === 1) rewrapped++;
+          // Changed meanwhile (update/rotation elsewhere): retry in a later run.
+          else skip.add(row.id);
         } catch {
           failed++;
           skip.add(row.id);

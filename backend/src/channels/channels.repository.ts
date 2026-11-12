@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import {
   InjectPrisma,
@@ -35,6 +36,7 @@ const SECRET_FIELDS = {
   dekIv: true,
   dekTag: true,
   kekId: true,
+  updatedAt: true,
 } satisfies Prisma.ChannelAccountSelect;
 
 type SecretRow = Prisma.ChannelAccountGetPayload<{
@@ -121,8 +123,10 @@ export class ChannelsRepository {
     });
   }
 
-  update(
+  /** Updates a live account; null when it was deleted or moved meanwhile. */
+  async update(
     db: PrismaTx,
+    companyId: string,
     id: string,
     data: {
       name?: string;
@@ -131,42 +135,57 @@ export class ChannelsRepository {
       hint?: Record<string, string>;
     },
   ) {
-    return db.channelAccount.update({
-      where: { id },
+    const { count } = await db.channelAccount.updateMany({
+      where: { id, companyId, deletedAt: null },
       data: {
         name: data.name,
         isActive: data.isActive,
         credentialsHint: data.hint,
         ...(data.encrypted ? toColumns(data.encrypted) : {}),
       },
-      select: ACCOUNT_FIELDS,
     });
+    return count === 1 ? this.find(companyId, id, db) : null;
   }
 
-  softDelete(db: PrismaTx, id: string) {
-    return db.channelAccount.update({
-      where: { id },
-      data: { deletedAt: new Date(), isActive: false },
-      select: { id: true },
+  /**
+   * Soft delete. The key material is overwritten with random bytes, so the
+   * stored credentials of a deleted account can never be decrypted again.
+   */
+  async softDelete(db: PrismaTx, companyId: string, id: string) {
+    const { count } = await db.channelAccount.updateMany({
+      where: { id, companyId, deletedAt: null },
+      data: {
+        deletedAt: new Date(),
+        isActive: false,
+        credentialsCiphertext: new Uint8Array(randomBytes(1)),
+        wrappedDek: new Uint8Array(randomBytes(32)),
+        credentialsHint: {},
+      },
     });
+    return count === 1;
   }
 
   /** Accounts of the current tenant whose DEK is wrapped with another KEK. */
   findForRewrap(activeKekId: string, take: number) {
     return this.prisma.channelAccount.findMany({
-      where: { kekId: { not: activeKekId } },
+      where: { kekId: { not: activeKekId }, deletedAt: null },
       select: SECRET_FIELDS,
       take,
     });
   }
 
+  /** Compare-and-set: only when the row is unchanged since it was read. */
   saveRewrap(
-    id: string,
-    expectedKekId: string,
+    row: Pick<SecretRow, 'id' | 'kekId' | 'updatedAt'>,
     w: Pick<EncryptedCredentials, 'wrappedDek' | 'dekIv' | 'dekTag' | 'kekId'>,
   ) {
     return this.prisma.channelAccount.updateMany({
-      where: { id, kekId: expectedKekId },
+      where: {
+        id: row.id,
+        kekId: row.kekId,
+        updatedAt: row.updatedAt,
+        deletedAt: null,
+      },
       data: {
         wrappedDek: new Uint8Array(w.wrappedDek),
         dekIv: new Uint8Array(w.dekIv),

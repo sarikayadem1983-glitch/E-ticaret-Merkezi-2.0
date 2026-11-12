@@ -199,8 +199,14 @@ export class CredentialCipher {
         { ciphertext: record.ciphertext, iv: record.iv, tag: record.tag },
         aad(identity, 'data'),
       );
-      const parsed = JSON.parse(plain.toString('utf8')) as unknown;
-      plain.fill(0);
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(plain.toString('utf8'));
+      } catch {
+        throw new CredentialDecryptError();
+      } finally {
+        plain.fill(0);
+      }
       if (
         !parsed ||
         typeof parsed !== 'object' ||

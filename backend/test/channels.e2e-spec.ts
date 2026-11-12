@@ -178,8 +178,8 @@ describe('Channel accounts API (e2e, INT-01)', () => {
       isActive: true,
       credentials: {
         supplierId: '••••',
-        apiKey: '••••1111',
-        apiSecret: '••••2222',
+        apiKey: '••••',
+        apiSecret: '••••',
       },
     });
     const body = JSON.stringify(res.body);
@@ -274,7 +274,7 @@ describe('Channel accounts API (e2e, INT-01)', () => {
       })
       .expect(200);
     expect(res.body.data.name).toBe('Yeni ad');
-    expect(res.body.data.credentials.apiSecret).toBe('••••3333');
+    expect(res.body.data.credentials.apiSecret).toBe('••••');
     const service = app.get(ChannelsService);
     const plain = await TenantContext.run(tenantA, () =>
       service.credentialsFor(companyX, accountId),

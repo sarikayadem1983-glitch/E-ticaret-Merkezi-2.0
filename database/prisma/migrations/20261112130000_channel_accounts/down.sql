@@ -3,6 +3,8 @@
 
 BEGIN;
 
+LOCK TABLE "channel_accounts" IN ACCESS EXCLUSIVE MODE;
+
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM "channel_accounts") THEN
