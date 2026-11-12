@@ -283,10 +283,8 @@ describe('Channel accounts API (e2e, INT-01)', () => {
   });
 
   it('admin can manage; company-scoped roles cannot (403)', async () => {
-    await http()
-      .get(url())
-      .set(bearer(await admin()))
-      .expect(200);
+    const adminToken = await admin();
+    await http().get(url()).set(bearer(adminToken)).expect(200);
     const op = await operator();
     await http().get(url()).set(bearer(op)).expect(403);
     await http()
