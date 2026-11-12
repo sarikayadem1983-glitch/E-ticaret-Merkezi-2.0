@@ -13,6 +13,8 @@ const ALLOWED = new Set([
   'health/health.service.ts',
   'invitations/invitations.repository.ts',
   'memberships/memberships.repository.ts',
+  // USR-19: users and tokens are global; every query filters by user id or token hash.
+  'recovery/recovery.service.ts',
 ]);
 
 const SRC = join(import.meta.dirname, '..');
