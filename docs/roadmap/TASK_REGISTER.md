@@ -193,7 +193,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 
 | ID | Görev | Öncelik | Bağımlılık | Tahmin | Mod | Sürüm | Durum | Kabul kriteri | Test | Güvenlik riski | Kaynak |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| INT-01 | `ChannelAdapter` arayüzü, kanal hesabı modeli, kimlik bilgisi şifreleme (envelope encryption, anahtar rotasyonu) | P0 | USR-T8, INF-13 (dev'de yerel anahtar) | 4 | CRITICAL | A | DONE-PR (PR #32) | Kimlik bilgisi DB'de düz metin değil; API yanıtlarında maskeli | U, E, S | Kritik (müşteri API anahtarları) | Öneri (onay bekliyor) |
+| INT-01 | `ChannelAdapter` arayüzü, kanal hesabı modeli, kimlik bilgisi şifreleme (envelope encryption, anahtar rotasyonu) | P0 | USR-T8, INF-13 (dev'de yerel anahtar) | 4 | CRITICAL | A | DONE-MERGED (PR #32, merge `7b3c0b9`; dev `7b3c0b9`, 2026-11-12) | Kimlik bilgisi DB'de düz metin değil; API yanıtlarında maskeli | U, E, S | Kritik (müşteri API anahtarları) | Öneri (onay bekliyor) |
 | INT-02 | Senkron motoru: kanal başına rate limiter, retry, idempotency, senkron logu, çakışma çözümü | P0 | INT-01, INF-09 | 5 | CRITICAL | A | PLANNED | Aynı sipariş iki kez içeri alınmaz; başarısız iş görünür ve yeniden denenebilir | U, E | Yüksek | Öneri (onay bekliyor) |
 | INT-03 | Entegrasyon yönetim UI: bağla, test et, durum, hata logu | P0 | INT-01 | 3 | STANDARD | A | PLANNED | Yalnızca yetkili roller kimlik bilgisi girer/görür (maskeli) | F, P | Orta | Öneri (onay bekliyor) |
 | INT-04 | Webhook alıcısı (imza doğrulama, tekrar oynatma koruması) | P1 | INT-02 | 2 | CRITICAL | B | PLANNED | İmzasız/eski istek reddedilir | U, E, S | Yüksek | Öneri (onay bekliyor) |
@@ -440,7 +440,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | CAT-06 | Kanal kategori ağacı ve zorunlu özellik eşleme modeli + UI | PLANNED | 4 | STANDARD | Öneri (onay bekliyor) |
 | IMP-01 | Excel/CSV şablonu, satır doğrulama, deneme (dry-run) raporu | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
 | IMG-01 | Görsel yükleme, sıralama, ürün/varyanta bağlama | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
-| INT-01 | `ChannelAdapter` arayüzü, kanal hesabı modeli, kimlik bilgisi şifreleme (envelope encryption, anahtar rotasyonu) | DONE-PR (PR #32) | 4 | CRITICAL | Öneri (onay bekliyor) |
+| INT-01 | `ChannelAdapter` arayüzü, kanal hesabı modeli, kimlik bilgisi şifreleme (envelope encryption, anahtar rotasyonu) | DONE-MERGED (PR #32, merge `7b3c0b9`; dev `7b3c0b9`, 2026-11-12) | 4 | CRITICAL | Öneri (onay bekliyor) |
 | INT-02 | Senkron motoru: kanal başına rate limiter, retry, idempotency, senkron logu, çakışma çözümü | PLANNED | 5 | CRITICAL | Öneri (onay bekliyor) |
 | INT-03 | Entegrasyon yönetim UI: bağla, test et, durum, hata logu | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
 | INT-TY-01 | Trendyol bağlantısı + ürün oluşturma/güncelleme, batch durum takibi | PLANNED | 5 | STANDARD | Öneri (onay bekliyor) |
@@ -560,13 +560,13 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | Modül | 20 |
 | EPIC | 33 |
 | Görev | 141 (133 + 6 MVP dilimi: USR-T9a, T10a, T11a, T12a, T13a, T15a + 2 kullanıcı kararı 2026-10-30: OPS-08, USR-21) |
-| DONE-MERGED | 36 |
+| DONE-MERGED | 37 |
 | DONE-PR | 0 |
 | DONE-NOT-DEPLOYED | 0 |
 | IN-PROGRESS | 0 |
 | BLOCKED | 1 (USR-18) |
-| PLANNED | 105 |
-| Sürüm A | 58 görev (36 tamamlandı + 22 kalan), 18 EPIC, kalan 85 iş günü |
+| PLANNED | 104 |
+| Sürüm A | 58 görev (37 tamamlandı + 21 kalan), 18 EPIC, kalan 81 iş günü |
 | Sürüm B | 62 görev (0 tamamlandı + 62 kalan), 23 EPIC, kalan 190 iş günü |
 | Sürüm C | 21 görev (0 tamamlandı + 21 kalan), 9 EPIC, kalan 87 iş günü |
 | Mod: CRITICAL / STANDARD / FAST | 55 / 79 / 7 |
