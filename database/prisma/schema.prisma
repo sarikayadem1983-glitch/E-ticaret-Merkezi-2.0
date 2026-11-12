@@ -35,6 +35,11 @@ model Tenant {
   variantAttrs     VariantAttributeValue[]
   variantPrices    VariantPrice[]
   channelAccounts  ChannelAccount[]
+  channelCategories ChannelCategory[]
+  channelCategoryAttributes ChannelCategoryAttribute[]
+  categoryChannelMappings CategoryChannelMapping[]
+  attributeChannelMappings AttributeChannelMapping[]
+  productChannelValues ProductChannelAttributeValue[]
 
   @@map("tenants")
 }
@@ -346,6 +351,7 @@ model Category {
   children Category[] @relation("CategoryTree")
   products Product[]
 
+  channelMappings CategoryChannelMapping[]
   @@unique([tenantId, id])
   // SQL-only: unique (tenant_id, slug) WHERE deleted_at IS NULL.
   @@index([tenantId, parentId])
@@ -391,6 +397,7 @@ model Product {
   brand    Brand?           @relation(fields: [tenantId, brandId], references: [tenantId, id], onDelete: Restrict)
   variants ProductVariant[]
 
+  channelValues ProductChannelAttributeValue[]
   @@unique([tenantId, id])
   /// Target of the variant FK: a variant always belongs to its product's company.
   @@unique([tenantId, companyId, id])
@@ -437,6 +444,7 @@ model Attribute {
   tenant Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   values AttributeValue[]
 
+  channelMappings AttributeChannelMapping[]
   @@unique([tenantId, id])
   // SQL-only: unique (tenant_id, lower(btrim(name))) WHERE deleted_at IS NULL.
   @@map("attributes")
@@ -532,4 +540,108 @@ model ChannelAccount {
   // SQL-only: unique (tenant_id, company_id, channel, lower(name)) WHERE deleted_at IS NULL.
   @@index([tenantId, companyId])
   @@map("channel_accounts")
+}
+
+/// CAT-06: a marketplace's category tree, per tenant and channel. Filled by import
+/// (INT-TY-01 will fill it from the marketplace API). Rows are replaced, never deleted.
+model ChannelCategory {
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  channel          String    @db.VarChar(50)
+  externalId       String    @map("external_id") @db.VarChar(64)
+  parentExternalId String?   @map("parent_external_id") @db.VarChar(64)
+  name             String    @db.VarChar(200)
+  isLeaf           Boolean   @map("is_leaf")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz
+
+  tenant     Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  attributes ChannelCategoryAttribute[]
+  mappings   CategoryChannelMapping[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, channel, externalId])
+  @@index([tenantId, channel, parentExternalId])
+  @@map("channel_categories")
+}
+
+/// An attribute a channel category asks for (e.g. "Menşei"), with its allowed values.
+model ChannelCategoryAttribute {
+  id                String    @id @default(uuid()) @db.Uuid
+  tenantId          String    @map("tenant_id") @db.Uuid
+  channelCategoryId String    @map("channel_category_id") @db.Uuid
+  externalId        String    @map("external_id") @db.VarChar(64)
+  name              String    @db.VarChar(200)
+  required          Boolean
+  /// True: the value differs per variant (colour, size) and comes from a mapped attribute.
+  variesByVariant   Boolean   @map("varies_by_variant")
+  allowCustom       Boolean   @map("allow_custom")
+  /// [{ "externalId": "...", "name": "..." }]
+  allowedValues     Json      @map("allowed_values")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt         DateTime? @map("deleted_at") @db.Timestamptz
+
+  tenant            Tenant                         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  category          ChannelCategory                @relation(fields: [tenantId, channelCategoryId], references: [tenantId, id], onDelete: Restrict)
+  attributeMappings AttributeChannelMapping[]
+  productValues     ProductChannelAttributeValue[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, channelCategoryId, externalId])
+  @@map("channel_category_attributes")
+}
+
+/// Our category → a leaf channel category, one per (category, channel).
+model CategoryChannelMapping {
+  tenantId          String   @map("tenant_id") @db.Uuid
+  categoryId        String   @map("category_id") @db.Uuid
+  channel           String   @db.VarChar(50)
+  channelCategoryId String   @map("channel_category_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  category        Category        @relation(fields: [tenantId, categoryId], references: [tenantId, id], onDelete: Restrict)
+  channelCategory ChannelCategory @relation(fields: [tenantId, channelCategoryId], references: [tenantId, id], onDelete: Restrict)
+
+  @@id([tenantId, categoryId, channel])
+  @@map("category_channel_mappings")
+}
+
+/// Our variant attribute (CAT-03) → a variant-level channel attribute. Value mapping: INT-TY-01.
+model AttributeChannelMapping {
+  tenantId                   String   @map("tenant_id") @db.Uuid
+  channelCategoryAttributeId String   @map("channel_category_attribute_id") @db.Uuid
+  attributeId                String   @map("attribute_id") @db.Uuid
+  createdAt                  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                  DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  tenant           Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  channelAttribute ChannelCategoryAttribute @relation(fields: [tenantId, channelCategoryAttributeId], references: [tenantId, id], onDelete: Restrict)
+  attribute        Attribute                @relation(fields: [tenantId, attributeId], references: [tenantId, id], onDelete: Restrict)
+
+  @@id([tenantId, channelCategoryAttributeId])
+  @@index([tenantId, attributeId])
+  @@map("attribute_channel_mappings")
+}
+
+/// A product's value for a product-level channel attribute (same for every variant).
+model ProductChannelAttributeValue {
+  tenantId                   String   @map("tenant_id") @db.Uuid
+  productId                  String   @map("product_id") @db.Uuid
+  channelCategoryAttributeId String   @map("channel_category_attribute_id") @db.Uuid
+  /// Allowed value's externalId, or null for a custom value.
+  valueExternalId            String?  @map("value_external_id") @db.VarChar(64)
+  value                      String   @db.VarChar(200)
+  createdAt                  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                  DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  tenant           Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  product          Product                  @relation(fields: [tenantId, productId], references: [tenantId, id], onDelete: Restrict)
+  channelAttribute ChannelCategoryAttribute @relation(fields: [tenantId, channelCategoryAttributeId], references: [tenantId, id], onDelete: Restrict)
+
+  @@id([tenantId, productId, channelCategoryAttributeId])
+  @@map("product_channel_attribute_values")
 }
