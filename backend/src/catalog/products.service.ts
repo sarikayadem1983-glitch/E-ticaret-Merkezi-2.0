@@ -151,6 +151,16 @@ export class ProductsService {
     return product;
   }
 
+  /**
+   * For other catalog services (CAT-06): the product if the member may read it,
+   * or, with `write`, change it (company active). Same 404/403 rules as the API.
+   */
+  accessible(user: AuthUser, id: string, write: boolean, tx: PrismaTx) {
+    return write
+      ? this.loadForWrite(user, id, tx)
+      : this.load(user, id, 'products:read', tx);
+  }
+
   /** Loads a product for a write: its company must also be active (409 COMPANY_INACTIVE). */
   private async loadForWrite(
     user: AuthUser,

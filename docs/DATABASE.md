@@ -143,3 +143,13 @@
 ## Roller
 
 Uygulama `tm_app`, migration `tm_migrator` rolüyle çalışır; ayrıntılar [SECURITY.md](SECURITY.md#1-veritabanı-rolleri-en-az-yetki). Yeni append-only tablo eklenirse migration'da `REVOKE UPDATE, DELETE ON <tablo> FROM tm_app` yazılmalıdır.
+
+### Kanal kategori eşleme (CAT-06)
+
+- `channel_categories`: kanalın kategori ağacı (tenant + kanal başına, `external_id` tekil). İçe aktarma tüm ağacı gönderir; listede olmayan düğümler soft-delete edilir.
+- `channel_category_attributes`: kategorinin istediği özellikler (`required`, `varies_by_variant`, `allow_custom`, `allowed_values` JSON dizi).
+- `category_channel_mappings`: bizim kategori → yaprak kanal kategorisi (kategori + kanal başına bir).
+- `attribute_channel_mappings`: bizim varyant özelliği (CAT-03) → varyanta göre değişen kanal özelliği. Değer eşlemesi INT-TY-01'de.
+- `product_channel_attribute_values`: ürün düzeyindeki kanal özelliği değeri (izinli değer `value_external_id` ile veya serbest değer).
+- Hazırlık kontrolü `GET /products/:id/channel-readiness/:channel`: eksik kategori, eşleme, zorunlu değer ve değeri olmayan varyantları listeler.
+- `tm_app`: ağaç tablolarında SELECT/INSERT/UPDATE; eşleme ve değer tablolarında DELETE de var (kullanıcı eşlemeyi kaldırabilir).
