@@ -11,7 +11,7 @@ Son güncelleme: 2026-10-30 (`main` @ `8fc7ae3` dev'e deploy edildi) · Kaynak: 
 | BLOCKED | 1 — USR-18 (T16 + Aşama 2 migration onayı) |
 | Sürüm A (Trendyol-only MVP) ilerleme | 28 / 58 görev merge edildi ve dev'de; kalan 30 görev, 87,5 iş günü; tahmini hedef 2027-01-20 (taahhüt değil; OPS-08 ve USR-T11a sonrası yeniden hesaplanmadı) |
 | Sürüm B / C | 62 / 21 görev |
-| Açık PR | #27 CAT-03, #29 CAT-05 (#27 üstünde) (`DONE-PR`); #23 USR-T14 (`DONE-PR`; CI ✓, CRITICAL bağımsız inceleme 2 tur temiz) |
+| Açık PR | #29 CAT-05 (`DONE-PR`). #27 CAT-03 2026-11-12'de kullanıcı onayıyla merge edildi (`1db22ae`); #25, #26, #28 (USR-T13a/T15a/T16) 2026-11-11'de merge edildi |
 | `origin/main` | `8fc7ae3` (PR #19 merge; #18 `9653158`). `main` CI ✓: backend unit 283/283, e2e 318/319 (1 skip, Mailpit), frontend 84/84 |
 | Dev ortamı | `8fc7ae3` (2026-10-30; onay kaydı yok, bkz. §3). Backend `node dist/main` (PID 2404), frontend `npm run dev`, Mailpit (e-posta dışarı gitmez). Smoke: oturum içinde çalıştırıldığı bildirildi, çıktı kaydedilmedi, doğrulanamadı |
 | Dev DB şeması | Tüm migration'lar uygulandı; son `20261029120000_catalog_schema` (CAT-01, 2026-10-30, kullanıcı onayıyla; öncesinde yedek + izole prova 16/16). `setup-roles.sql` yeniden çalıştırıldı. Aşama 2 (`migrations-pending/`) uygulanmadı |
@@ -158,5 +158,8 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 | 2026-10-30 | USR-T12a → DONE-PR | [#22](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/22) | frontend unit 124/124, typecheck ok; CI ✓; bağımsız inceleme 2 tur, açık bulgu yok | yok |
 | 2026-10-30 | USR-T12a → DONE-NOT-DEPLOYED (merge `f41c88e`, kullanıcı onayı) | [#22](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/22) | PR CI ✓ (`6fde946`) | yok (dev `8fc7ae3`) |
 | 2026-10-30 | USR-T14 → DONE-PR | [#23](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/23) | CI (`42c82e6` sonrası): bkz. PR; ürün kodu değişmedi; bağımsız inceleme 2 tur, 2. turdaki Low bulgular (hata kodu sabitleme, rol geri yükleme) kapatıldı | yok |
+| 2026-10-30 | USR-T13a → DONE-PR | [#25](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/25) | frontend unit 132/132, lint ok, typecheck ok; davranış testi USR-T15a (Playwright) | yok |
+| 2026-11-11 | USR-T15a → DONE-PR | [#26](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/26) | Playwright (`next dev` :3100, backend :4100) ardışık 2 koşu 16/16, 16/16; frontend unit 132/132, lint ok, typecheck ok | yok |
+| 2026-11-11 | USR-T16 → DONE-PR | [#28](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/28) | backend unit 283/283, e2e 331/332 (1 skip; 3. tam koşu, önceki 2 koşuda yük kaynaklı hook zaman aşımları, tekil yeniden koşu PASS), lint ok, build ok; frontend 132/132, lint ok, typecheck ok, `next build` ok; Playwright 16/16 ×2 | yok |
 | 2026-11-11 | CAT-03 → DONE-PR | [#27](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/27) | yerel (izole `tm_e2e_cat`): unit 296/296, lint ok; e2e 347/350 (1 skip Mailpit, 2 flaky rate-limit/lockout — tek başına 54/54) | yok; migration dev DB'ye uygulanmadı |
 | 2026-11-11 | CAT-05 → DONE-PR | [#29](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/29) | yerel (izole `tm_e2e_cat`): unit 315/315, lint ok; e2e 357/358 (1 skip Mailpit) | yok; migration dev DB'ye uygulanmadı |

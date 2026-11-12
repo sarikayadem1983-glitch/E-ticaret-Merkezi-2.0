@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import {
+  APP_ORIGIN,
   PASSWORD,
   expireSession,
   login,
@@ -53,7 +54,7 @@ test.describe('authentication and session', () => {
     });
     expect(forged.status()).toBe(403);
     const noHeader = await page.request.post('/api/bff/companies', {
-      headers: { Origin: 'http://localhost:3000' },
+      headers: { Origin: APP_ORIGIN },
       data: {},
     });
     expect(noHeader.status()).toBe(403);
@@ -161,7 +162,7 @@ test.describe('company management', () => {
     const ownerPage = await owner.newPage();
     await register(ownerPage, newAccount('iso-a'));
     const created = await ownerPage.request.post('/api/bff/companies', {
-      headers: { Origin: 'http://localhost:3000', 'x-tm-csrf': '1' },
+      headers: { Origin: APP_ORIGIN, 'x-tm-csrf': '1' },
       data: {
         legalName: 'Gizli Firma Ltd. Şti.',
         taxNumber: randomVkn(),
@@ -221,7 +222,7 @@ test.describe('security headers and reload', () => {
 });
 
 test.describe('unauthorized access and session expiry', () => {
-  const sameOrigin = { Origin: 'http://localhost:3000', 'x-tm-csrf': '1' };
+  const sameOrigin = { Origin: APP_ORIGIN, 'x-tm-csrf': '1' };
 
   test('BFF refuses API calls without a valid session', async ({ page, context }) => {
     expect((await page.request.get('/api/bff/companies')).status()).toBe(401);
