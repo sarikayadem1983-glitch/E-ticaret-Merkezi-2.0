@@ -135,7 +135,15 @@ describe('Database privileges (e2e)', () => {
   });
 
   describe('catalog tables (soft delete only)', () => {
-    const tables = ['categories', 'brands', 'products', 'product_variants'];
+    const tables = [
+      'categories',
+      'brands',
+      'products',
+      'product_variants',
+      'attributes',
+      'attribute_values',
+      'variant_attribute_values',
+    ];
 
     it('app role has SELECT, INSERT, UPDATE and nothing else', async () => {
       const { rows } = await app.query<{ t: string; privs: string[] }>(

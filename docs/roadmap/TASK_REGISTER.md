@@ -140,7 +140,7 @@ Kaynak: `docs/superpowers/plans/2026-10-28-user-management.md` (T1–T16 numaral
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | CAT-01 | Katalog şeması: kategori, marka, ürün, varyant, barkod/SKU (tenant + firma kapsamlı) | P0 | PR #6 merge (USR-T7/T8 ile paralel) | 3 | CRITICAL | A | DONE-MERGED (PR #13, merge `aa02144`; dev `f010233`, 2026-10-30) | Composite tenant FK'leri; SKU tenant içinde tekil; migration provası | M, E | Yüksek (izolasyon) | Öneri (onay bekliyor) |
 | CAT-02 | Ürün CRUD API (liste, filtre, sayfalama, soft-delete, audit) | P0 | CAT-01; merge öncesi USR-T8 (firma izin kontrolü) | 3 | STANDARD | A | DONE-MERGED (PR #16, merge `6824f6f`; dev `f010233`, 2026-10-30) | Firma rolü izinleri uygulanır; pasif firmanın ürünleri yazılamaz (`409 COMPANY_INACTIVE`) | E, S | Orta | Öneri (onay bekliyor) |
-| CAT-03 | Varyant ve özellik (attribute) yönetimi | P0 | CAT-02 | 4 | STANDARD | A | PLANNED | Renk/beden gibi eksenlerden varyant üretimi | U, E | Düşük | Öneri (onay bekliyor) |
+| CAT-03 | Varyant ve özellik (attribute) yönetimi | P0 | CAT-02 | 4 | STANDARD | A | DONE-PR (PR #27) | Renk/beden gibi eksenlerden varyant üretimi | U, E | Düşük | Öneri (onay bekliyor) |
 | CAT-04 | Katalog UI: liste, filtre, ürün formu, varyant editörü | P0 | CAT-03 | 4 | STANDARD | A | PLANNED | Mobilde kullanılabilir | F, P | Düşük | Öneri (onay bekliyor) |
 | CAT-05 | Fiyat yönetimi: liste fiyatı, kanal fiyatı, KDV oranı (`decimal` + para birimi) | P0 | CAT-02 | 2 | STANDARD | A | PLANNED | Float yok; yuvarlama kuralı belgelendi | U, E | Orta (finansal doğruluk) | Öneri (onay bekliyor) |
 
@@ -434,7 +434,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | DSH-01 | Uygulama kabuğu ve dashboard iskeleti | DONE-MERGED (PR #4) | — | FAST | Onaylı plan |
 | CAT-01 | Katalog şeması: kategori, marka, ürün, varyant, barkod/SKU (tenant + firma kapsamlı) | DONE-MERGED (PR #13, merge `aa02144`; dev `f010233`, 2026-10-30) | 3 | CRITICAL | Öneri (onay bekliyor) |
 | CAT-02 | Ürün CRUD API (liste, filtre, sayfalama, soft-delete, audit) | DONE-MERGED (PR #16, merge `6824f6f`; dev `f010233`, 2026-10-30) | 3 | STANDARD | Öneri (onay bekliyor) |
-| CAT-03 | Varyant ve özellik (attribute) yönetimi | PLANNED | 4 | STANDARD | Öneri (onay bekliyor) |
+| CAT-03 | Varyant ve özellik (attribute) yönetimi | DONE-PR (PR #27) | 4 | STANDARD | Öneri (onay bekliyor) |
 | CAT-04 | Katalog UI: liste, filtre, ürün formu, varyant editörü | PLANNED | 4 | STANDARD | Öneri (onay bekliyor) |
 | CAT-05 | Fiyat yönetimi: liste fiyatı, kanal fiyatı, KDV oranı (`decimal` + para birimi) | PLANNED | 2 | STANDARD | Öneri (onay bekliyor) |
 | CAT-06 | Kanal kategori ağacı ve zorunlu özellik eşleme modeli + UI | PLANNED | 4 | STANDARD | Öneri (onay bekliyor) |

@@ -85,6 +85,20 @@
 - Prisma şemasında gösterilemeyenler (yalnızca SQL'de; `schema.prisma`'da karşılığı olan `@@unique` yoktur): kısmi tekil indeksler `brands_tenant_id_name_active_key`, `categories_tenant_id_slug_active_key` ve yukarıdaki CHECK'ler. `prisma migrate diff` (migrate edilmiş veritabanı → şema) bunları silmeye çalışmaz; yalnızca önceki migration'lardan bilinen `role_scope` farkını gösterir.
 - Geri dönüş: `down.sql` (tek transaction; yalnızca sistem rollerinin (`key IS NOT NULL`) izinlerini geri alır; katalog tablolarında satır varsa hiçbir şey değiştirmeden durur; veri varsa geri dönüş yalnızca yedekten). Testler: `backend/test/catalog-schema.e2e-spec.ts` (izolasyon, composite FK, tekillik), `migration-catalog.e2e-spec.ts` (boş ve veri içeren veritabanında uygulama, ikinci uygulama, `down.sql`), `db-privileges.e2e-spec.ts` (yetkiler).
 
+### catalog — varyant özellikleri (CAT-03; migration `catalog_variant_attributes`, izole e2e veritabanında denendi, geliştirme veritabanına henüz uygulanmadı)
+- Özellikler (renk, beden…) **tenant** genelidir (marka gibi tüm firmalar paylaşır); değerleri varyanta bağlanır.
+- `attributes` — id, tenant_id, name (100), created_at, updated_at, deleted_at
+  - Ad tenant içinde büyük/küçük harf duyarsız, silinmemiş satırlar arasında tekil: kısmi ifade indeksi `attributes_tenant_id_name_active_key` `(tenant_id, lower(btrim(name))) WHERE deleted_at IS NULL`. CHECK `attributes_name_trimmed`.
+- `attribute_values` — id, tenant_id, attribute_id, value (100), sort_order (int, varsayılan 0), created_at, updated_at, deleted_at
+  - FK `(tenant_id, attribute_id)` → `attributes(tenant_id, id)`. Tekil `(tenant_id, attribute_id, id)`: bağlantı tablosunun FK hedefi (değer başka özelliğin değeri olarak bağlanamaz).
+  - Değer özellik içinde büyük/küçük harf duyarsız, silinmemişler arasında tekil: `attribute_values_tenant_id_attribute_id_value_active_key` `(tenant_id, attribute_id, lower(btrim(value))) WHERE deleted_at IS NULL`. CHECK `attribute_values_value_trimmed`.
+- `variant_attribute_values` — tenant_id, variant_id, attribute_id, attribute_value_id, created_at, updated_at — PK `(variant_id, attribute_id)`: bir varyantın her eksende **tek** değeri olur.
+  - FK `(tenant_id, variant_id)` → `product_variants(tenant_id, id)`, `(tenant_id, attribute_id, attribute_value_id)` → `attribute_values(tenant_id, attribute_id, id)` (RESTRICT). İndeks `(tenant_id, attribute_value_id)` (kullanımda mı kontrolü).
+  - Satır silinmez; değer değişikliği `UPDATE`'tir. Varyant soft-delete edilince bağlantı satırı geçmiş için kalır.
+- Uygulama kuralları: aynı ürünün silinmemiş iki varyantı aynı özellik-değer kombinasyonunu taşıyamaz (`409 VARIANT_COMBINATION_TAKEN`, `SERIALIZABLE` transaction'da kontrol); silinmemiş bir varyantın kullandığı özellik/değer silinemez (`409 ATTRIBUTE_IN_USE` / `ATTRIBUTE_VALUE_IN_USE`). Varyant üretimi (`POST /products/:id/variants/generate`) eksen değerlerinin kartezyen çarpımını üretir (en çok 3 eksen, 100 kombinasyon); var olan kombinasyonlar atlanır.
+- `tm_app`: üç tabloda da `SELECT, INSERT, UPDATE` (DELETE/TRUNCATE yok).
+- Geri dönüş: `down.sql` (tablolarda satır varsa hiçbir şey değiştirmeden durur).
+
 ### inventory
 - `warehouses` — id, name
 - `stock_levels` — variant_id, warehouse_id, quantity

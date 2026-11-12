@@ -18,6 +18,12 @@ export const conflict = (code: string, message: string) =>
 const UNIQUE_CONFLICTS: [RegExp, string, string][] = [
   [/sku/i, 'SKU_TAKEN', 'Bu SKU kullanılmış (silinen varyantlar dahil)'],
   [
+    /attribute_?values|AttributeValue/i,
+    'ATTRIBUTE_VALUE_TAKEN',
+    'Bu değer özellikte zaten var',
+  ],
+  [/attributes|Attribute/, 'ATTRIBUTE_NAME_TAKEN', 'Bu özellik zaten var'],
+  [
     /barcode/i,
     'BARCODE_TAKEN',
     'Bu barkod kullanılmış (silinen varyantlar dahil)',
