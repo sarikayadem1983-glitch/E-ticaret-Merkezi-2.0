@@ -148,7 +148,7 @@ Kaynak: `docs/superpowers/plans/2026-10-28-user-management.md` (T1–T16 numaral
 
 | ID | Görev | Öncelik | Bağımlılık | Tahmin | Mod | Sürüm | Durum | Kabul kriteri | Test | Güvenlik riski | Kaynak |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| CAT-06 | Kanal kategori ağacı ve zorunlu özellik eşleme modeli + UI | P0 | CAT-02, INT-01 (CAT-03 ile paralel; varyant özellik eşlemesi INT-TY-01'de tamamlanır) | 4 | STANDARD | A | DONE-PR (PR açılıyor; backend dilimi, UI → CAT-06b) | Eksik zorunlu özellik listeleme öncesi gösterilir | U, E | Düşük | Öneri (onay bekliyor) |
+| CAT-06 | Kanal kategori ağacı ve zorunlu özellik eşleme modeli + UI | P0 | CAT-02, INT-01 (CAT-03 ile paralel; varyant özellik eşlemesi INT-TY-01'de tamamlanır) | 4 | STANDARD | A | DONE-PR (PR #34; backend dilimi, UI → CAT-06b) | Eksik zorunlu özellik listeleme öncesi gösterilir | U, E | Düşük | Öneri (onay bekliyor) |
 
 ## M05 — AI destekli ürün yükleme (`AIU`)
 
@@ -437,7 +437,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | CAT-03 | Varyant ve özellik (attribute) yönetimi | DONE-MERGED (PR #27, merge `1db22ae`; dev `5ac1401`, 2026-11-12) | 4 | STANDARD | Öneri (onay bekliyor) |
 | CAT-04 | Katalog UI: liste, filtre, ürün formu, varyant editörü | DONE-MERGED (PR #30, merge `6a3eea0`; dev `5ac1401`, 2026-11-12) | 4 | STANDARD | Öneri (onay bekliyor) |
 | CAT-05 | Fiyat yönetimi: liste fiyatı, kanal fiyatı, KDV oranı (`decimal` + para birimi) | DONE-MERGED (PR #29, merge `28a03ae`; dev `5ac1401`, 2026-11-12) | 2 | STANDARD | Öneri (onay bekliyor) |
-| CAT-06 | Kanal kategori ağacı ve zorunlu özellik eşleme modeli + UI | DONE-PR (PR açılıyor; backend dilimi, UI → CAT-06b) | 4 | STANDARD | Öneri (onay bekliyor) |
+| CAT-06 | Kanal kategori ağacı ve zorunlu özellik eşleme modeli + UI | DONE-PR (PR #34; backend dilimi, UI → CAT-06b) | 4 | STANDARD | Öneri (onay bekliyor) |
 | IMP-01 | Excel/CSV şablonu, satır doğrulama, deneme (dry-run) raporu | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
 | IMG-01 | Görsel yükleme, sıralama, ürün/varyanta bağlama | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
 | INT-01 | `ChannelAdapter` arayüzü, kanal hesabı modeli, kimlik bilgisi şifreleme (envelope encryption, anahtar rotasyonu) | DONE-PR (PR #32) | 4 | CRITICAL | Öneri (onay bekliyor) |
