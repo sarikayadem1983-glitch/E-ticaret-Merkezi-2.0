@@ -290,3 +290,4 @@ Pazaryeri API anahtarları `channel_accounts` tablosunda **zarf şifrelemesiyle*
 - Anahtarlar: `CHANNEL_KEKS` (`kimlik:base64`, virgülle) ve `CHANNEL_KEK_ACTIVE`. Geçersiz değerle uygulama açılmaz; boşsa kayıt `503 CHANNEL_CRYPTO_UNAVAILABLE` döner, production'da açılmaz.
 - Rotasyon: yeni KEK'i ekleyip etkin yapın, `ChannelsService.rewrapAll` ile DEK'leri yeniden sarın (şifreli veri değişmez), tüm kayıtlar geçtikten sonra eski KEK'i kaldırın.
 - Sınır: Sürüm A'da KEK ortam değişkenindedir. Production öncesi KMS gerekir (INF-13, R-25).
+- Silme: soft delete canlı satırdaki şifreli veriyi ve sarılı DEK'i rastgele baytlarla ezer; API ve adapter'lar artık çözemez. Eski satır sürümleri, WAL ve yedekler vacuum/saklama süresi dolana kadar eski baytları tutar ve yerel KEK ile çözülebilir kalır. Gerçek "kripto-imha" KMS gerektirir (INF-13, R-25).

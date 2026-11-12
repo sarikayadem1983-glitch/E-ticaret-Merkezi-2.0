@@ -170,12 +170,9 @@ export class CredentialCipher {
     credentials: Record<string, string>,
   ): EncryptedCredentials {
     const dek = randomBytes(KEY_BYTES);
+    const plain = Buffer.from(JSON.stringify(credentials), 'utf8');
     try {
-      const data = seal(
-        dek,
-        Buffer.from(JSON.stringify(credentials), 'utf8'),
-        aad(identity, 'data'),
-      );
+      const data = seal(dek, plain, aad(identity, 'data'));
       const wrapped = this.wrap(identity, dek);
       return {
         ciphertext: data.ciphertext,
@@ -185,6 +182,7 @@ export class CredentialCipher {
       };
     } finally {
       dek.fill(0);
+      plain.fill(0);
     }
   }
 

@@ -148,8 +148,11 @@ export class ChannelsRepository {
   }
 
   /**
-   * Soft delete. The key material is overwritten with random bytes, so the
-   * stored credentials of a deleted account can never be decrypted again.
+   * Soft delete. The live row's key material is overwritten with random bytes,
+   * so the API and adapters can no longer decrypt it. Old row versions, WAL and
+   * backups still hold the previous bytes until vacuum/retention removes them;
+   * with a local KEK they stay decryptable there. True crypto-shredding needs a
+   * KMS (INF-13, R-25). See docs/SECURITY.md.
    */
   async softDelete(db: PrismaTx, companyId: string, id: string) {
     const { count } = await db.channelAccount.updateMany({
@@ -166,10 +169,16 @@ export class ChannelsRepository {
   }
 
   /** Accounts of the current tenant whose DEK is wrapped with another KEK. */
-  findForRewrap(activeKekId: string, take: number) {
+  /** Keyset page (id order) so every row is visited once per run. */
+  findForRewrap(activeKekId: string, afterId: string | null, take: number) {
     return this.prisma.channelAccount.findMany({
-      where: { kekId: { not: activeKekId }, deletedAt: null },
+      where: {
+        kekId: { not: activeKekId },
+        deletedAt: null,
+        ...(afterId ? { id: { gt: afterId } } : {}),
+      },
       select: SECRET_FIELDS,
+      orderBy: { id: 'asc' },
       take,
     });
   }

@@ -324,15 +324,15 @@ export class ChannelsService {
     const cipher = this.requireCipher();
     let rewrapped = 0;
     let failed = 0;
-    const skip = new Set<string>();
+    let afterId: string | null = null;
     for (;;) {
-      const rows = (
-        await this.repository.findForRewrap(
-          cipher.activeKekId,
-          batch + skip.size,
-        )
-      ).filter((r) => !skip.has(r.id));
+      const rows = await this.repository.findForRewrap(
+        cipher.activeKekId,
+        afterId,
+        batch,
+      );
       if (rows.length === 0) break;
+      afterId = rows[rows.length - 1].id;
       for (const row of rows) {
         try {
           const wrapped = cipher.rewrap(
@@ -340,12 +340,10 @@ export class ChannelsService {
             toEncrypted(row),
           );
           const { count } = await this.repository.saveRewrap(row, wrapped);
+          // count 0: changed meanwhile (update/rotation elsewhere); a later run retries.
           if (count === 1) rewrapped++;
-          // Changed meanwhile (update/rotation elsewhere): retry in a later run.
-          else skip.add(row.id);
         } catch {
           failed++;
-          skip.add(row.id);
           this.logger.error(`Kanal hesabı anahtarı yenilenemedi: ${row.id}`);
         }
       }
