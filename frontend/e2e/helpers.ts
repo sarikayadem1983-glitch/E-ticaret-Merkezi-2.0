@@ -88,3 +88,50 @@ export async function expireSession(sid: string) {
     redis.disconnect();
   }
 }
+
+const MAILPIT_URL = process.env.MAILPIT_URL ?? 'http://localhost:8025';
+
+/**
+ * Returns the newest invitation link sent to `email` from Mailpit (dev/test
+ * SMTP only). Only the `/invite/<token>` path is kept so the link opens on the
+ * app under test whatever origin the backend put in the mail.
+ */
+export async function readInviteLinkFromMailpit(email: string): Promise<string> {
+  const query = encodeURIComponent(`to:"${email}"`);
+  let path = '';
+  await expect(async () => {
+    const list = (await (
+      await fetch(`${MAILPIT_URL}/api/v1/search?query=${query}&limit=1`)
+    ).json()) as { messages?: { ID: string }[] };
+    const id = list.messages?.[0]?.ID;
+    expect(id, `${email} için davet e-postası`).toBeTruthy();
+    const message = (await (
+      await fetch(`${MAILPIT_URL}/api/v1/message/${id}`)
+    ).json()) as { Text?: string; HTML?: string };
+    const match = /\/invite\/([A-Za-z0-9_-]+)/.exec(
+      `${message.Text ?? ''} ${message.HTML ?? ''}`,
+    );
+    expect(match, 'davet bağlantısı').not.toBeNull();
+    path = `/invite/${match![1]}`;
+  }).toPass({ timeout: 20_000 });
+  return path;
+}
+
+/** Creates an active company through the UI and returns its id. */
+export async function createCompany(page: Page, legalName: string): Promise<string> {
+  await page.goto('/companies/new');
+  await page.getByLabel('Ticari unvan').fill(legalName);
+  await page.getByLabel('VKN / TCKN').fill(randomVkn());
+  await page.getByLabel('Vergi dairesi').fill('Kadıköy');
+  await page.locator('#addressLine').fill('Moda Caddesi No: 12');
+  await page.getByLabel('İlçe').fill('Kadıköy');
+  await page.locator('#city').fill('İstanbul');
+  await page.getByRole('button', { name: 'Firmayı kaydet' }).click();
+  await expect(page.getByRole('heading', { name: legalName })).toBeVisible();
+  const id = /\/companies\/([^/?#]+)$/.exec(page.url())?.[1];
+  expect(id).toBeTruthy();
+  return id!;
+}
+
+/** Origin of the app under test (same as `baseURL` in playwright.config.ts). */
+export const APP_ORIGIN = process.env.E2E_BASE_URL ?? 'http://localhost:3000';

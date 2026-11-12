@@ -8,9 +8,12 @@ import {
 } from '@tanstack/react-query';
 import { bff, request } from '@/lib/api';
 import { hardNavigate } from '@/lib/navigation';
+import type { AccessValue } from '@/lib/access';
 import type {
   Company,
   CompanySummary,
+  CreatedInvitation,
+  Member,
   Membership,
   Page,
   SessionInfo,
@@ -24,6 +27,7 @@ export const keys = {
     ['companies', 'list', params] as const,
   company: (id: string) => ['companies', 'one', id] as const,
   summary: ['companies', 'summary'] as const,
+  users: ['users'] as const,
 };
 
 export function useSession() {
@@ -143,5 +147,43 @@ export function useSwitchTenant() {
     mutationFn: (tenantId: string) =>
       request('/api/session/tenant', { method: 'POST', body: { tenantId } }),
     onSuccess: () => hardNavigate('/dashboard'),
+  });
+}
+
+export function useUsers() {
+  return useQuery({
+    queryKey: keys.users,
+    queryFn: () => bff<{ data: Member[] }>('users'),
+    select: (r) => r.data,
+  });
+}
+
+export function useUpdateAccess(userId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (value: AccessValue) =>
+      bff(`users/${userId}/access`, { method: 'PUT', body: value }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.users }),
+  });
+}
+
+export function useSetUserActive() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, active }: { userId: string; active: boolean }) =>
+      bff(`users/${userId}/${active ? 'activate' : 'deactivate'}`, {
+        method: 'POST',
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.users }),
+  });
+}
+
+export function useCreateInvitation() {
+  return useMutation({
+    mutationFn: (input: { email: string } & AccessValue) =>
+      bff<{ data: CreatedInvitation }>('invitations', {
+        method: 'POST',
+        body: input,
+      }),
   });
 }

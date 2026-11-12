@@ -36,6 +36,7 @@ export interface SessionInfo {
     email: string;
     permissions: string[];
     tenant: { id: string; name: string; slug: string } | null;
+    canManageUsers?: boolean;
   };
   selectedCompanyId: string | null;
 }
@@ -109,4 +110,41 @@ export interface Attribute {
   id: string;
   name: string;
   values: { id: string; value: string; sortOrder: number }[];
+}
+
+export type CompanyRoleKey = 'operations' | 'accounting' | 'viewer';
+
+/** A member's whole access: one tenant role or a list of company roles. */
+export type MemberAccess =
+  | { tenantRole: 'owner' | 'admin' }
+  | {
+      companyRoles: {
+        companyId: string;
+        companyName: string | null;
+        roleKey: CompanyRoleKey;
+      }[];
+    };
+
+export interface Member {
+  userId: string;
+  name: string;
+  email: string;
+  status: 'active' | 'inactive';
+  access: MemberAccess;
+}
+
+export interface CreatedInvitation {
+  id: string;
+  status: 'pending';
+  delivery: 'sent' | 'failed';
+  replacesInactiveMembership: boolean;
+}
+
+export interface InvitationLookup {
+  tenantName: string;
+  inviterName: string;
+  roleSummary: string;
+  maskedEmail: string;
+  accountExists: boolean;
+  replacesInactiveMembership: boolean;
 }
