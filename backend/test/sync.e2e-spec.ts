@@ -680,6 +680,19 @@ describe('Sync engine (e2e, INT-02)', () => {
     });
   });
 
+  it('connection test is refused without a request while SYNC_LIVE_CALLS is off (INT-03)', async () => {
+    const res = await http()
+      .post(
+        `/api/v1/companies/${companyA}/channel-accounts/${accountA}/test-connection`,
+      )
+      .set(bearer(tokenA))
+      .expect(200);
+    expect(res.body.data).toMatchObject({
+      ok: false,
+      code: 'SYNC_LIVE_CALLS_DISABLED',
+    });
+  });
+
   describe('API', () => {
     let failedId: string;
 
