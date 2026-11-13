@@ -136,6 +136,16 @@ Kullanıcı onayıyla, yalnızca dev ortamında (`localhost:5432/ticaret_merkezi
 |---|---|---|---|---|
 | BLK-01 | Trendyol satıcı hesabı, API key/secret, satıcı ID; stage ortamı ve IP whitelist | `apigw.trendyol.com` 401 (erişilebilir, kimlik yok) · `stageapigw.trendyol.com` 403 (IP whitelist yok) · projede Trendyol kimlik bilgisi yok. Sırlar sohbette paylaşılmaz; `.env`'e kullanıcı yazar | INT-TY-01…03, SHP-02, kabul senaryosu | Kullanıcı |
 
+**BLK-01 durumu (2026-11-13) — AÇIK, kısmen ilerledi:**
+
+| Alt madde | Durum | Kanıt |
+|---|---|---|
+| Satıcı hesabı ve API kimlik bilgileri | Edinildi (muhtemelen çözüldü) | Kullanıcı onayıyla tek seferlik salt-okuma testi: canlı `apigw` ürün listesi 200, sipariş listesi 200. Hiçbir şey değiştirilmedi. Anahtarlar hiçbir dosyaya yazılmadı; kullanıcı test sonrası yenileyecek. Kalıcı giriş, kanal hesabı ekranı hazır olunca kullanıcı tarafından yapılacak |
+| Stage ortamı ve IP whitelist | Doğrulanmadı | Stage denenmedi; 2026-10-29'da 403 (IP whitelist yok) |
+| Resmî istek limiti | Doğrulanmadı | Canlı yanıtlarda rate-limit başlığı yoktu. `SYNC_RATE_TRENDYOL` varsayılanı (10:5) doğrulanmış limit değil; `SYNC_LIVE_CALLS` kapalı |
+
+BLK-01, stage/IP erişimi ve resmî limit doğrulanmadan kapatılmaz.
+
 ## 5. Riskler
 
 Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** (güvenlik açığı veya geniş kesinti) · **Orta** (sınırlı etki) · **Düşük**.

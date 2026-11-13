@@ -153,3 +153,12 @@ Uygulama `tm_app`, migration `tm_migrator` rolüyle çalışır; ayrıntılar [S
 - `product_channel_attribute_values`: ürün düzeyindeki kanal özelliği değeri (izinli değer `value_external_id` ile veya serbest değer).
 - Hazırlık kontrolü `GET /products/:id/channel-readiness/:channel`: eksik kategori, eşleme, zorunlu değer ve değeri olmayan varyantları listeler.
 - `tm_app`: ağaç tablolarında SELECT/INSERT/UPDATE; eşleme ve değer tablolarında DELETE de var (kullanıcı eşlemeyi kaldırabilir).
+
+### Senkron motoru (INT-02)
+
+Migration `20261113120000_sync_engine`. İzole test veritabanında denendi; dev veritabanına uygulanması kullanıcı onayı bekliyor.
+
+- `sync_jobs`: her pazaryeri senkron işi için bir satır (durum + log). `status` ∈ `queued | running | succeeded | failed`; `error_code` yalnızca kod (serbest metin yok, CHECK ile); `payload` kimlik bilgisi taşımaz. Tekil: `(tenant_id, channel_account_id, kind, idempotency_key)`. `run_token`: satırın sahibi olan kuyruk işinin kimliği; satırı yalnızca o iş çalıştırabilir veya kapatabilir. `(tenant_id, company_id, channel_account_id)` → `channel_accounts` bileşik FK'sı, işin firmasının hesabın firmasıyla aynı olmasını zorlar (bunun için `channel_accounts` üzerinde `(tenant_id, company_id, id)` tekil indeksi eklendi).
+- `channel_external_refs`: pazaryeri kaydı → yerel kayıt. Tekil: `(tenant_id, channel_account_id, entity_type, external_id)`; aynı sipariş iki kez içeri alınamaz. `entity_type` ∈ `order | product | variant`; `payload_hash` sha256 hex. Eski sürüm (`external_updated_at` daha eski) yenisinin üzerine yazmaz.
+- `tm_app`: iki tabloda SELECT/INSERT/UPDATE; DELETE yok.
+- `down.sql` tablolarda veri varken durur.

@@ -441,3 +441,19 @@ Hatalar: `401` `INVALID_CREDENTIALS` (mevcut hesabın şifresi yanlış veya hes
 | `ATTRIBUTE_UNAVAILABLE`, `ATTRIBUTE_DUPLICATE`, `TOO_MANY_COMBINATIONS` | 422 | Özellik/değer yok veya silinmiş; aynı eksen iki kez; varyant üretiminde 100'den fazla kombinasyon |
 | `TENANT_CONTEXT_MISSING` | 500 | Sorgu tenant bağlamı olmadan çalıştırıldı (geliştirici hatası) |
 | `TENANT_VIOLATION` | 500 | Sorgu başka tenant'ın verisine dokunmaya çalıştı (geliştirici hatası) |
+
+### Senkron logu (INT-02)
+
+Yetki: `channels:manage` (kanal hesabıyla aynı). Başka tenant ya da firmanın hesabı/işi → 404.
+
+#### GET /api/v1/companies/:companyId/channel-accounts/:accountId/sync-jobs
+
+Sorgu: `status` (`queued|running|succeeded|failed`), `limit` (1–100, varsayılan 20), `cursor` (önceki yanıttaki `nextCursor`; başka hesaba ait imleç → 422 `INVALID_CURSOR`). Yeniden eskiye sıralı.
+
+Yanıt `{ data: [{ id, kind, status, attempts, errorCode, errorMessage, stats, queuedAt, startedAt, finishedAt }], nextCursor }`. `payload` dönmez; `errorMessage` koddan üretilen Türkçe metindir.
+
+#### POST /api/v1/companies/:companyId/channel-accounts/:accountId/sync-jobs/:syncJobId/retry
+
+`failed` işler ile kuyruk işi artık var olmayan `queued`/`running` işler için 202. Kuyrukta bekleyen veya çalışan iş → 409 `SYNC_JOB_ACTIVE`. Durum değişimi tek koşullu UPDATE ile yapılır; eşzamanlı iki istekten biri 409 alır. Başarıyla bitmiş iş → 409 `SYNC_JOB_NOT_FAILED`; kuyruk erişilemezse 503 `SYNC_QUEUE_UNAVAILABLE`.
+
+İş başlatma ucu yok: işler INT-TY-* modüllerinden `SyncService.start` ile başlatılır.
