@@ -11,7 +11,7 @@ Son güncelleme: 2026-11-13 (`main` @ `70bae17` dev'e deploy edildi) · Kaynak: 
 | BLOCKED | 1 — USR-18 (T16 + Aşama 2 migration onayı) |
 | Sürüm A (Trendyol-only MVP) ilerleme | 30 / 58 görev merge edildi ve dev'de; kalan 28 görev, 85 iş günü; tahmini hedef 2027-01-20 (taahhüt değil; OPS-08 ve USR-T11a sonrası yeniden hesaplanmadı) |
 | Sürüm B / C | 62 / 21 görev |
-| Açık PR | Bu doküman PR'ı. #38 merge edildi (`70bae17`, 2026-11-13, kullanıcı onayıyla) |
+| Açık PR | #40 INT-03 (entegrasyon yönetim ekranı; merge ve deploy kullanıcı onayı bekliyor) |
 | `origin/main` | `70bae17` (PR #38 merge, INT-02). `main` CI ✓ (#38 head `d3416cb`: backend, frontend) |
 | Dev ortamı | `70bae17` (2026-11-13, kullanıcı onayıyla, bkz. §3d). Backend `node dist/main` (WMI ile ayrık). Smoke: `tm-backups/smoke-70bae17.log`. Önceki: `736cb40` (bkz. §3c) |
 | Dev DB şeması | Tüm migration'lar uygulandı; son `20261113120000_sync_engine` (INT-02, 2026-11-13, kullanıcı onayıyla; yedek `ticaret_merkezi-20261113-210949.dump`, izole prova ok). Önceki `20261112210000_user_tokens` (USR-19, kullanıcı onayıyla; yedek `ticaret_merkezi-20261112-210146.dump`; `migrate status` 2026-11-13: güncel). Önceki `20261112190000_channel_mapping` (CAT-06, 2026-11-12, kullanıcı onayıyla; yedek `ticaret_merkezi-20261112-184613.dump` + izole prova 10/10). Aşama 2 (`migrations-pending/`) uygulanmadı |
@@ -243,3 +243,4 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 | 2026-11-13 | USR-19 → DONE-MERGED (merge `736cb40`, dev `736cb40`, kullanıcı onayı) | [#36](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/36) | `main` CI ✓; dev USR-19 smoke ok (doğrulama, sıfırlama, eski şifre 401 / yeni 200) | dev `736cb40` |
 | 2026-11-13 | INT-02 → DONE-PR (merge edilmedi) | [#38](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/38) | yerel (izole `tm_e2e_sync`): unit 348/348, e2e 411/412 (1 skip Mailpit), lint ok, build ok; bağımsız CRITICAL inceleme 2 tur → APPROVE | yok; migration dev DB'ye uygulanmadı |
 | 2026-11-13 | INT-02 → DONE-MERGED (merge `70bae17`, dev `70bae17`, kullanıcı onayı) | [#38](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/38) | CI ✓; izole prova ok; dev smoke 22/22 + USR-19 kontrolü | dev `70bae17` |
+| 2026-11-13 | INT-03 → DONE-PR (merge edilmedi) | [#40](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/40) | backend: bağlantı testi e2e 6/6 (sahte Trendyol sunucusu), sync e2e 21/21; frontend unit 177/177, lint ok, typecheck ok. `next build` ve Playwright yerelde koşulmadı (bellek); CI'ye bırakıldı | yok; migration yok |

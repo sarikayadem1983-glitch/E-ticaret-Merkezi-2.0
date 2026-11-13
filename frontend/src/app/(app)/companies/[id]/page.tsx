@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, Pencil, Power, PowerOff } from 'lucide-react';
+import { ArrowLeft, Pencil, Plug, Power, PowerOff } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
@@ -17,7 +17,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useCompany, useSetCompanyActive } from '@/hooks/queries';
+import { useCompany, useSession, useSetCompanyActive } from '@/hooks/queries';
 import { errorMessage } from '@/lib/api';
 
 const dateFormat = new Intl.DateTimeFormat('tr-TR', {
@@ -50,6 +50,9 @@ export default function CompanyDetailPage() {
   const company = useCompany(id);
   const setActive = useSetCompanyActive(id);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const session = useSession();
+  const perms = session.data?.user.permissions ?? [];
+  const canManageChannels = perms.includes('*') || perms.includes('channels:manage');
 
   if (company.isError) {
     return (
@@ -108,6 +111,14 @@ export default function CompanyDetailPage() {
               >
                 <Power className="size-4" aria-hidden />
                 Aktifleştir
+              </Button>
+            )}
+            {canManageChannels && (
+              <Button asChild variant="outline">
+                <Link href={`/companies/${c.id}/integrations`}>
+                  <Plug className="size-4" aria-hidden />
+                  Entegrasyonlar
+                </Link>
               </Button>
             )}
             <Button asChild variant="brand">

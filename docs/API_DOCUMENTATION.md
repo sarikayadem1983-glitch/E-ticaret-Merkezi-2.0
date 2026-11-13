@@ -457,3 +457,19 @@ Yanıt `{ data: [{ id, kind, status, attempts, errorCode, errorMessage, stats, q
 `failed` işler ile kuyruk işi artık var olmayan `queued`/`running` işler için 202. Kuyrukta bekleyen veya çalışan iş → 409 `SYNC_JOB_ACTIVE`. Durum değişimi tek koşullu UPDATE ile yapılır; eşzamanlı iki istekten biri 409 alır. Başarıyla bitmiş iş → 409 `SYNC_JOB_NOT_FAILED`; kuyruk erişilemezse 503 `SYNC_QUEUE_UNAVAILABLE`.
 
 İş başlatma ucu yok: işler INT-TY-* modüllerinden `SyncService.start` ile başlatılır.
+
+### Entegrasyon yönetimi (INT-03)
+
+Yetki: `channels:manage` (mağaza sahibi, Admin).
+
+#### GET /api/v1/channel-definitions
+
+Kanal başına kimlik bilgisi alanları: `{ data: [{ code, name, credentialFields: [{ key, label, secret, maxLength }], connectionTest }] }`. Doğrulama desenleri ve sırlar dönmez.
+
+#### POST /api/v1/companies/:companyId/channel-accounts/:id/test-connection
+
+Kayıtlı kimlik bilgileriyle pazaryerine tek bir salt-okuma isteği gönderir (Trendyol: 1 ürünlük liste). Yanıt her zaman 200: `{ data: { ok, code, message } }`.
+
+Kodlar: `OK`, `INVALID_CREDENTIALS`, `FORBIDDEN`, `UNAVAILABLE`, `UNKNOWN`, `ACCOUNT_INACTIVE`, `SYNC_LIVE_CALLS_DISABLED` (canlı çağrılar kapalıyken istek gönderilmez), `CHANNEL_RATE_LIMITED`, `NOT_SUPPORTED`.
+
+Hesap başına dakikada en fazla 5 test yapılabilir (aşılırsa 429). Pazaryeri yanıt gövdesi okunmaz ve dönmez.

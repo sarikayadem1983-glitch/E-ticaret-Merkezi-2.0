@@ -10,6 +10,13 @@ import { bff, request } from '@/lib/api';
 import { hardNavigate } from '@/lib/navigation';
 import type { AccessValue } from '@/lib/access';
 import type {
+  ChannelAccount,
+  ChannelDefinition,
+  ConnectionTestResult,
+  SyncJob,
+  SyncStatus,
+} from '@/lib/integrations';
+import type {
   Company,
   CompanySummary,
   CreatedInvitation,
@@ -185,5 +192,93 @@ export function useCreateInvitation() {
         method: 'POST',
         body: input,
       }),
+  });
+}
+
+// INT-03 integrations ---------------------------------------------------------
+
+const integrationKeys = {
+  definitions: ['channel-definitions'] as const,
+  accounts: (companyId: string) => ['channel-accounts', companyId] as const,
+  jobs: (companyId: string, accountId: string, status: string) =>
+    ['sync-jobs', companyId, accountId, status] as const,
+};
+
+export function useChannelDefinitions() {
+  return useQuery({
+    queryKey: integrationKeys.definitions,
+    queryFn: () => bff<{ data: ChannelDefinition[] }>('channel-definitions'),
+    select: (r) => r.data,
+    staleTime: 10 * 60_000,
+  });
+}
+
+export function useChannelAccounts(companyId: string) {
+  return useQuery({
+    queryKey: integrationKeys.accounts(companyId),
+    queryFn: () => bff<{ data: ChannelAccount[] }>(`companies/${companyId}/channel-accounts`),
+    select: (r) => r.data,
+  });
+}
+
+export interface ChannelAccountInput {
+  channel?: string;
+  name?: string;
+  isActive?: boolean;
+  credentials?: Record<string, string>;
+}
+
+export function useSaveChannelAccount(companyId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id?: string; body: ChannelAccountInput }) =>
+      bff<{ data: ChannelAccount }>(
+        `companies/${companyId}/channel-accounts${id ? `/${id}` : ''}`,
+        { method: id ? 'PATCH' : 'POST', body },
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: integrationKeys.accounts(companyId) }),
+  });
+}
+
+export function useDeleteChannelAccount(companyId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      bff(`companies/${companyId}/channel-accounts/${id}`, { method: 'DELETE' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: integrationKeys.accounts(companyId) }),
+  });
+}
+
+export function useTestConnection(companyId: string) {
+  return useMutation({
+    mutationFn: (id: string) =>
+      bff<{ data: ConnectionTestResult }>(
+        `companies/${companyId}/channel-accounts/${id}/test-connection`,
+        { method: 'POST' },
+      ).then((r) => r.data),
+  });
+}
+
+export function useSyncJobs(companyId: string, accountId: string, status: SyncStatus | 'all') {
+  return useQuery({
+    queryKey: integrationKeys.jobs(companyId, accountId, status),
+    queryFn: () =>
+      bff<{ data: SyncJob[]; nextCursor: string | null }>(
+        `companies/${companyId}/channel-accounts/${accountId}/sync-jobs?limit=20${
+          status === 'all' ? '' : `&status=${status}`
+        }`,
+      ),
+    refetchInterval: 15_000,
+  });
+}
+
+export function useRetrySyncJob(companyId: string, accountId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (jobId: string) =>
+      bff(`companies/${companyId}/channel-accounts/${accountId}/sync-jobs/${jobId}/retry`, {
+        method: 'POST',
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['sync-jobs', companyId, accountId] }),
   });
 }
