@@ -353,7 +353,6 @@ export class QueueService implements OnModuleInit, OnApplicationShutdown {
     return queue;
   }
 
-  /** Never logs payloads or error messages (they may carry secrets); only codes. */
   /**
    * State of a job of the CURRENT tenant: BullMQ state, or 'missing' when it
    * does not exist (removed after retention) or belongs to another tenant.
@@ -395,6 +394,7 @@ export class QueueService implements OnModuleInit, OnApplicationShutdown {
     }
   }
 
+  /** Never logs payloads or error messages (they may carry secrets); only codes. */
   private logFailure(
     definition: JobDefinition<unknown>,
     job: Job | undefined,

@@ -37,6 +37,7 @@ import {
   type SyncKindOptions,
   type SyncQueuePayload,
   type SyncStatus,
+  SYNC_ERROR_MESSAGES,
   syncErrorMessage,
 } from './sync.types.js';
 
@@ -297,7 +298,9 @@ export class SyncService {
     if (row.status === 'succeeded') throw notRetryable('SYNC_JOB_NOT_FAILED');
     if (row.status !== 'failed') {
       const state = row.runToken
-        ? await this.queue.jobState(kind.definition, row.runToken)
+        ? await this.queue.jobState(kind.definition, row.runToken).catch(() => {
+            throw queueUnavailable();
+          })
         : 'missing';
       if (LIVE_QUEUE_STATES.has(state)) throw notRetryable('SYNC_JOB_ACTIVE');
     }
@@ -351,10 +354,7 @@ export class SyncService {
           finishedAt: new Date(),
         },
       });
-      throw new ServiceUnavailableException({
-        code: 'SYNC_QUEUE_UNAVAILABLE',
-        message: syncErrorMessage('SYNC_QUEUE_UNAVAILABLE'),
-      });
+      throw queueUnavailable();
     }
   }
 
@@ -375,8 +375,9 @@ export class SyncService {
       },
       data: {
         status: 'failed',
+        // Only our own sync codes are kept; anything else (P2024, ECONNRESET, ...) is shown as abandoned.
         errorCode:
-          code && code !== 'UNRECOVERABLE' ? code : 'SYNC_JOB_ABANDONED',
+          code && SYNC_ERROR_MESSAGES[code] ? code : 'SYNC_JOB_ABANDONED',
         finishedAt: new Date(),
       },
     });
@@ -569,5 +570,12 @@ function notRetryable(code: 'SYNC_JOB_NOT_FAILED' | 'SYNC_JOB_ACTIVE') {
       code === 'SYNC_JOB_ACTIVE'
         ? 'İş hâlâ kuyrukta veya çalışıyor'
         : 'Yalnızca başarısız işler yeniden denenebilir',
+  });
+}
+
+function queueUnavailable() {
+  return new ServiceUnavailableException({
+    code: 'SYNC_QUEUE_UNAVAILABLE',
+    message: syncErrorMessage('SYNC_QUEUE_UNAVAILABLE'),
   });
 }

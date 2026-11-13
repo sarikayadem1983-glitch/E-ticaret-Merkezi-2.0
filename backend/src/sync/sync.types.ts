@@ -44,7 +44,11 @@ export interface SyncContext {
   stats: SyncStats;
   /**
    * Takes request budget from the account's shared bucket before each
-   * marketplace call. When the budget is spent the job is deferred (no attempt used).
+   * marketplace call. Short waits (up to MAX_RATE_WAIT_IN_PROCESS_MS in total)
+   * sleep in process; longer ones defer the job (no attempt used). Call it
+   * OUTSIDE a database transaction: a wait can outlast Prisma's 5 s timeout.
+   * After a lock loss BullMQ may run the job elsewhere while this handler is
+   * still going (at-least-once); refs keep records unique, but avoid long sleeps.
    */
   takeRate(tokens?: number): Promise<void>;
   /** ExternalRefsRepository.claim plus stats bookkeeping. Pass `tx` to import atomically. */
