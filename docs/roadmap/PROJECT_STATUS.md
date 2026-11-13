@@ -11,7 +11,7 @@ Son güncelleme: 2026-11-13 (`main` @ `736cb40` dev'e deploy edildi) · Kaynak: 
 | BLOCKED | 1 — USR-18 (T16 + Aşama 2 migration onayı) |
 | Sürüm A (Trendyol-only MVP) ilerleme | 30 / 58 görev merge edildi ve dev'de; kalan 28 görev, 85 iş günü; tahmini hedef 2027-01-20 (taahhüt değil; OPS-08 ve USR-T11a sonrası yeniden hesaplanmadı) |
 | Sürüm B / C | 62 / 21 görev |
-| Açık PR | #24 bu doküman PR'ı. Merge edildi: 2026-11-11 #25 (`719aa64`), #26 (`eb6baf6`), #28 (`8bd98db`); 2026-11-12 kullanıcı onayıyla #27 (`1db22ae`), #29 (`28a03ae`), #30 (`6a3eea0`) |
+| Açık PR | #38 INT-02 (senkron motoru; merge, dev migration ve deploy kullanıcı onayı bekliyor) |
 | `origin/main` | `736cb40` (PR #36 merge, USR-19). `main` CI ✓ |
 | Dev ortamı | `736cb40` (2026-11-13, kullanıcı onayıyla, bkz. §3c). USR-19 smoke: `tm-backups/smoke-usr19-736cb40.log`. Önceki: `8ee40bb` (2026-11-12, bkz. §3). Backend `node dist/main` (WMI ile ayrık), frontend `npm run dev`, Mailpit. Smoke 43/44 + CAT-06 kontrolü; çıktı `tm-backups/smoke-8ee40bb.log` |
 | Dev DB şeması | Tüm migration'lar uygulandı; son `20261112210000_user_tokens` (USR-19, kullanıcı onayıyla; yedek `ticaret_merkezi-20261112-210146.dump`; `migrate status` 2026-11-13: güncel). Önceki `20261112190000_channel_mapping` (CAT-06, 2026-11-12, kullanıcı onayıyla; yedek `ticaret_merkezi-20261112-184613.dump` + izole prova 10/10). Aşama 2 (`migrations-pending/`) uygulanmadı |
@@ -227,3 +227,4 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 | 2026-11-12 | INT-01 → DONE-MERGED (merge `7b3c0b9`, dev `7b3c0b9`, kullanıcı onayı) | [#32](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/32) | CI: unit 333/333, e2e 369/370 (1 skip), fe 172/172; bağımsız CRITICAL inceleme 2 tur; dev smoke 43/44 + INT-01 kontrolü | dev `7b3c0b9` |
 | 2026-11-12 | CAT-06 → DONE-MERGED (merge `8ee40bb`, dev `8ee40bb`, kullanıcı onayı) | [#34](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/34) | CI: unit 333/333, e2e 380/381 (1 skip), fe 172/172; dev smoke 43/44 + CAT-06 kontrolü | dev `8ee40bb` |
 | 2026-11-13 | USR-19 → DONE-MERGED (merge `736cb40`, dev `736cb40`, kullanıcı onayı) | [#36](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/36) | `main` CI ✓; dev USR-19 smoke ok (doğrulama, sıfırlama, eski şifre 401 / yeni 200) | dev `736cb40` |
+| 2026-11-13 | INT-02 → DONE-PR (merge edilmedi) | [#38](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/38) | yerel (izole `tm_e2e_sync`): unit 348/348, e2e 411/412 (1 skip Mailpit), lint ok, build ok; bağımsız CRITICAL inceleme 2 tur → APPROVE | yok; migration dev DB'ye uygulanmadı |
