@@ -18,28 +18,30 @@ model Tenant {
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz
 
-  memberships      TenantMembership[]
-  invitations      Invitation[]
-  roles            Role[]
-  userRoles        UserRole[]
-  refreshTokens    RefreshToken[]
-  auditLogs        AuditLog[]
-  companies        Company[]
-  userCompanyRoles UserCompanyRole[]
-  categories       Category[]
-  brands           Brand[]
-  products         Product[]
-  productVariants  ProductVariant[]
-  attributes       Attribute[]
-  attributeValues  AttributeValue[]
-  variantAttrs     VariantAttributeValue[]
-  variantPrices    VariantPrice[]
-  channelAccounts  ChannelAccount[]
-  channelCategories ChannelCategory[]
+  memberships               TenantMembership[]
+  invitations               Invitation[]
+  roles                     Role[]
+  userRoles                 UserRole[]
+  refreshTokens             RefreshToken[]
+  auditLogs                 AuditLog[]
+  companies                 Company[]
+  userCompanyRoles          UserCompanyRole[]
+  categories                Category[]
+  brands                    Brand[]
+  products                  Product[]
+  productVariants           ProductVariant[]
+  attributes                Attribute[]
+  attributeValues           AttributeValue[]
+  variantAttrs              VariantAttributeValue[]
+  variantPrices             VariantPrice[]
+  channelAccounts           ChannelAccount[]
+  channelCategories         ChannelCategory[]
   channelCategoryAttributes ChannelCategoryAttribute[]
-  categoryChannelMappings CategoryChannelMapping[]
-  attributeChannelMappings AttributeChannelMapping[]
-  productChannelValues ProductChannelAttributeValue[]
+  categoryChannelMappings   CategoryChannelMapping[]
+  attributeChannelMappings  AttributeChannelMapping[]
+  productChannelValues      ProductChannelAttributeValue[]
+  syncJobs                  SyncJob[]
+  channelExternalRefs       ChannelExternalRef[]
 
   @@map("tenants")
 }
@@ -158,10 +160,11 @@ model Company {
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  userRoles UserCompanyRole[]
-  products  Product[]
+  tenant          Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  userRoles       UserCompanyRole[]
+  products        Product[]
   channelAccounts ChannelAccount[]
+  syncJobs        SyncJob[]
 
   @@unique([tenantId, taxNumber])
   @@unique([tenantId, id])
@@ -353,6 +356,7 @@ model Category {
   products Product[]
 
   channelMappings CategoryChannelMapping[]
+
   @@unique([tenantId, id])
   // SQL-only: unique (tenant_id, slug) WHERE deleted_at IS NULL.
   @@index([tenantId, parentId])
@@ -399,6 +403,7 @@ model Product {
   variants ProductVariant[]
 
   channelValues ProductChannelAttributeValue[]
+
   @@unique([tenantId, id])
   /// Target of the variant FK: a variant always belongs to its product's company.
   @@unique([tenantId, companyId, id])
@@ -446,6 +451,7 @@ model Attribute {
   values AttributeValue[]
 
   channelMappings AttributeChannelMapping[]
+
   @@unique([tenantId, id])
   // SQL-only: unique (tenant_id, lower(btrim(name))) WHERE deleted_at IS NULL.
   @@map("attributes")
@@ -534,10 +540,14 @@ model ChannelAccount {
   updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt             DateTime? @map("deleted_at") @db.Timestamptz
 
-  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict)
+  tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  company             Company              @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict)
+  syncJobs            SyncJob[]
+  channelExternalRefs ChannelExternalRef[]
 
   @@unique([tenantId, id])
+  @@unique([tenantId, companyId, id])
+  // SQL-only: FK sync_jobs (tenant_id, company_id, channel_account_id) -> this unique (INT-02).
   // SQL-only: unique (tenant_id, company_id, channel, lower(name)) WHERE deleted_at IS NULL.
   @@index([tenantId, companyId])
   @@map("channel_accounts")
@@ -663,4 +673,61 @@ model UserToken {
 
   @@index([userId, purpose])
   @@map("user_tokens")
+}
+
+/// INT-02: one row per marketplace sync job (log + state). The queue job only carries
+/// this row's id; credentials are loaded at run time and never stored here.
+model SyncJob {
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  companyId        String    @map("company_id") @db.Uuid
+  channelAccountId String    @map("channel_account_id") @db.Uuid
+  kind             String    @db.VarChar(60)
+  /// queued | running | succeeded | failed (SQL CHECK)
+  status           String    @default("queued") @db.VarChar(20)
+  idempotencyKey   String    @map("idempotency_key") @db.VarChar(200)
+  /// No credentials or personal data; validated by the kind's parser.
+  payload          Json      @default("{}")
+  attempts         Int       @default(0)
+  /// Code only (e.g. CHANNEL_AUTH_FAILED), never a free-text message.
+  errorCode        String?   @map("error_code") @db.VarChar(80)
+  stats            Json      @default("{}")
+  createdBy        String?   @map("created_by") @db.Uuid
+  queuedAt         DateTime  @default(now()) @map("queued_at") @db.Timestamptz
+  startedAt        DateTime? @map("started_at") @db.Timestamptz
+  finishedAt       DateTime? @map("finished_at") @db.Timestamptz
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  company        Company        @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict)
+  channelAccount ChannelAccount @relation(fields: [tenantId, channelAccountId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, channelAccountId, kind, idempotencyKey])
+  @@index([tenantId, channelAccountId, queuedAt(sort: Desc)])
+  @@map("sync_jobs")
+}
+
+/// INT-02: external marketplace record → local record. One row per (account, type, external id):
+/// the same order can never be imported twice.
+model ChannelExternalRef {
+  id                String    @id @default(uuid()) @db.Uuid
+  tenantId          String    @map("tenant_id") @db.Uuid
+  channelAccountId  String    @map("channel_account_id") @db.Uuid
+  /// order | product | variant (SQL CHECK)
+  entityType        String    @map("entity_type") @db.VarChar(30)
+  externalId        String    @map("external_id") @db.VarChar(100)
+  localId           String?   @map("local_id") @db.Uuid
+  externalUpdatedAt DateTime? @map("external_updated_at") @db.Timestamptz
+  payloadHash       String    @map("payload_hash") @db.Char(64)
+  lastSyncJobId     String?   @map("last_sync_job_id") @db.Uuid
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  channelAccount ChannelAccount @relation(fields: [tenantId, channelAccountId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, channelAccountId, entityType, externalId])
+  @@map("channel_external_refs")
 }
