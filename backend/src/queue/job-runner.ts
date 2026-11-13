@@ -1,4 +1,4 @@
-import { UnrecoverableError } from 'bullmq';
+import { DelayedError, UnrecoverableError } from 'bullmq';
 import { TenantContext } from '../tenancy/tenant-context.js';
 import {
   InvalidJobPayloadError,
@@ -51,6 +51,8 @@ export async function runJob<P>(
     try {
       await handler(payload, { ...meta, tenantId });
     } catch (error) {
+      // A deferral is not a failure: BullMQ already moved the job to delayed.
+      if (error instanceof DelayedError) throw error;
       throw handlerFailure(error);
     }
   });

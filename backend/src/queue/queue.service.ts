@@ -6,7 +6,13 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { type Job, Queue, UnrecoverableError, Worker } from 'bullmq';
+import {
+  DelayedError,
+  type Job,
+  Queue,
+  UnrecoverableError,
+  Worker,
+} from 'bullmq';
 import type { Redis } from 'ioredis';
 import {
   InjectPrisma,
@@ -129,12 +135,19 @@ export class QueueService implements OnModuleInit, OnApplicationShutdown {
     redis.on('error', () => undefined);
     const worker = new Worker(
       definition.name,
-      (job: Job) =>
+      (job: Job, token?: string) =>
         runJob(
           definition,
           handler,
           job.data,
-          { jobId: job.id ?? '', attempt: job.attemptsMade + 1 },
+          {
+            jobId: job.id ?? '',
+            attempt: job.attemptsMade + 1,
+            defer: async (delayMs: number) => {
+              await job.moveToDelayed(Date.now() + Math.max(0, delayMs), token);
+              throw new DelayedError();
+            },
+          },
           {
             isTenantActive: (tenantId) =>
               this.tenants.isActive(this.prisma, tenantId),
