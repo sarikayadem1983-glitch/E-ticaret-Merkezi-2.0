@@ -118,7 +118,7 @@ Kaynak: `docs/superpowers/plans/2026-10-28-user-management.md` (T1–T16 numaral
 
 | ID | Görev | Öncelik | Bağımlılık | Tahmin | Mod | Sürüm | Durum | Kabul kriteri | Test | Güvenlik riski | Kaynak |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| USR-19 | Şifre sıfırlama ve e-posta doğrulama (hash'li tek kullanımlık token) | P0 | USR-T9a | 3 | CRITICAL | A | DONE-PR (PR #36) | Token tek kullanımlık, süreli; sıfırlama tüm oturumları düşürür; yanıt hesap varlığını sızdırmaz | E, S | Yüksek | Öneri (onay bekliyor) |
+| USR-19 | Şifre sıfırlama ve e-posta doğrulama (hash'li tek kullanımlık token) | P0 | USR-T9a | 3 | CRITICAL | A | DONE-MERGED (PR #36, merge `736cb40`; dev `736cb40`, 2026-11-13) | Token tek kullanımlık, süreli; sıfırlama tüm oturumları düşürür; yanıt hesap varlığını sızdırmaz | E, S | Yüksek | Öneri (onay bekliyor) |
 | USR-20 | İki adımlı doğrulama (TOTP) ve kurtarma kodları | P2 | USR-19 | 3 | CRITICAL | B | PLANNED | Owner/admin için zorunlu kılınabilir | U, E | Orta | Öneri (onay bekliyor) |
 | USR-21 | Sahiplik devri: owner rolünü başka bir aktif üyeye devretme (devreden onayı, yeniden kimlik doğrulama, audit, son owner koruması) | P2 | USR-T11a | 1,5 | CRITICAL | B | PLANNED | Devir tek işlemde; devir sırasında mağaza hiçbir an owner'sız kalmaz; eşzamanlı devir/pasife alma güvenli | E, S | Yüksek | Kullanıcı kararı (2026-10-30) |
 
@@ -430,7 +430,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | USR-T14 | Yetki yükseltme ve tenant izolasyonu test paketi | DONE-MERGED (PR #23, merge `0437c16`; dev `0437c16`, 2026-10-30) | 2 | CRITICAL | Onaylı plan |
 | USR-T15a | Playwright çekirdek akışlar: owner muhasebeciyi A firmasına davet eder, davetli yalnızca A'yı görür; iptal edilen bağlantı geçersiz sayfası; pasife alınan kullanıcı sonraki işlemde çıkış yapar | DONE-MERGED (PR #26, merge `eb6baf6`; dev `5ac1401`, 2026-11-12) | 1 | STANDARD | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
 | USR-T16 | Tam doğrulama ve PR | DONE-MERGED (PR #28, merge `8bd98db`; dev `5ac1401`, 2026-11-12) | 1 | STANDARD | Onaylı plan |
-| USR-19 | Şifre sıfırlama ve e-posta doğrulama (hash'li tek kullanımlık token) | PLANNED | 3 | CRITICAL | Öneri (onay bekliyor) |
+| USR-19 | Şifre sıfırlama ve e-posta doğrulama (hash'li tek kullanımlık token) | DONE-MERGED | 3 | CRITICAL | Öneri (onay bekliyor) |
 | DSH-01 | Uygulama kabuğu ve dashboard iskeleti | DONE-MERGED (PR #4) | — | FAST | Onaylı plan |
 | CAT-01 | Katalog şeması: kategori, marka, ürün, varyant, barkod/SKU (tenant + firma kapsamlı) | DONE-MERGED (PR #13, merge `aa02144`; dev `f010233`, 2026-10-30) | 3 | CRITICAL | Öneri (onay bekliyor) |
 | CAT-02 | Ürün CRUD API (liste, filtre, sayfalama, soft-delete, audit) | DONE-MERGED (PR #16, merge `6824f6f`; dev `f010233`, 2026-10-30) | 3 | STANDARD | Öneri (onay bekliyor) |

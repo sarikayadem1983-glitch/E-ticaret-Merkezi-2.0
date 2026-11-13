@@ -1,6 +1,6 @@
 # Proje Durumu
 
-Son güncelleme: 2026-11-12 (`main` @ `8ee40bb` dev'e deploy edildi) · Kaynak: `origin/main` @ `8ee40bb` · Güncelleme kuralları: `AGENTS.md` → "Yol haritası ve durum takibi".
+Son güncelleme: 2026-11-13 (`main` @ `736cb40` dev'e deploy edildi) · Kaynak: `origin/main` @ `736cb40` · Güncelleme kuralları: `AGENTS.md` → "Yol haritası ve durum takibi".
 
 ## 1. Özet
 
@@ -12,9 +12,9 @@ Son güncelleme: 2026-11-12 (`main` @ `8ee40bb` dev'e deploy edildi) · Kaynak: 
 | Sürüm A (Trendyol-only MVP) ilerleme | 30 / 58 görev merge edildi ve dev'de; kalan 28 görev, 85 iş günü; tahmini hedef 2027-01-20 (taahhüt değil; OPS-08 ve USR-T11a sonrası yeniden hesaplanmadı) |
 | Sürüm B / C | 62 / 21 görev |
 | Açık PR | #24 bu doküman PR'ı. Merge edildi: 2026-11-11 #25 (`719aa64`), #26 (`eb6baf6`), #28 (`8bd98db`); 2026-11-12 kullanıcı onayıyla #27 (`1db22ae`), #29 (`28a03ae`), #30 (`6a3eea0`) |
-| `origin/main` | `8ee40bb` (PR #34 merge; #33 `3cb07fb`). `main` CI ✓ |
-| Dev ortamı | `8ee40bb` (2026-11-12, kullanıcı onayıyla, bkz. §3). Backend `node dist/main` (WMI ile ayrık), frontend `npm run dev`, Mailpit. Smoke 43/44 + CAT-06 kontrolü; çıktı `tm-backups/smoke-8ee40bb.log` |
-| Dev DB şeması | Tüm migration'lar uygulandı; son `20261112190000_channel_mapping` (CAT-06, 2026-11-12, kullanıcı onayıyla; yedek `ticaret_merkezi-20261112-184613.dump` + izole prova 10/10). Aşama 2 (`migrations-pending/`) uygulanmadı |
+| `origin/main` | `736cb40` (PR #36 merge, USR-19). `main` CI ✓ |
+| Dev ortamı | `736cb40` (2026-11-13, kullanıcı onayıyla, bkz. §3c). USR-19 smoke: `tm-backups/smoke-usr19-736cb40.log`. Önceki: `8ee40bb` (2026-11-12, bkz. §3). Backend `node dist/main` (WMI ile ayrık), frontend `npm run dev`, Mailpit. Smoke 43/44 + CAT-06 kontrolü; çıktı `tm-backups/smoke-8ee40bb.log` |
+| Dev DB şeması | Tüm migration'lar uygulandı; son `20261112210000_user_tokens` (USR-19, kullanıcı onayıyla; yedek `ticaret_merkezi-20261112-210146.dump`; `migrate status` 2026-11-13: güncel). Önceki `20261112190000_channel_mapping` (CAT-06, 2026-11-12, kullanıcı onayıyla; yedek `ticaret_merkezi-20261112-184613.dump` + izole prova 10/10). Aşama 2 (`migrations-pending/`) uygulanmadı |
 | Son testler (`main` @ `0437c16`, CI run 41096842266) | backend unit 283/283, e2e 331/332 (1 skip: `mail.e2e-spec.ts`, Mailpit); frontend unit 124/124. Önceki tam tur (`8fc7ae3`, CI run 41053467144): build, lint, typecheck ok. Playwright CI'da koşmuyor. Önceki yerel tam tur (`95b5bdb`): build ok; frontend 81/81, lint ok, typecheck ok, `next build` ok; Playwright 13/13 yalnızca `next dev` ile — `next start` (prod modu, http) 11/13: `APP_ORIGIN` https koruması, bkz. R-24 |
 
 ### Modül bazında tamamlanma (görev sayısına göre)
@@ -22,18 +22,28 @@ Son güncelleme: 2026-11-12 (`main` @ `8ee40bb` dev'e deploy edildi) · Kaynak: 
 | Modül | Tamamlanan / Toplam | % | Not |
 |---|---|---|---|
 | M01 INF | 11 / 20 | 55 | Hepsi dev'de |
-| M02 USR | 19 / 28 | 68 | Hepsi dev'de |
+| M02 USR | 20 / 28 | 71 | Hepsi dev'de (USR-19 dahil) |
 | M03 DSH | 1 / 3 | 33 | İskelet |
 | M04 CAT | 6 / 6 | 100 | Hepsi dev'de; CAT-06 backend dilimi (UI: CAT-06b) |
 | M08 INT | 1 / 25 | 4 | INT-01 dev'de (`7b3c0b9`)
 | Diğer (M05–M07, M09–M20) | 0 / 57 | 0 | Başlanmadı |
-| **Toplam** | **38 / 141** | **27,0** | Dev'e deploy edilmiş: 38 / 141 (%27,0) |
+| **Toplam** | **39 / 141** | **27,7** | Dev'e deploy edilmiş: 39 / 141 (%27,7) |
 
 ## 2. Merge edilen, deploy edilmemiş PR'lar
 
 Yok. #25–#30 (`5ac1401`) 2026-11-12'de dev'e deploy edildi. #6–#16 (`f010233`), #19 (`8fc7ae3`), #22 ve #23 (`0437c16`) 2026-10-30'da dev'e deploy edildi ve bu tablodan çıkarıldı; ayrıntı §3 ve §6.
 
 Aşama 2 SQL'i (`migrations-pending/`) uygulanmadı (USR-18).
+
+## 3c. Dev deploy kaydı (2026-11-12/13, `main` @ `736cb40`)
+
+Yalnızca dev ortamında, kullanıcı onayıyla (2026-11-13). `8ee40bb` → `736cb40`: #35 (doküman), #36 USR-19 (backend + migration `20261112210000_user_tokens` + `next.config` başlıkları).
+
+- 2026-11-12: yedek `tm-backups/ticaret_merkezi-20261112-210146.dump`, migration uygulandı, backend build (`dist` 21:06). Smoke yarıda kaldı (`smoke-736cb40.log`, `invitation_create` sonrası); backend 22:36'da kapandı.
+- 2026-11-13: `migrate status` güncel. Backend `node dist/main` WMI ile ayrık yeniden başlatıldı, `/health` ok (database up, queue up); frontend `npm run dev` yeniden başlatıldı.
+- USR-19 smoke (`smoke-usr19-736cb40.log`): kayıt 201; doğrulama isteği 202 → Mailpit → `email/verify` 204, aynı token tekrar 400; bilinmeyen adresle `password/forgot` 202 (aynı yanıt); `password/reset` 204; sonra eski şifre 401, yeni şifre 200. `/reset-password/*`, `/verify-email/*` → `Referrer-Policy: no-referrer` (sayfa henüz yok, 307).
+- Genel 44'lük smoke bu turda yeniden koşulmadı (betik bulunamadı).
+- Geri alma: dump restore + `git checkout 8ee40bb`, backend build + yeniden başlatma, frontend yeniden başlatma.
 
 ## 3. Dev deploy kaydı (2026-11-12, `main` @ `8ee40bb`)
 
@@ -111,12 +121,11 @@ Kullanıcı onayıyla, yalnızca dev ortamında (`localhost:5432/ticaret_merkezi
 
 | # | ID | Başlık | Not |
 |---|---|---|---|
-| 1 | USR-19 | Şifre sıfırlama ve e-posta doğrulama | USR-T9a tamam |
+| 1 | — | (USR-19 tamamlandı, dev `736cb40`) | Şifre sıfırlama / doğrulama sayfaları frontend'de henüz yok |
 | 2 | CAT-06 | Kanal kategori ağacı ve zorunlu özellik eşleme | INT-01 bağımlılığı |
 | 3 | USR-T13b / USR-T15b | Kullanıcı yönetimi kalan dilimleri | Sürüm B |
 | 4 | — | — | — |
 | 5 | ORD-01 / INV-01 | Sipariş ve stok şemaları | CAT-01 tamam; migration dev'e uygulanması onay gerektirir |
-| 6 | USR-19 | Şifre sıfırlama ve e-posta doğrulama | USR-T9a tamam |
 | 7 | INF-12 → IMG-01 | Dosya depolama, görsel yükleme | CAT-02 tamam |
 
 **Dış iş (kullanıcı, hemen):** Trendyol satıcı hesabı, API anahtarı ve stage erişimi / IP whitelist başvurusu — MVP'nin ana dış kapısı, en geç ≈ 2026-12-14 (INT-TY-01 başlangıcı).
@@ -207,3 +216,4 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 | 2026-11-12 | USR-T13a, USR-T15a, USR-T16, CAT-03, CAT-05, CAT-04 → DONE-MERGED (dev `5ac1401`, kullanıcı onayı) | #24–#30 | izole prova 11/11; smoke 43/44 + izolasyon yeniden kontrolü ok | dev `5ac1401` |
 | 2026-11-12 | INT-01 → DONE-MERGED (merge `7b3c0b9`, dev `7b3c0b9`, kullanıcı onayı) | [#32](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/32) | CI: unit 333/333, e2e 369/370 (1 skip), fe 172/172; bağımsız CRITICAL inceleme 2 tur; dev smoke 43/44 + INT-01 kontrolü | dev `7b3c0b9` |
 | 2026-11-12 | CAT-06 → DONE-MERGED (merge `8ee40bb`, dev `8ee40bb`, kullanıcı onayı) | [#34](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/34) | CI: unit 333/333, e2e 380/381 (1 skip), fe 172/172; dev smoke 43/44 + CAT-06 kontrolü | dev `8ee40bb` |
+| 2026-11-13 | USR-19 → DONE-MERGED (merge `736cb40`, dev `736cb40`, kullanıcı onayı) | [#36](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/36) | `main` CI ✓; dev USR-19 smoke ok (doğrulama, sıfırlama, eski şifre 401 / yeni 200) | dev `736cb40` |
