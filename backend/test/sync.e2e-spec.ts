@@ -673,7 +673,7 @@ describe('Sync engine (e2e, INT-02)', () => {
           .post(jobsUrl(companyA, accountA, `/${failedId}/retry`))
           .set(bearer(tokenA)),
       ]);
-      expect([r1.status, r2.status].sort()).toEqual([202, 409]);
+      expect([r1.status, r2.status].sort((a, b) => a - b)).toEqual([202, 409]);
       expect(await waitFor(failedId, ['succeeded', 'failed'])).toMatchObject({
         status: 'succeeded',
       });
