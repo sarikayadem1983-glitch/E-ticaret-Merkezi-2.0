@@ -9,6 +9,12 @@ export interface JobContext {
   jobId: string;
   /** 1 for the first run, 2 for the first retry, ... */
   attempt: number;
+  /**
+   * Postpones the job by `delayMs` without counting a failed attempt (e.g. a
+   * marketplace rate limit). Never returns: it throws BullMQ's DelayedError,
+   * which the handler must let propagate. Absent outside a worker (tests).
+   */
+  defer?: (delayMs: number) => Promise<never>;
 }
 
 export type JobHandler<P> = (payload: P, context: JobContext) => Promise<void>;
@@ -33,6 +39,16 @@ export interface JobDefinition<P> {
    * job as invalid; it is dead-lettered without retries.
    */
   readonly parse?: (raw: unknown) => P;
+  /**
+   * Called once when the job has failed for good (attempts spent, unrecoverable,
+   * or stalled too often), inside the job's tenant context. Lets the owner
+   * close its own state (e.g. a sync_jobs row). Errors are logged, not thrown.
+   * Not called when the job's tenant is malformed.
+   */
+  readonly onFinalFailure?: (
+    rawPayload: unknown,
+    context: { tenantId: string; jobId: string; errorCode: string },
+  ) => Promise<void>;
 }
 
 export const DEFAULT_ATTEMPTS = 5;

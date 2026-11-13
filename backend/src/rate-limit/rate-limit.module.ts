@@ -13,7 +13,7 @@ import { REDIS, redisProvider } from './redis.provider.js';
     RateLimiterService,
     { provide: AUTH_RATE_LIMITS, useValue: DEFAULT_AUTH_RATE_LIMITS },
   ],
-  exports: [RateLimiterService, AUTH_RATE_LIMITS],
+  exports: [RateLimiterService, AUTH_RATE_LIMITS, REDIS],
 })
 export class RateLimitModule implements OnApplicationShutdown {
   constructor(@Inject(REDIS) private readonly redis: Redis) {}

@@ -1,4 +1,4 @@
-import { UnrecoverableError } from 'bullmq';
+import { DelayedError, UnrecoverableError } from 'bullmq';
 import { TenantContext } from '../tenancy/tenant-context.js';
 import { runJob } from './job-runner.js';
 import { defineJob } from './queue.types.js';
@@ -141,6 +141,23 @@ describe('runJob', () => {
     );
     expect(error.message).toBe('INVALID_JOB_TENANT');
     expect(error.stack).toBe('');
+  });
+});
+
+describe('runJob deferral (INT-02)', () => {
+  it('lets DelayedError through unchanged: a deferral is not a failed attempt', async () => {
+    const deferred = new DelayedError();
+    await expect(
+      runJob(
+        def,
+        async () => {
+          throw deferred;
+        },
+        { tenantId: TENANT, payload: { n: 1 } },
+        meta,
+        { isTenantActive: async () => true },
+      ),
+    ).rejects.toBe(deferred);
   });
 });
 

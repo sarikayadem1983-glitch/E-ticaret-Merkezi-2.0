@@ -62,6 +62,8 @@ export async function purgeTenants(slugs: string[]): Promise<void> {
         'user_roles',
         'refresh_tokens',
         'tenant_memberships',
+        'channel_external_refs',
+        'sync_jobs',
         'channel_accounts',
         'product_channel_attribute_values',
         'attribute_channel_mappings',

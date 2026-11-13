@@ -6,7 +6,13 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { type Job, Queue, UnrecoverableError, Worker } from 'bullmq';
+import {
+  DelayedError,
+  type Job,
+  Queue,
+  UnrecoverableError,
+  Worker,
+} from 'bullmq';
 import type { Redis } from 'ioredis';
 import {
   InjectPrisma,
@@ -129,12 +135,19 @@ export class QueueService implements OnModuleInit, OnApplicationShutdown {
     redis.on('error', () => undefined);
     const worker = new Worker(
       definition.name,
-      (job: Job) =>
+      (job: Job, token?: string) =>
         runJob(
           definition,
           handler,
           job.data,
-          { jobId: job.id ?? '', attempt: job.attemptsMade + 1 },
+          {
+            jobId: job.id ?? '',
+            attempt: job.attemptsMade + 1,
+            defer: async (delayMs: number) => {
+              await job.moveToDelayed(Date.now() + Math.max(0, delayMs), token);
+              throw new DelayedError();
+            },
+          },
           {
             isTenantActive: (tenantId) =>
               this.tenants.isActive(this.prisma, tenantId),
@@ -162,6 +175,11 @@ export class QueueService implements OnModuleInit, OnApplicationShutdown {
     worker.on('failed', (job, error) =>
       this.logFailure(definition, job, error),
     );
+    if (definition.onFinalFailure) {
+      worker.on('failed', (job, error) => {
+        if (job) void this.finalFailure(definition, job, error);
+      });
+    }
     this.workers.set(definition.name, { worker, redis });
   }
 
@@ -333,6 +351,47 @@ export class QueueService implements OnModuleInit, OnApplicationShutdown {
       this.queues.set(definition.name, queue);
     }
     return queue;
+  }
+
+  /**
+   * State of a job of the CURRENT tenant: BullMQ state, or 'missing' when it
+   * does not exist (removed after retention) or belongs to another tenant.
+   */
+  async jobState(
+    definition: JobDefinition<unknown>,
+    jobId: string,
+  ): Promise<string> {
+    const tenantId = TenantContext.requireTenantId();
+    const job = await this.queue(definition).getJob(jobId);
+    if (!job || (job.data as JobEnvelope)?.tenantId !== tenantId)
+      return 'missing';
+    return job.getState();
+  }
+
+  private async finalFailure(
+    definition: JobDefinition<unknown>,
+    job: Job,
+    error: Error,
+  ): Promise<void> {
+    try {
+      // 'failed' also fires for attempts that will be retried; act only on the final one.
+      if ((await job.getState()) !== 'failed') return;
+      const envelope = job.data as JobEnvelope | undefined;
+      const tenantId = envelope?.tenantId;
+      if (!isTenantId(tenantId) || !definition.onFinalFailure) return;
+      const hook = definition.onFinalFailure;
+      await TenantContext.run(tenantId, () =>
+        hook(envelope?.payload, {
+          tenantId,
+          jobId: job.id ?? '',
+          errorCode: errorCode(error),
+        }),
+      );
+    } catch (hookError) {
+      this.logger.error(
+        `queue=${definition.name} job=${job.id} final-failure hook failed: ${errorCode(hookError as Error)}`,
+      );
+    }
   }
 
   /** Never logs payloads or error messages (they may carry secrets); only codes. */
