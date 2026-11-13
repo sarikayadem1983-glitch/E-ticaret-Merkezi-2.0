@@ -76,6 +76,8 @@ export interface SyncQueuePayload {
 export const MAX_RATE_LIMIT_DEFERRALS = 20;
 /** Upper bound for sync_jobs.payload (JSON text length). */
 export const MAX_PAYLOAD_CHARS = 16_384;
+/** takeRate waits in process up to this long in total; a longer wait defers the job. */
+export const MAX_RATE_WAIT_IN_PROCESS_MS = 10_000;
 
 /** Turkish messages for stored error codes. Unknown codes get a generic text. */
 export const SYNC_ERROR_MESSAGES: Readonly<Record<string, string>> = {
@@ -93,6 +95,9 @@ export const SYNC_ERROR_MESSAGES: Readonly<Record<string, string>> = {
   SYNC_QUEUE_UNAVAILABLE: 'İş kuyruğa alınamadı; tekrar deneyin.',
   SYNC_RATE_LIMIT_UNAVAILABLE: 'Hız sınırı deposuna ulaşılamadı.',
   SYNC_UNKNOWN_KIND: 'Bu iş türü bu sürümde tanımlı değil.',
+  SYNC_JOB_ABANDONED:
+    'İş kuyrukta yarıda kaldı (süreç durdu veya tekrar hakkı bitti); yeniden deneyebilirsiniz.',
+  SYNC_CREDENTIALS_UNAVAILABLE: 'Kanal kimlik bilgisi şu an çözülemedi.',
 };
 
 export function syncErrorMessage(code: string | null): string | null {

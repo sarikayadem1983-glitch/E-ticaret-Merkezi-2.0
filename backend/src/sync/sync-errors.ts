@@ -14,13 +14,18 @@ export type FailureKind = 'transient' | 'rate_limited' | 'auth' | 'permanent';
 const CODE = /^[A-Z][A-Z0-9_]{0,79}$/;
 
 export class SyncError extends Error {
+  /** Always a safe code: anything else (e.g. text from a marketplace) becomes SYNC_ERROR. */
+  readonly code: string;
+
   constructor(
-    readonly code: string,
+    code: string,
     readonly kind: FailureKind,
     /** Only for rate_limited: how long to wait before the next try. */
     readonly retryAfterMs?: number,
   ) {
-    super(CODE.test(code) ? code : 'SYNC_ERROR');
+    const safe = CODE.test(code) ? code : 'SYNC_ERROR';
+    super(safe);
+    this.code = safe;
     this.name = 'SyncError';
   }
 }

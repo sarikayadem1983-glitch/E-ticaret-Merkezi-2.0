@@ -14,6 +14,7 @@ CREATE TABLE "sync_jobs" (
     "idempotency_key" VARCHAR(200) NOT NULL,
     "payload" JSONB NOT NULL DEFAULT '{}',
     "attempts" INTEGER NOT NULL DEFAULT 0,
+    "run_token" VARCHAR(64),
     "error_code" VARCHAR(80),
     "stats" JSONB NOT NULL DEFAULT '{}',
     "created_by" UUID,
@@ -82,6 +83,7 @@ ALTER TABLE "sync_jobs" ADD CONSTRAINT "sync_jobs_status_known" CHECK ("status" 
 ALTER TABLE "sync_jobs" ADD CONSTRAINT "sync_jobs_kind_format" CHECK ("kind" ~ '^[a-z0-9][a-z0-9.-]{0,59}$');
 ALTER TABLE "sync_jobs" ADD CONSTRAINT "sync_jobs_idempotency_key_not_blank" CHECK (length(btrim("idempotency_key")) > 0);
 ALTER TABLE "sync_jobs" ADD CONSTRAINT "sync_jobs_attempts_non_negative" CHECK ("attempts" >= 0);
+ALTER TABLE "sync_jobs" ADD CONSTRAINT "sync_jobs_run_token_hex" CHECK ("run_token" IS NULL OR "run_token" ~ '^[0-9a-f]{64}$');
 ALTER TABLE "sync_jobs" ADD CONSTRAINT "sync_jobs_error_code_format" CHECK ("error_code" IS NULL OR "error_code" ~ '^[A-Z][A-Z0-9_:]{0,79}$');
 ALTER TABLE "sync_jobs" ADD CONSTRAINT "sync_jobs_payload_object" CHECK (jsonb_typeof("payload") = 'object');
 ALTER TABLE "sync_jobs" ADD CONSTRAINT "sync_jobs_stats_object" CHECK (jsonb_typeof("stats") = 'object');

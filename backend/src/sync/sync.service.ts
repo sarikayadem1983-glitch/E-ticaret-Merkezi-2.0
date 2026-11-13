@@ -5,6 +5,7 @@ import {
   Logger,
   NotFoundException,
   ServiceUnavailableException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { UnrecoverableError } from 'bullmq';
@@ -15,7 +16,7 @@ import {
   type TenantPrismaClient,
 } from '../database/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';
-import { QueueService } from '../queue/queue.service.js';
+import { jobIdFor, QueueService } from '../queue/queue.service.js';
 import {
   DEFAULT_ATTEMPTS,
   defineJob,
@@ -30,17 +31,26 @@ import {
   emptyStats,
   MAX_PAYLOAD_CHARS,
   MAX_RATE_LIMIT_DEFERRALS,
+  MAX_RATE_WAIT_IN_PROCESS_MS,
   type SyncContext,
   type SyncHandler,
   type SyncKindOptions,
   type SyncQueuePayload,
-  type SyncStats,
   type SyncStatus,
   syncErrorMessage,
 } from './sync.types.js';
 
 const KIND = /^[a-z0-9][a-z0-9.-]{0,56}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** BullMQ states in which the owning queue job can still run the row. */
+const LIVE_QUEUE_STATES = new Set([
+  'waiting',
+  'wait',
+  'active',
+  'delayed',
+  'prioritized',
+  'waiting-children',
+]);
 
 interface RegisteredKind {
   definition: JobDefinition<SyncQueuePayload>;
@@ -82,12 +92,16 @@ function parseQueuePayload(raw: unknown): SyncQueuePayload {
   return { syncJobId: id };
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 /**
  * INT-02 sync engine. Each sync job is a sync_jobs row (state + log); the queue
- * job carries only the row id. Marketplace modules register kinds
- * (`registerKind`) and start jobs (`start` / `startForAccount`). Every run is
- * in the job's tenant (QueueService), credentials are decrypted per run, every
- * marketplace request takes budget from the account's shared Redis bucket.
+ * job carries only the row id. The row's `run_token` names the one BullMQ job
+ * that owns it: only that job may run or finish the row, so a stray or
+ * duplicate queue job is a no-op. When the owning job fails for good, the
+ * queue's final-failure hook closes the row; rows whose owning job is gone can
+ * be retried. Every marketplace request takes budget from the account's
+ * shared Redis bucket; credentials are decrypted per run.
  */
 @Injectable()
 export class SyncService {
@@ -106,7 +120,11 @@ export class SyncService {
     this.liveCallsAllowed = config.get<string>('SYNC_LIVE_CALLS') === 'true';
   }
 
-  /** Registers a sync kind and starts its worker. Call once per kind (module init). */
+  /**
+   * Registers a sync kind and starts its worker. Call once per kind (module
+   * init). `usesLiveApi` is the kind's own declaration: a kind that calls a
+   * marketplace must set it, the engine cannot detect network use.
+   */
   registerKind<P>(
     kind: string,
     handler: SyncHandler<P>,
@@ -119,6 +137,7 @@ export class SyncService {
       attempts: options.attempts ?? DEFAULT_ATTEMPTS,
       backoffMs: options.backoffMs,
       parse: parseQueuePayload,
+      onFinalFailure: (raw, ctx) => this.abandon(raw, ctx.jobId, ctx.errorCode),
     });
     const entry: RegisteredKind = {
       definition,
@@ -131,15 +150,31 @@ export class SyncService {
     );
   }
 
+  /** Queue definition of a kind (tests and diagnostics). */
+  definitionOf(kind: string): JobDefinition<SyncQueuePayload> | undefined {
+    return this.kinds.get(kind)?.definition;
+  }
+
   /** Starts a job on behalf of a user: requires channels:manage and an active account of the company. */
   async start(user: AuthUser, input: StartInput) {
     await this.channels.get(user, input.companyId, input.channelAccountId);
-    return this.startForAccount(input, user.sub);
+    try {
+      return await this.startForAccount(input, user.sub);
+    } catch (error) {
+      if (error instanceof SyncError) {
+        throw new UnprocessableEntityException({
+          code: error.code,
+          message: syncErrorMessage(error.code),
+        });
+      }
+      throw error;
+    }
   }
 
   /**
    * Starts a job in the current tenant without a user (scheduled pulls). The
-   * caller must have resolved the account inside this tenant.
+   * caller must have resolved the account inside this tenant. The same key
+   * returns the existing row and never queues it a second time.
    */
   async startForAccount(
     input: StartInput,
@@ -156,6 +191,9 @@ export class SyncService {
     if (JSON.stringify(payload ?? {}).length > MAX_PAYLOAD_CHARS) {
       throw new SyncError('SYNC_INVALID_PAYLOAD', 'permanent');
     }
+    const tenantId = TenantContext.requireTenantId();
+    const id = randomUUID();
+    const runToken = jobIdFor(kind.definition, tenantId, id);
     const key = {
       channelAccountId: input.channelAccountId,
       kind: input.kind,
@@ -165,25 +203,32 @@ export class SyncService {
     const { count } = await this.prisma.syncJob.createMany({
       data: [
         {
-          tenantId: TenantContext.requireTenantId(),
+          id,
+          tenantId,
           ...key,
           companyId: input.companyId,
           payload: (payload ?? {}) as Prisma.InputJsonValue,
           createdBy,
+          runToken,
         },
       ],
       skipDuplicates: true,
     });
-    const row = await this.prisma.syncJob.findFirstOrThrow({
-      where: key,
-      select: { id: true, status: true, companyId: true },
-    });
-    if (row.companyId !== input.companyId) {
-      throw new NotFoundException({ code: 'NOT_FOUND', message: 'Bulunamadı' });
+    if (count === 0) {
+      const row = await this.prisma.syncJob.findFirstOrThrow({
+        where: key,
+        select: { id: true, companyId: true },
+      });
+      if (row.companyId !== input.companyId) {
+        throw new NotFoundException({
+          code: 'NOT_FOUND',
+          message: 'Bulunamadı',
+        });
+      }
+      return { syncJobId: row.id, duplicate: true };
     }
-    // A queued row is (re-)enqueued under its own id: idempotent in BullMQ too.
-    if (row.status === 'queued') await this.enqueue(kind, row.id, row.id);
-    return { syncJobId: row.id, duplicate: count === 0 };
+    await this.enqueue(kind, id, id, runToken);
+    return { syncJobId: id, duplicate: false };
   }
 
   async list(
@@ -193,13 +238,21 @@ export class SyncService {
     query: { status?: SyncStatus; limit?: number; cursor?: string },
   ) {
     await this.channels.get(user, companyId, channelAccountId);
+    const where = { companyId, channelAccountId };
+    if (
+      query.cursor &&
+      (await this.prisma.syncJob.count({
+        where: { ...where, id: query.cursor },
+      })) === 0
+    ) {
+      throw new UnprocessableEntityException({
+        code: 'INVALID_CURSOR',
+        message: 'Geçersiz sayfa imleci',
+      });
+    }
     const limit = Math.min(Math.max(query.limit ?? 20, 1), 100);
     const rows = await this.prisma.syncJob.findMany({
-      where: {
-        companyId,
-        channelAccountId,
-        ...(query.status ? { status: query.status } : {}),
-      },
+      where: { ...where, ...(query.status ? { status: query.status } : {}) },
       select: VIEW_FIELDS,
       orderBy: [{ queuedAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
@@ -213,8 +266,11 @@ export class SyncService {
   }
 
   /**
-   * Re-queues a failed job. The failed → queued switch is one conditional
-   * UPDATE: two concurrent retries (or a retry of a running job) cannot both win.
+   * Re-queues a job. Allowed for `failed` rows, and for `queued`/`running`
+   * rows whose owning queue job no longer exists or has ended (process died
+   * before enqueue, job dropped by the queue). The switch is one conditional
+   * UPDATE that also hands the row to a new queue job, so concurrent retries
+   * start it once and the previous queue job can no longer run it.
    */
   async retry(
     user: AuthUser,
@@ -224,49 +280,61 @@ export class SyncService {
   ): Promise<void> {
     await this.channels.get(user, companyId, channelAccountId);
     const where = { id: syncJobId, companyId, channelAccountId };
-    const { count } = await this.prisma.syncJob.updateMany({
-      where: { ...where, status: 'failed' },
-      data: {
-        status: 'queued',
-        errorCode: null,
-        finishedAt: null,
-        stats: {},
-        queuedAt: new Date(),
-      },
-    });
-    if (count === 0) {
-      const exists = await this.prisma.syncJob.count({ where });
-      if (exists === 0) {
-        throw new NotFoundException({
-          code: 'NOT_FOUND',
-          message: 'Bulunamadı',
-        });
-      }
-      throw new ConflictException({
-        code: 'SYNC_JOB_NOT_FAILED',
-        message: 'Yalnızca başarısız işler yeniden denenebilir',
-      });
-    }
-    const row = await this.prisma.syncJob.findFirstOrThrow({
+    const row = await this.prisma.syncJob.findFirst({
       where,
-      select: { kind: true },
+      select: { kind: true, status: true, runToken: true },
     });
+    if (!row) {
+      throw new NotFoundException({ code: 'NOT_FOUND', message: 'Bulunamadı' });
+    }
     const kind = this.kinds.get(row.kind);
     if (!kind) {
-      await this.finish(syncJobId, 'failed', 'SYNC_UNKNOWN_KIND');
       throw new ConflictException({
         code: 'SYNC_UNKNOWN_KIND',
         message: syncErrorMessage('SYNC_UNKNOWN_KIND'),
       });
     }
-    // Fresh queue job (new id): the old one keeps its own attempt history.
-    await this.enqueue(kind, syncJobId, `${syncJobId}:retry:${randomUUID()}`);
+    if (row.status === 'succeeded') throw notRetryable('SYNC_JOB_NOT_FAILED');
+    if (row.status !== 'failed') {
+      const state = row.runToken
+        ? await this.queue.jobState(kind.definition, row.runToken)
+        : 'missing';
+      if (LIVE_QUEUE_STATES.has(state)) throw notRetryable('SYNC_JOB_ACTIVE');
+    }
+    const key = `${syncJobId}:retry:${randomUUID()}`;
+    const runToken = jobIdFor(
+      kind.definition,
+      TenantContext.requireTenantId(),
+      key,
+    );
+    const { count } = await this.prisma.syncJob.updateMany({
+      where: { ...where, status: row.status, runToken: row.runToken },
+      data: {
+        status: 'queued',
+        runToken,
+        errorCode: null,
+        finishedAt: null,
+        stats: {},
+      },
+    });
+    if (count === 0) {
+      throw notRetryable(
+        row.status === 'failed' ? 'SYNC_JOB_NOT_FAILED' : 'SYNC_JOB_ACTIVE',
+      );
+    }
+    await this.enqueue(kind, syncJobId, key, runToken);
   }
 
+  /**
+   * Queues the row's owning job. On failure the row is failed only if it is
+   * still waiting for exactly this job; if the job was in fact created (a
+   * timeout after the write), it finds the row failed and does nothing.
+   */
   private async enqueue(
     kind: RegisteredKind,
     syncJobId: string,
     idempotencyKey: string,
+    runToken: string,
   ): Promise<void> {
     try {
       await this.queue.enqueue(
@@ -275,7 +343,14 @@ export class SyncService {
         { idempotencyKey },
       );
     } catch {
-      await this.finish(syncJobId, 'failed', 'SYNC_QUEUE_UNAVAILABLE');
+      await this.prisma.syncJob.updateMany({
+        where: { id: syncJobId, status: 'queued', runToken },
+        data: {
+          status: 'failed',
+          errorCode: 'SYNC_QUEUE_UNAVAILABLE',
+          finishedAt: new Date(),
+        },
+      });
       throw new ServiceUnavailableException({
         code: 'SYNC_QUEUE_UNAVAILABLE',
         message: syncErrorMessage('SYNC_QUEUE_UNAVAILABLE'),
@@ -283,19 +358,26 @@ export class SyncService {
     }
   }
 
-  private async finish(
-    id: string,
-    status: 'succeeded' | 'failed',
-    errorCode: string | null,
-    stats?: SyncStats & { rateLimitDeferrals?: number },
+  /** Final-failure hook: the owning queue job is dead, so its open row is closed. */
+  private async abandon(
+    raw: unknown,
+    jobId: string,
+    errorCode: string,
   ): Promise<void> {
+    const syncJobId = (raw as { syncJobId?: unknown } | null)?.syncJobId;
+    if (typeof syncJobId !== 'string' || !UUID.test(syncJobId)) return;
+    const code = /^JOB_FAILED:([A-Z][A-Z0-9_]{0,63})$/.exec(errorCode)?.[1];
     await this.prisma.syncJob.updateMany({
-      where: { id },
+      where: {
+        id: syncJobId,
+        runToken: jobId,
+        status: { in: ['queued', 'running'] },
+      },
       data: {
-        status,
-        errorCode,
+        status: 'failed',
+        errorCode:
+          code && code !== 'UNRECOVERABLE' ? code : 'SYNC_JOB_ABANDONED',
         finishedAt: new Date(),
-        ...(stats ? { stats: stats as unknown as Prisma.InputJsonValue } : {}),
       },
     });
   }
@@ -326,10 +408,11 @@ export class SyncService {
     if (!job || job.kind !== kind) {
       throw new UnrecoverableError('SYNC_JOB_NOT_FOUND');
     }
-    // Only queued (or running after a crash) rows run; a finished row is a no-op,
-    // so a duplicate queue job can never run a job twice after it ended.
+    const owned = { id: job.id, runToken: context.jobId };
+    // Only the owning queue job may run the row, and only while it is open.
+    // A stalled redelivery keeps its job id, so it resumes a `running` row.
     const { count } = await this.prisma.syncJob.updateMany({
-      where: { id: job.id, status: { in: ['queued', 'running'] } },
+      where: { ...owned, status: { in: ['queued', 'running'] } },
       data: {
         status: 'running',
         attempts: { increment: 1 },
@@ -344,8 +427,18 @@ export class SyncService {
         (job.stats as { rateLimitDeferrals?: unknown }).rateLimitDeferrals,
       ) || 0;
     const stats = emptyStats();
+    const finish = (status: 'succeeded' | 'failed', errorCode: string | null) =>
+      this.prisma.syncJob.updateMany({
+        where: { ...owned, status: 'running' },
+        data: {
+          status,
+          errorCode,
+          finishedAt: new Date(),
+          stats: stats as unknown as Prisma.InputJsonValue,
+        },
+      });
     const fail = async (code: string): Promise<never> => {
-      await this.finish(job.id, 'failed', code, stats);
+      await finish('failed', code);
       throw new UnrecoverableError(code);
     };
 
@@ -386,18 +479,26 @@ export class SyncService {
         credentials: Object.freeze({ ...credentials }),
         liveCallsAllowed: this.liveCallsAllowed,
         stats,
+        // Short waits happen in process (the handler keeps its progress); only a
+        // long wait defers the whole job.
         takeRate: async (tokens = 1) => {
-          const r = await this.limiter.take(
-            account.channel,
-            job.channelAccountId,
-            tokens,
-          );
-          if (!r.ok) {
-            throw new SyncError(
-              'CHANNEL_RATE_LIMITED',
-              'rate_limited',
-              r.retryAfterMs,
+          let waited = 0;
+          for (;;) {
+            const r = await this.limiter.take(
+              account.channel,
+              job.channelAccountId,
+              tokens,
             );
+            if (r.ok) return;
+            if (waited + r.retryAfterMs > MAX_RATE_WAIT_IN_PROCESS_MS) {
+              throw new SyncError(
+                'CHANNEL_RATE_LIMITED',
+                'rate_limited',
+                r.retryAfterMs,
+              );
+            }
+            await sleep(r.retryAfterMs);
+            waited += r.retryAfterMs;
           }
         },
         claim: async (input, tx) => {
@@ -414,10 +515,10 @@ export class SyncService {
           return result;
         },
         linkLocal: (refId, localId, tx) =>
-          this.refs.linkLocal(refId, localId, tx),
+          this.refs.linkLocal(job.channelAccountId, refId, localId, tx),
       };
       await entry.handler(payload, ctx);
-      await this.finish(job.id, 'succeeded', null, stats);
+      await finish('succeeded', null);
     } catch (error) {
       if (error instanceof UnrecoverableError) throw error;
       const failure = classifyFailure(error);
@@ -430,7 +531,7 @@ export class SyncService {
         }
         // A deferral is not an attempt: undo the increment, keep the count.
         await this.prisma.syncJob.updateMany({
-          where: { id: job.id },
+          where: { ...owned, status: 'running' },
           data: {
             status: 'queued',
             attempts: { decrement: 1 },
@@ -438,16 +539,18 @@ export class SyncService {
             stats: { ...stats, rateLimitDeferrals: deferrals + 1 },
           },
         });
+        // If the deferral itself fails, BullMQ counts an attempt; the final-failure
+        // hook closes the row when attempts run out.
         if (context.defer) await context.defer(failure.retryAfterMs ?? 0);
         throw new Error(failure.code);
       }
       // transient
       const maxAttempts = entry.options.attempts ?? DEFAULT_ATTEMPTS;
       if (context.attempt >= maxAttempts) {
-        await this.finish(job.id, 'failed', failure.code, stats);
+        await finish('failed', failure.code);
       } else {
         await this.prisma.syncJob.updateMany({
-          where: { id: job.id },
+          where: { ...owned, status: 'running' },
           data: { status: 'queued', errorCode: failure.code },
         });
       }
@@ -457,4 +560,14 @@ export class SyncService {
       throw new Error(failure.code);
     }
   }
+}
+
+function notRetryable(code: 'SYNC_JOB_NOT_FAILED' | 'SYNC_JOB_ACTIVE') {
+  return new ConflictException({
+    code,
+    message:
+      code === 'SYNC_JOB_ACTIVE'
+        ? 'İş hâlâ kuyrukta veya çalışıyor'
+        : 'Yalnızca başarısız işler yeniden denenebilir',
+  });
 }

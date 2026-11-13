@@ -65,6 +65,9 @@ describe('classifyFailure', () => {
   });
 
   it('never keeps a free-text message as the code', () => {
+    const leaked = new SyncError('CHANNEL_REJECTED_apiSecret=abc', 'permanent');
+    expect(leaked.code).toBe('SYNC_ERROR');
+    expect(classifyFailure(leaked).code).toBe('SYNC_ERROR');
     expect(new SyncError('token abc123 hatalı', 'permanent').message).toBe(
       'SYNC_ERROR',
     );

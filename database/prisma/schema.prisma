@@ -689,6 +689,8 @@ model SyncJob {
   /// No credentials or personal data; validated by the kind's parser.
   payload          Json      @default("{}")
   attempts         Int       @default(0)
+  /// BullMQ job id that owns this row; only that queue job may run it (INT-02).
+  runToken         String?   @map("run_token") @db.VarChar(64)
   /// Code only (e.g. CHANNEL_AUTH_FAILED), never a free-text message.
   errorCode        String?   @map("error_code") @db.VarChar(80)
   stats            Json      @default("{}")

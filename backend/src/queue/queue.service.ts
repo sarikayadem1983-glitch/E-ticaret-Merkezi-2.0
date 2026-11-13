@@ -175,6 +175,11 @@ export class QueueService implements OnModuleInit, OnApplicationShutdown {
     worker.on('failed', (job, error) =>
       this.logFailure(definition, job, error),
     );
+    if (definition.onFinalFailure) {
+      worker.on('failed', (job, error) => {
+        if (job) void this.finalFailure(definition, job, error);
+      });
+    }
     this.workers.set(definition.name, { worker, redis });
   }
 
@@ -349,6 +354,47 @@ export class QueueService implements OnModuleInit, OnApplicationShutdown {
   }
 
   /** Never logs payloads or error messages (they may carry secrets); only codes. */
+  /**
+   * State of a job of the CURRENT tenant: BullMQ state, or 'missing' when it
+   * does not exist (removed after retention) or belongs to another tenant.
+   */
+  async jobState(
+    definition: JobDefinition<unknown>,
+    jobId: string,
+  ): Promise<string> {
+    const tenantId = TenantContext.requireTenantId();
+    const job = await this.queue(definition).getJob(jobId);
+    if (!job || (job.data as JobEnvelope)?.tenantId !== tenantId)
+      return 'missing';
+    return job.getState();
+  }
+
+  private async finalFailure(
+    definition: JobDefinition<unknown>,
+    job: Job,
+    error: Error,
+  ): Promise<void> {
+    try {
+      // 'failed' also fires for attempts that will be retried; act only on the final one.
+      if ((await job.getState()) !== 'failed') return;
+      const envelope = job.data as JobEnvelope | undefined;
+      const tenantId = envelope?.tenantId;
+      if (!isTenantId(tenantId) || !definition.onFinalFailure) return;
+      const hook = definition.onFinalFailure;
+      await TenantContext.run(tenantId, () =>
+        hook(envelope?.payload, {
+          tenantId,
+          jobId: job.id ?? '',
+          errorCode: errorCode(error),
+        }),
+      );
+    } catch (hookError) {
+      this.logger.error(
+        `queue=${definition.name} job=${job.id} final-failure hook failed: ${errorCode(hookError as Error)}`,
+      );
+    }
+  }
+
   private logFailure(
     definition: JobDefinition<unknown>,
     job: Job | undefined,

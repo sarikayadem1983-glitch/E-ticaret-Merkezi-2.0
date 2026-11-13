@@ -32,6 +32,13 @@ export interface ClaimResult {
   refId: string;
   /** Local record id; null until the import finished (also after a crash mid-import). */
   localId: string | null;
+  /**
+   * True when no local record is linked yet, whatever the decision. Importers
+   * decide on THIS, not on `decision === 'created'`: a claim made without a
+   * transaction that crashed before linkLocal comes back as `unchanged` with
+   * localId null and must still be imported.
+   */
+  needsImport: boolean;
 }
 
 const HASH = /^[0-9a-f]{64}$/;
@@ -105,7 +112,12 @@ export class ExternalRefsRepository {
     if (decision === 'unchanged' && row.payloadHash !== input.payloadHash) {
       decision = 'stale';
     }
-    return { decision, refId: row.id, localId: row.localId };
+    return {
+      decision,
+      refId: row.id,
+      localId: row.localId,
+      needsImport: row.localId === null,
+    };
   }
 
   /**
@@ -113,17 +125,22 @@ export class ExternalRefsRepository {
    * when another importer already linked a different record.
    */
   async linkLocal(
+    channelAccountId: string,
     refId: string,
     localId: string,
     tx?: PrismaTx,
   ): Promise<void> {
     const db = tx ?? this.prisma;
     const { count } = await db.channelExternalRef.updateMany({
-      where: { id: refId, OR: [{ localId: null }, { localId }] },
+      where: {
+        id: refId,
+        channelAccountId,
+        OR: [{ localId: null }, { localId }],
+      },
       data: { localId },
     });
     if (count !== 1) {
-      throw new SyncError('SYNC_EXTERNAL_REF_ALREADY_LINKED', 'transient');
+      throw new SyncError('SYNC_EXTERNAL_REF_ALREADY_LINKED', 'permanent');
     }
   }
 }

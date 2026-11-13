@@ -16,6 +16,8 @@ import { ChannelRateLimiter } from './../src/sync/channel-rate-limiter.js';
 import { ExternalRefsRepository } from './../src/sync/external-refs.repository.js';
 import { httpFailure, SyncError } from './../src/sync/sync-errors.js';
 import { SyncService } from './../src/sync/sync.service.js';
+import { jobIdFor, QueueService } from './../src/queue/queue.service.js';
+import { UnrecoverableError } from 'bullmq';
 import type { SyncContext } from './../src/sync/sync.types.js';
 import { TenantContext } from './../src/tenancy/tenant-context.js';
 import {
@@ -62,6 +64,7 @@ describe('Sync engine (e2e, INT-02)', () => {
   let sync: SyncService;
   let refs: ExternalRefsRepository;
   let prisma: TenantPrismaClient;
+  let queue: QueueService;
   const saved: Record<string, string | undefined> = {};
   const seenCredentials: string[] = [];
 
@@ -170,6 +173,7 @@ describe('Sync engine (e2e, INT-02)', () => {
     sync = app.get(SyncService);
     refs = app.get(ExternalRefsRepository);
     prisma = app.get(PRISMA);
+    queue = app.get(QueueService);
     tokenA = await register(slugs[0]);
     tokenB = await register(slugs[1]);
     tenantA = await tenantOf(tokenA);
@@ -294,9 +298,9 @@ describe('Sync engine (e2e, INT-02)', () => {
               },
               tx,
             );
-            if (r.decision !== 'created') return 'skipped';
+            if (!r.needsImport) return 'skipped';
             await sleep(50);
-            await refs.linkLocal(r.refId, localId, tx);
+            await refs.linkLocal(accountA, r.refId, localId, tx);
             return 'imported';
           }),
         );
@@ -500,33 +504,63 @@ describe('Sync engine (e2e, INT-02)', () => {
       expect(seenCredentials.length - before).toBeLessThanOrEqual(1);
     });
 
-    it('a job left "running" by a crash is resumed in the same row, never duplicated', async () => {
-      scripts.set('resume', [async () => undefined]);
+    /** Inserts a row as if the process died at some point; the owner queue job uses `ownerKey`. */
+    const insertRow = async (
+      status: string,
+      idemKey: string,
+      ownerKey: string,
+      script: string,
+    ) => {
+      const def = sync.definitionOf(kind('script'));
+      if (!def) throw new Error('kind missing');
+      const id = randomUUID();
       const pool = ownerPool();
-      let id: string;
       try {
-        // Simulate: row created and marked running, the process died before finishing.
-        id = randomUUID();
         await pool.query(
-          `INSERT INTO sync_jobs (id, tenant_id, company_id, channel_account_id, kind, status, idempotency_key, payload, attempts, updated_at)
-           VALUES ($1, $2, $3, $4, $5, 'running', 'k-resume', '{"script":"resume"}', 1, now())`,
-          [id, tenantA, companyA, accountA, kind('script')],
+          `INSERT INTO sync_jobs (id, tenant_id, company_id, channel_account_id, kind, status, idempotency_key, payload, attempts, run_token, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())`,
+          [
+            id,
+            tenantA,
+            companyA,
+            accountA,
+            kind('script'),
+            status,
+            idemKey,
+            JSON.stringify({ script }),
+            status === 'running' ? 1 : 0,
+            jobIdFor(def, tenantA, ownerKey),
+          ],
         );
       } finally {
         await pool.end();
       }
-      // The same key returns the existing row; BullMQ redelivery runs it again.
-      const again = await start(kind('script'), 'k-resume', {
-        script: 'resume',
-      });
-      expect(again).toEqual({ syncJobId: id, duplicate: true });
-      await asA(() =>
-        prisma.syncJob.updateMany({
-          where: { id },
-          data: { status: 'queued' },
-        }),
+      return { id, def };
+    };
+
+    it('a crashed "running" row is resumed by its own redelivered queue job, never duplicated', async () => {
+      scripts.set('resume', [async () => undefined]);
+      const { id, def } = await insertRow(
+        'running',
+        'k-resume',
+        'owner-resume',
+        'resume',
       );
-      await start(kind('script'), 'k-resume', { script: 'resume' });
+      // Same key → existing row, nothing new queued.
+      expect(
+        await start(kind('script'), 'k-resume', { script: 'resume' }),
+      ).toEqual({
+        syncJobId: id,
+        duplicate: true,
+      });
+      // Stalled redelivery keeps the owner job id.
+      await asA(() =>
+        queue.enqueue(
+          def,
+          { syncJobId: id },
+          { idempotencyKey: 'owner-resume' },
+        ),
+      );
       expect(await waitFor(id, ['succeeded', 'failed'])).toMatchObject({
         status: 'succeeded',
         attempts: 2,
@@ -536,6 +570,98 @@ describe('Sync engine (e2e, INT-02)', () => {
           prisma.syncJob.count({ where: { idempotencyKey: 'k-resume' } }),
         ),
       ).toBe(1);
+    });
+
+    it('a stray second queue job cannot run a row it does not own; a row without a live job can be retried', async () => {
+      let calls = 0;
+      scripts.set('orphan', [
+        async () => {
+          calls += 1;
+        },
+        async () => {
+          calls += 1;
+        },
+      ]);
+      // Process died after inserting the row, before enqueueing its owner job.
+      const { id, def } = await insertRow(
+        'queued',
+        'k-orphan',
+        'owner-orphan',
+        'orphan',
+      );
+      await asA(() =>
+        queue.enqueue(def, { syncJobId: id }, { idempotencyKey: 'stray' }),
+      );
+      await sleep(1000);
+      expect(calls).toBe(0);
+      expect(await row(id)).toMatchObject({ status: 'queued', attempts: 0 });
+
+      await http()
+        .post(jobsUrl(companyA, accountA, `/${id}/retry`))
+        .set(bearer(tokenA))
+        .expect(202);
+      expect(await waitFor(id, ['succeeded', 'failed'])).toMatchObject({
+        status: 'succeeded',
+        attempts: 1,
+      });
+      expect(calls).toBe(1);
+    });
+
+    it('a queue job that dies outside the engine closes its row as abandoned', async () => {
+      scripts.set('die', [
+        async () => {
+          throw new UnrecoverableError('worker gone');
+        },
+      ]);
+      const { syncJobId } = await start(kind('script'), 'k-die', {
+        script: 'die',
+      });
+      expect(await waitFor(syncJobId, ['failed'])).toMatchObject({
+        errorCode: 'SYNC_JOB_ABANDONED',
+      });
+    });
+
+    it('a queued or running job with a live queue job cannot be retried', async () => {
+      scripts.set('slow', [
+        async () => {
+          await sleep(1500);
+        },
+      ]);
+      const { syncJobId } = await start(kind('script'), 'k-slow', {
+        script: 'slow',
+      });
+      await waitFor(syncJobId, ['running']);
+      const res = await http()
+        .post(jobsUrl(companyA, accountA, `/${syncJobId}/retry`))
+        .set(bearer(tokenA))
+        .expect(409);
+      expect(JSON.stringify(res.body)).toContain('SYNC_JOB_ACTIVE');
+      expect(await waitFor(syncJobId, ['succeeded', 'failed'])).toMatchObject({
+        status: 'succeeded',
+        attempts: 1,
+      });
+    });
+
+    it('a handler needing more requests than the bucket holds waits in process and keeps its progress', async () => {
+      let requests = 0;
+      scripts.set('many', [
+        async (ctx) => {
+          for (let i = 0; i < 25; i++) {
+            await ctx.takeRate();
+            requests += 1;
+          }
+        },
+      ]);
+      const { syncJobId } = await start(
+        kind('script'),
+        'k-many',
+        { script: 'many' },
+        accountA2,
+      );
+      const done = await waitFor(syncJobId, ['succeeded', 'failed'], 30_000);
+      expect(done).toMatchObject({ status: 'succeeded', attempts: 1 });
+      expect(done.stats).not.toHaveProperty('rateLimitDeferrals');
+      expect(requests).toBe(25);
     });
 
     it('stores codes only: no credentials in rows, errors or logs', async () => {
@@ -620,6 +746,12 @@ describe('Sync engine (e2e, INT-02)', () => {
       await http()
         .get(jobsUrl(companyA, accountA))
         .query({ status: 'done' })
+        .set(bearer(tokenA))
+        .expect(422);
+      // A cursor from another account's log is refused, not used as a position.
+      await http()
+        .get(jobsUrl(companyA, accountA2))
+        .query({ cursor: failedId })
         .set(bearer(tokenA))
         .expect(422);
     });
