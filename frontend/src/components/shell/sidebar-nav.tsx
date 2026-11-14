@@ -23,6 +23,7 @@ const NAV = [
   { href: '/companies', label: 'Firmalar', icon: Building2 },
   { href: '/products', label: 'Ürünler', icon: Package },
   { href: '/orders', label: 'Siparişler', icon: ShoppingCart },
+  { href: '/stock', label: 'Stok', icon: Boxes },
   { href: '/reports', label: 'Raporlar', icon: BarChart3 },
   { href: '/profile', label: 'Profil', icon: UserRound },
 ];
@@ -32,7 +33,6 @@ const USERS_ITEM = { href: '/users', label: 'Kullanıcılar', icon: Users };
 
 /** Planned modules, shown so the menu reflects the roadmap; not clickable yet. */
 const SOON = [
-  { label: 'Stok', icon: Boxes },
   { label: 'Pazaryerleri', icon: Store },
   { label: 'e-Fatura', icon: FileText },
 ] as const;

@@ -151,6 +151,20 @@ describe('matchBffRoute', () => {
     expect(match('POST', `${acc}/${ID}/sync-jobs`)).toEqual({ ok: false, status: 404 });
   });
 
+  it('allows the stock routes and nothing around them (INV-03)', () => {
+    expect(match('GET', 'warehouses', 'company_id=x')).toMatchObject({ ok: true });
+    expect(match('POST', 'warehouses')).toMatchObject({ ok: true, body: true });
+    expect(match('GET', 'stock-levels', 'page=1&per_page=50&warehouse_id=x')).toMatchObject({ ok: true });
+    expect(match('GET', 'stock-levels/low', 'company_id=x')).toMatchObject({ ok: true });
+    expect(match('POST', 'stock-movements')).toMatchObject({ ok: true, body: true });
+    expect(match('PUT', `stock-thresholds/${ID}`)).toMatchObject({ ok: true, body: true });
+    expect(match('POST', `orders/${ID}/reserve`)).toMatchObject({ ok: true, body: true });
+    expect(match('DELETE', `stock-thresholds/${ID}`)).toEqual({ ok: false, status: 404 });
+    expect(match('GET', 'stock-movements')).toEqual({ ok: false, status: 404 });
+    expect(match('PATCH', 'warehouses')).toEqual({ ok: false, status: 404 });
+    expect(match('GET', 'stock-levels', 'tenant_id=x')).toEqual({ ok: false, status: 400 });
+  });
+
   it('allows the sales report read-only (RPT-01)', () => {
     expect(
       match('GET', 'reports/sales', 'from=2026-11-01&to=2026-11-14&group_by=day&company_id=x&channel=manual'),

@@ -111,3 +111,13 @@ export class ReserveOrderDto {
   @IsUUID()
   warehouseId?: string;
 }
+
+export class SetThresholdDto {
+  /** null removes the threshold. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(1000000)
+  threshold: number | null;
+}

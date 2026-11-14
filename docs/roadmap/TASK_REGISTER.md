@@ -273,7 +273,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | INV-01 | Depo ve stok şeması; append-only stok hareketleri | P0 | CAT-01 | 3 | CRITICAL | A | DONE-MERGED (PR #44, merge `458ee82`; dev `458ee82`, 2026-11-14) | Stok = hareketlerin toplamı; hareket silinemez | M, E | Orta | Öneri (onay bekliyor) |
 | INV-02 | Rezervasyon ve sipariş bağlı düşüm (eşzamanlılık güvenli) | P0 | INV-01, ORD-01 | 4 | CRITICAL | A | DONE-MERGED (PR #51, merge `9d4eb11`; dev `9d4eb11`, 2026-11-14) | Paralel siparişlerde negatif stok oluşmaz (satır kilidi/koşullu güncelleme) | U, E, L | Orta (veri bütünlüğü) | Öneri (onay bekliyor) |
-| INV-03 | Stok UI, düşük stok eşiği ve uyarısı | P1 | INV-01 | 2 | STANDARD | A | PLANNED | Eşik altı ürünler listelenir | F, P | Düşük | Öneri (onay bekliyor) |
+| INV-03 | Stok UI, düşük stok eşiği ve uyarısı | P1 | INV-01 | 2 | STANDARD | A | DONE-PR (PR #55) | Eşik altı ürünler listelenir | F, P | Düşük | Öneri (onay bekliyor) |
 | INV-04 | Çoklu depo transferi ve stok sayımı | P2 | INV-02 | 3 | STANDARD | B | PLANNED | Transfer iki hareket olarak kaydedilir | E | Düşük | Öneri (onay bekliyor) |
 
 ## M11 — Kargo, iptal ve iade (`SHP`)
@@ -451,7 +451,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | ORD-03 | Sipariş UI: liste, filtre, detay, toplu işlem (etiket yazdır, durum) | DONE-MERGED (PR #49, merge `75ce1de`; dev `75ce1de`, 2026-11-14) | 3 | STANDARD | Öneri (onay bekliyor) |
 | INV-01 | Depo ve stok şeması; append-only stok hareketleri | DONE-MERGED (PR #44, merge `458ee82`; dev `458ee82`, 2026-11-14) | 3 | CRITICAL | Öneri (onay bekliyor) |
 | INV-02 | Rezervasyon ve sipariş bağlı düşüm (eşzamanlılık güvenli) | DONE-MERGED (PR #51, merge `9d4eb11`; dev `9d4eb11`, 2026-11-14) | 4 | CRITICAL | Öneri (onay bekliyor) |
-| INV-03 | Stok UI, düşük stok eşiği ve uyarısı | PLANNED | 2 | STANDARD | Öneri (onay bekliyor) |
+| INV-03 | Stok UI, düşük stok eşiği ve uyarısı | DONE-PR (PR #55) | 2 | STANDARD | Öneri (onay bekliyor) |
 | SHP-02 | Pazaryeri kargo entegrasyonu üzerinden etiket ve takip numarası | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
 | RPT-01 | Satış raporları (dönem, kanal, ürün) | DONE-MERGED (PR #53, merge `633f250`; dev `633f250`, 2026-11-14) | 3 | STANDARD | Öneri (onay bekliyor) |
 | OPS-01 | Yapılandırılmış log + hata izleme (ör. Sentry), istek kimliği | PLANNED | 2 | STANDARD | Öneri (onay bekliyor) |

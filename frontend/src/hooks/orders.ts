@@ -81,3 +81,16 @@ export function useCreateOrder() {
     onSuccess: () => qc.invalidateQueries({ queryKey: orderKeys.orders }),
   });
 }
+
+/** Reserves stock for every matched line in the default warehouse (INV-02). */
+export function useReserveOrder(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => bff<{ data: OrderDetail }>(`orders/${id}/reserve`, { method: 'POST', body: {} }),
+    onSuccess: (res) => {
+      qc.setQueryData(orderKeys.one(id), res);
+      return qc.invalidateQueries({ queryKey: ['inventory'] });
+    },
+  });
+}
+
