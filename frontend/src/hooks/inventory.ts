@@ -114,3 +114,22 @@ export function useSetThreshold() {
     }),
   );
 }
+
+/** INV-04: two movements (transfer_out / transfer_in) with one reference. */
+export function useStockTransfer() {
+  return useInventoryMutation(
+    (input: { fromWarehouseId: string; toWarehouseId: string; variantId: string; quantity: number }) =>
+      bff<{ data: { transferId: string; quantity: number } }>('stock-transfers', { method: 'POST', body: input }),
+  );
+}
+
+/** INV-04: counted quantity; the backend writes only the difference. */
+export function useStockCount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { warehouseId: string; variantId: string; counted: number }) =>
+      bff<{ data: { counted: number; difference: number } }>('stock-counts', { method: 'POST', body: input }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: inventoryKeys.all }),
+  });
+}
+
