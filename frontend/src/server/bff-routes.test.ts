@@ -165,6 +165,13 @@ describe('matchBffRoute', () => {
     expect(match('GET', 'stock-levels', 'tenant_id=x')).toEqual({ ok: false, status: 400 });
   });
 
+  it('allows the two exports read-only (IMP-04)', () => {
+    expect(match('GET', 'exports/products', 'company_id=x')).toMatchObject({ ok: true, body: false });
+    expect(match('GET', 'exports/stock')).toMatchObject({ ok: true });
+    expect(match('GET', 'exports/users')).toEqual({ ok: false, status: 404 });
+    expect(match('POST', 'exports/products')).toEqual({ ok: false, status: 404 });
+  });
+
   it('allows only the product import POST (IMP-01)', () => {
     expect(match('POST', 'imports/products')).toMatchObject({ ok: true, body: true });
     expect(match('GET', 'imports/products')).toEqual({ ok: false, status: 404 });

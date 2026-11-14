@@ -558,3 +558,11 @@ Tek bir izin istemez; her KPI kendi iznine bakar, görülemiyorsa `null` döner 
 - `integrationErrors` (`channels:manage`): son 7 günde başarısız senkron işleri.
 Hepsi üyenin firma rollerine göre süzülür.
 
+### Dışa aktarma (IMP-04)
+
+`GET /api/v1/exports/products?company_id` (`products:read`) ve `GET /api/v1/exports/stock?company_id` (`inventory:read`) → `{ data: { filename, rows, csv } }`. Yalnızca üyenin okuyabildiği firmalar (firma rolleri veritabanından).
+
+- CSV: UTF-8 BOM, `;` ayraç, tutarlar `249,90` biçiminde. Ürün dosyası içe aktarma şablonuyla **aynı kolonlardadır** (düzenlenip yeniden içe aktarılabilir); stok dosyası: `urun_adi;sku;depo;eldeki;ayrilmis;kullanilabilir;esik`.
+- `=`, `+`, `-`, `@`, sekme veya CR ile başlayan her hücrenin başına `'` eklenir (CSV/formül enjeksiyonu); `;`, `"` veya satır sonu içeren hücreler tırnaklanır.
+- En çok 20 000 satır (fazlası 422 `EXPORT_TOO_LARGE`; firma seçerek daraltın).
+

@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Package, Plus, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { NativeSelect, ProductStatusBadge } from '@/components/catalog/common';
+import { ExportButton } from '@/components/export-button';
 import { PageHeader } from '@/components/page-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -98,6 +99,7 @@ export default function ProductsPage() {
             <Button asChild variant="outline">
               <Link href="/products/import">İçe aktar</Link>
             </Button>
+            <ExportButton kind="products" companyId={filters.companyId || undefined} />
             <Button asChild variant="brand">
               <Link href="/products/new">
                 <Plus className="size-4" aria-hidden />

@@ -105,6 +105,8 @@ const ROUTES: readonly BffRoute[] = [
   { method: 'POST', path: /^stock-movements$/, body: true },
   { method: 'PUT', path: new RegExp(`^stock-thresholds/${UUID}$`), body: true },
   { method: 'POST', path: new RegExp(`^orders/${UUID}/reserve$`), body: true },
+  // Exports (IMP-04): CSV text inside a JSON body.
+  { method: 'GET', path: /^exports\/(products|stock)$/, query: ['company_id'] },
   // Product import (IMP-01): CSV text in the JSON body; dry run by default.
   { method: 'POST', path: /^imports\/products$/, body: true },
   // Dashboard KPIs (DSH-02).
