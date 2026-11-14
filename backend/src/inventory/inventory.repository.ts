@@ -93,6 +93,9 @@ function sqlState(error: unknown): string | undefined {
 export function mapStockError(error: unknown): never {
   if (error instanceof ConflictException || error instanceof NotFoundException)
     throw error;
+  // Prisma reports a serialization failure of an interactive transaction as P2034.
+  if ((error as { code?: unknown } | null)?.code === 'P2034')
+    throw BY_SQLSTATE['40001']();
   const state = sqlState(error);
   if (state === 'TS006') throw error; // tenant mismatch is a programming error: 500, never hidden
   if (state && BY_SQLSTATE[state]) throw BY_SQLSTATE[state]();

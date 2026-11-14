@@ -275,7 +275,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | INV-01 | Depo ve stok şeması; append-only stok hareketleri | P0 | CAT-01 | 3 | CRITICAL | A | DONE-MERGED (PR #44, merge `458ee82`; dev `458ee82`, 2026-11-14) | Stok = hareketlerin toplamı; hareket silinemez | M, E | Orta | Öneri (onay bekliyor) |
 | INV-02 | Rezervasyon ve sipariş bağlı düşüm (eşzamanlılık güvenli) | P0 | INV-01, ORD-01 | 4 | CRITICAL | A | DONE-MERGED (PR #51, merge `9d4eb11`; dev `9d4eb11`, 2026-11-14) | Paralel siparişlerde negatif stok oluşmaz (satır kilidi/koşullu güncelleme) | U, E, L | Orta (veri bütünlüğü) | Öneri (onay bekliyor) |
 | INV-03 | Stok UI, düşük stok eşiği ve uyarısı | P1 | INV-01 | 2 | STANDARD | A | DONE-MERGED (PR #55, merge `ad4de17`; dev `ad4de17`, 2026-11-14) | Eşik altı ürünler listelenir | F, P | Düşük | Öneri (onay bekliyor) |
-| INV-04 | Çoklu depo transferi ve stok sayımı | P2 | INV-02 | 3 | STANDARD | B | PLANNED | Transfer iki hareket olarak kaydedilir | E | Düşük | Öneri (onay bekliyor) |
+| INV-04 | Çoklu depo transferi ve stok sayımı | P2 | INV-02 | 3 | STANDARD | B | DONE-PR (PR #71; API, arayüz sonraki dilim; Sürüm B, öne alındı) | Transfer iki hareket olarak kaydedilir | E | Düşük | Öneri (onay bekliyor) |
 
 ## M11 — Kargo, iptal ve iade (`SHP`)
 
@@ -498,7 +498,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | INT-N11-02 | n11 stok ve fiyat senkronu | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
 | INT-N11-03 | n11 sipariş, kargo, iptal/iade | PLANNED | 5 | STANDARD | Öneri (onay bekliyor) |
 | ORD-04 | Manuel / telefonla sipariş girişi | PLANNED | 2 | FAST | Öneri (onay bekliyor) |
-| INV-04 | Çoklu depo transferi ve stok sayımı | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
+| INV-04 | Çoklu depo transferi ve stok sayımı | DONE-PR (PR #71; API, arayüz sonraki dilim; Sürüm B, öne alındı) | 3 | STANDARD | Öneri (onay bekliyor) |
 | SHP-01 | İptal ve iade akışı: talep, onay/ret, stok iadesi, kanal bildirimi | PLANNED | 4 | STANDARD | Öneri (onay bekliyor) |
 | SHP-03 | Anlaşmalı kargo firmaları API'leri (ör. Yurtiçi, Aras, MNG) | PLANNED | 5 | STANDARD | Öneri (onay bekliyor) |
 | EFT-01 | Özel entegratör adapter soyutlaması + ilk entegratör (sözleşme ve test hesabı gerekir) | PLANNED | 4 | CRITICAL | Öneri (onay bekliyor) |

@@ -121,3 +121,36 @@ export class SetThresholdDto {
   @Max(1000000)
   threshold: number | null;
 }
+
+/** INV-04: moves stock between two warehouses of one company (two movements, one id). */
+export class TransferDto {
+  @IsUUID()
+  fromWarehouseId: string;
+
+  @IsUUID()
+  toWarehouseId: string;
+
+  @IsUUID()
+  variantId: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(1000000)
+  quantity: number;
+}
+
+/** INV-04: the counted quantity; the difference to on_hand becomes one 'count' movement. */
+export class CountDto {
+  @IsUUID()
+  warehouseId: string;
+
+  @IsUUID()
+  variantId: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(1000000)
+  counted: number;
+}
