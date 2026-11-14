@@ -130,7 +130,7 @@
   - Tetikleyici `stock_movements_apply` (AFTER INSERT, `SECURITY DEFINER`, `search_path` sabit): önce `UPDATE … on_hand = on_hand + quantity` (satır kilidi; eşzamanlı düşümler sıraya girer), satır yoksa INSERT. CHECK `on_hand >= 0`: stoku eksiye düşürecek hareket tümüyle reddedilir (izole testte iki eşzamanlı −5 / 8 stok: biri reddedildi).
   - `tm_app`: yalnızca SELECT. `on_hand` ve yeni satır yalnızca tetikleyiciden gelir; `stock_guard` doğrudan `on_hand` değişikliğini ve satır silmeyi her rolde reddeder.
   - **INV-02 kararı:** `reserved` (≥ 0) yalnızca tenant kontrollü `SECURITY DEFINER` fonksiyonlarla (`reserve`/`release`) değişecek; doğrudan UPDATE yetkisi verilmeyecek. Kullanılabilir stok `on_hand − reserved`; `reserved <= on_hand` kuralı ve sipariş düşümünde önce rezervasyonun azaltılması INV-02'de.
-- Geri dönüş: `down.sql` (üç tablodan birinde satır varsa hiçbir şey değiştirmeden durur; tetikleyicileri ve fonksiyonları da kaldırır).
+- Geri dönüş: `down.sql` (üç tablodan birinde satır varsa hiçbir şey değiştirmeden durur; tetikleyicileri ve fonksiyonları da kaldırır). Prova dosyaları: `verify.sql` (yetki, tetikleyici, boş tablo kontrolleri) ve `rehearsal-seed.sql` (durma koşulu için test satırları), `backup-and-rehearse.sh` (OPS-08) tarafından kullanılır.
 
 ### channels
 - `channels` — id, company_id, type, name, credentials_ref, is_active
