@@ -260,7 +260,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 
 | ID | Görev | Öncelik | Bağımlılık | Tahmin | Mod | Sürüm | Durum | Kabul kriteri | Test | Güvenlik riski | Kaynak |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| ORD-01 | Sipariş şeması: sipariş, kalem, durum geçmişi, kanal referansı (tekil `channel + external_id`) | P0 | CAT-01 | 2 | CRITICAL | A | DONE-PR (PR #42) | Tutarlar `decimal`; kanal sipariş no tenant içinde tekil; migration provası | M, E | Yüksek | Öneri (onay bekliyor) |
+| ORD-01 | Sipariş şeması: sipariş, kalem, durum geçmişi, kanal referansı (tekil `channel + external_id`) | P0 | CAT-01 | 2 | CRITICAL | A | DONE-MERGED (PR #42, merge `93c03b1`; dev `93c03b1`, 2026-11-14) | Tutarlar `decimal`; kanal sipariş no tenant içinde tekil; migration provası | M, E | Yüksek | Öneri (onay bekliyor) |
 | ORD-02 | Sipariş API ve durum makinesi (geçersiz geçiş reddi, audit) | P0 | ORD-01 | 4 | STANDARD | A | PLANNED | Tüm geçişler test edilmiş tabloyla | U, E | Orta | Öneri (onay bekliyor) |
 | ORD-03 | Sipariş UI: liste, filtre, detay, toplu işlem (etiket yazdır, durum) | P0 | ORD-02 | 3 | STANDARD | A | PLANNED | Mobilde kart görünümü | F, P | Düşük | Öneri (onay bekliyor) |
 | ORD-04 | Manuel / telefonla sipariş girişi | P2 | ORD-02, CRM-01 | 2 | FAST | B | PLANNED | Stok düşümü otomatik | E | Düşük | Öneri (onay bekliyor) |
@@ -446,7 +446,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | INT-TY-01 | Trendyol bağlantısı + ürün oluşturma/güncelleme, batch durum takibi | PLANNED | 5 | STANDARD | Öneri (onay bekliyor) |
 | INT-TY-02 | Trendyol stok ve fiyat senkronu | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
 | INT-TY-03 | Trendyol sipariş çekme, paket durumu, kargo bilgisi, iptal (tedarik edememe) ve iade (claim) senkronu, yerel stok iadesi | PLANNED | 6 | STANDARD | Öneri (onay bekliyor) |
-| ORD-01 | Sipariş şeması: sipariş, kalem, durum geçmişi, kanal referansı (tekil `channel + external_id`) | DONE-PR (PR #42) | 2 | CRITICAL | Öneri (onay bekliyor) |
+| ORD-01 | Sipariş şeması: sipariş, kalem, durum geçmişi, kanal referansı (tekil `channel + external_id`) | DONE-MERGED (PR #42, merge `93c03b1`; dev `93c03b1`, 2026-11-14) | 2 | CRITICAL | Öneri (onay bekliyor) |
 | ORD-02 | Sipariş API ve durum makinesi (geçersiz geçiş reddi, audit) | PLANNED | 4 | STANDARD | Öneri (onay bekliyor) |
 | ORD-03 | Sipariş UI: liste, filtre, detay, toplu işlem (etiket yazdır, durum) | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
 | INV-01 | Depo ve stok şeması; append-only stok hareketleri | PLANNED | 3 | CRITICAL | Öneri (onay bekliyor) |

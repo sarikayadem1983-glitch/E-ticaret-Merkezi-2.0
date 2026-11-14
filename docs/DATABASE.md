@@ -129,7 +129,7 @@
 - `customers` — id, name, email, phone
 - `addresses` — id, customer_id, type, address fields
 
-### orders (ORD-01; migration `20261114120000_orders_schema`, izole veritabanında denendi)
+### orders (ORD-01; migration `20261114120000_orders_schema`, dev'e uygulandı 2026-11-14)
 - `orders` — id, tenant_id, company_id, channel (50), channel_account_id (NULL = elle girilen sipariş), external_order_no (100, NULL), status (30), currency `CHAR(3)`, subtotal, discount_total (satıcı indirimi), channel_discount_total (pazaryeri indirimi, ör. Trendyol `totalTyDiscount`), shipping_total, total (`NUMERIC(12,2)`), ordered_at, created_at, updated_at
   - Silme yok: `deleted_at` yok, `tm_app` için DELETE yok. İptal/iade bir durumdur.
   - Pazaryeri sipariş no tenant + kanal içinde tekil: kısmi tekil `(tenant_id, channel, external_order_no) WHERE external_order_no IS NOT NULL`. Aynı sipariş iki kez içeri alınamaz (ek koruma: `channel_external_refs`).
