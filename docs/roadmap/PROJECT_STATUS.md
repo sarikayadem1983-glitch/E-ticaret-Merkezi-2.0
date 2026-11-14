@@ -1,6 +1,6 @@
 # Proje Durumu
 
-Son güncelleme: 2026-11-14 (`main` @ `9062bb6` dev'e deploy edildi) · Kaynak: `origin/main` @ `9062bb6` · Güncelleme kuralları: `AGENTS.md` → "Yol haritası ve durum takibi".
+Son güncelleme: 2026-11-14 (`main` @ `75ce1de` dev'e deploy edildi) · Kaynak: `origin/main` @ `75ce1de` · Güncelleme kuralları: `AGENTS.md` → "Yol haritası ve durum takibi".
 
 ## 1. Özet
 
@@ -12,8 +12,8 @@ Son güncelleme: 2026-11-14 (`main` @ `9062bb6` dev'e deploy edildi) · Kaynak: 
 | Sürüm A (Trendyol-only MVP) ilerleme | 30 / 58 görev merge edildi ve dev'de; kalan 28 görev, 85 iş günü; tahmini hedef 2027-01-20 (taahhüt değil; OPS-08 ve USR-T11a sonrası yeniden hesaplanmadı) |
 | Sürüm B / C | 62 / 21 görev |
 | Açık PR | Yok |
-| `origin/main` | `9062bb6` (PR #47 merge, ORD-02). PR CI ✓ (backend, frontend) |
-| Dev ortamı | `9062bb6` (2026-11-14, kullanıcı onayıyla, bkz. §3h). Önceki `458ee82` (bkz. §3g). Önceki `70bae17` (2026-11-13, bkz. §3d). Backend `node dist/main` (WMI ile ayrık). Smoke: `tm-backups/smoke-70bae17.log`. Önceki: `736cb40` (bkz. §3c) |
+| `origin/main` | `75ce1de` (PR #49 merge, ORD-03). PR CI ✓ (backend, frontend; ilk koşuda kararsız sipariş testi düzeltildi) |
+| Dev ortamı | `75ce1de` (2026-11-14, kullanıcı onayıyla, bkz. §3i). Önceki `9062bb6` (bkz. §3h). Önceki `70bae17` (2026-11-13, bkz. §3d). Backend `node dist/main` (WMI ile ayrık). Smoke: `tm-backups/smoke-70bae17.log`. Önceki: `736cb40` (bkz. §3c) |
 | Dev DB şeması | Tüm migration'lar uygulandı; son `20261113120000_sync_engine` (INT-02, 2026-11-13, kullanıcı onayıyla; yedek `ticaret_merkezi-20261113-210949.dump`, izole prova ok). Önceki `20261112210000_user_tokens` (USR-19, kullanıcı onayıyla; yedek `ticaret_merkezi-20261112-210146.dump`; `migrate status` 2026-11-13: güncel). Önceki `20261112190000_channel_mapping` (CAT-06, 2026-11-12, kullanıcı onayıyla; yedek `ticaret_merkezi-20261112-184613.dump` + izole prova 10/10). Aşama 2 (`migrations-pending/`) uygulanmadı |
 | Son testler (`main` @ `0437c16`, CI run 41096842266) | backend unit 283/283, e2e 331/332 (1 skip: `mail.e2e-spec.ts`, Mailpit); frontend unit 124/124. Önceki tam tur (`8fc7ae3`, CI run 41053467144): build, lint, typecheck ok. Playwright CI'da koşmuyor. Önceki yerel tam tur (`95b5bdb`): build ok; frontend 81/81, lint ok, typecheck ok, `next build` ok; Playwright 13/13 yalnızca `next dev` ile — `next start` (prod modu, http) 11/13: `APP_ORIGIN` https koruması, bkz. R-24 |
 
@@ -27,16 +27,27 @@ Son güncelleme: 2026-11-14 (`main` @ `9062bb6` dev'e deploy edildi) · Kaynak: 
 | M03 DSH | 1 / 3 | 33 | İskelet |
 | M04 CAT | 6 / 6 | 100 | Hepsi dev'de; CAT-06 backend dilimi (UI: CAT-06b) |
 | M08 INT | 3 / 25 | 12 | INT-01 (`7b3c0b9`), INT-02 (`70bae17`), INT-03 (`65fcf85`) dev'de |
-| M06 ORD | 2 / 3 | 67 | ORD-01 (`93c03b1`), ORD-02 (`9062bb6`) dev'de |
+| M06 ORD | 3 / 3 | 100 | ORD-01 (`93c03b1`), ORD-02 (`9062bb6`), ORD-03 (`75ce1de`) dev'de |
 | M07 INV | 1 / 3 | 33 | INV-01 (`458ee82`) dev'de |
 | Diğer | 0 / 43 | 0 | Başlanmadı |
-| **Toplam** | **45 / 141** | **31,9** | Dev'e deploy edilmiş: 45 / 141 (%31,9) |
+| **Toplam** | **46 / 141** | **32,6** | Dev'e deploy edilmiş: 46 / 141 (%32,6) |
 
 ## 2. Merge edilen, deploy edilmemiş PR'lar
 
 Yok. #25–#30 (`5ac1401`) 2026-11-12'de dev'e deploy edildi. #6–#16 (`f010233`), #19 (`8fc7ae3`), #22 ve #23 (`0437c16`) 2026-10-30'da dev'e deploy edildi ve bu tablodan çıkarıldı; ayrıntı §3 ve §6.
 
 Aşama 2 SQL'i (`migrations-pending/`) uygulanmadı (USR-18).
+
+## 3i. Dev deploy kaydı (2026-11-14, `main` @ `75ce1de`)
+
+Yalnızca dev ortamında, kullanıcı onayıyla (2026-11-14 peşin onay). `5769db9` → `75ce1de`: #49 ORD-03 (frontend sipariş ekranları + ORD-02 kalem sıralaması düzeltmesi). Migration yok.
+
+- PR CI: ilk koşu backend e2e'de kararsız (aynı INSERT'te oluşan kalemlerin sırası); `created_at, sku` sıralamasıyla düzeltildi, ikinci koşu ✓.
+- Backend build + `node dist/main` WMI ile yeniden başlatıldı (log `tm-backups/backend-75ce1de.log`); `/health` ok. Frontend `npm run dev` (çalışıyordu) dosyaları sıcak yükledi.
+- Smoke (`tm-backups/smoke-75ce1de.log`): 26/26. Not: kayıt ucu IP başına saatte 5 ile sınırlı olduğundan smoke betiği artık kayıtlı iki test hesabıyla giriş yapıyor (ilk deneme 429 aldı; uygulama hatası değil).
+- Arayüz (Playwright betiği `tm-backups/ui-shots.mjs`, yerel test hesabı): `/orders`, `/orders/[id]`, `/orders/new` masaüstü 1280 ve mobil 390; konsol hatası yok; ekran görüntüleri `tm-backups/ui-shots/`.
+- Pazaryerine istek gönderilmedi.
+- Geri alma: `git checkout 9062bb6`, backend build + yeniden başlatma.
 
 ## 3h. Dev deploy kaydı (2026-11-14, `main` @ `9062bb6`)
 
@@ -294,6 +305,7 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 | 2026-11-13 | INT-02 → DONE-PR (merge edilmedi) | [#38](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/38) | yerel (izole `tm_e2e_sync`): unit 348/348, e2e 411/412 (1 skip Mailpit), lint ok, build ok; bağımsız CRITICAL inceleme 2 tur → APPROVE | yok; migration dev DB'ye uygulanmadı |
 | 2026-11-13 | INT-02 → DONE-MERGED (merge `70bae17`, dev `70bae17`, kullanıcı onayı) | [#38](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/38) | CI ✓; izole prova ok; dev smoke 22/22 + USR-19 kontrolü | dev `70bae17` |
 | 2026-11-13 | INT-03 → DONE-PR (merge edilmedi) | [#40](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/40) | backend: bağlantı testi e2e 6/6 (sahte Trendyol sunucusu), sync e2e 21/21; frontend unit 177/177, lint ok, typecheck ok. `next build` ve Playwright yerelde koşulmadı (bellek); CI'ye bırakıldı | yok; migration yok |
+| 2026-11-14 | ORD-03 → DONE-MERGED (merge `75ce1de`, dev `75ce1de`, kullanıcı onayı) | [#49](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/49) | frontend unit 182/182, lint ok, typecheck ok; PR CI ✓ (2. koşu); dev smoke 26/26; arayüz masaüstü+mobil, konsol hatası yok | dev `75ce1de` |
 | 2026-11-14 | ORD-02 → DONE-MERGED (merge `9062bb6`, dev `9062bb6`, kullanıcı onayı) | [#47](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/47) | unit 531/531 (169 geçiş hücresi); izole e2e 432/433 (1 skip Mailpit); PR CI ✓; dev smoke 26/26 | dev `9062bb6` |
 | 2026-11-14 | OPS-08 → DONE-MERGED (merge `63bbb94`) | [#45](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/45) | dev yedeğiyle 2 koşu: bekleyen yok → 2/2 çıkış 0; INV-01 bekliyorken 14/14 | betik; INV-01 deploy provasında kullanıldı |
 | 2026-11-14 | INV-01 → DONE-MERGED (merge `458ee82`, dev `458ee82`, kullanıcı onayı) | [#44](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/44) | unit 358/358; izole e2e 425/426 (1 skip Mailpit); migration testi 4/4 (tm_app ile kilit beklemesi doğrulanmış eşzamanlılık); bağımsız CRITICAL inceleme 2 tur → APPROVE; prova 14/14; dev smoke 21/21 | dev `458ee82` |
