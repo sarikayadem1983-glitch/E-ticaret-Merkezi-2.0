@@ -383,7 +383,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | OPS-02 | Metrikler, uptime ve alarm (DB, Redis, kuyruk, entegrasyon hata oranı) | P0 | OPS-01, INF-11 | 3 | STANDARD | B | PLANNED | Alarm kanalı test edildi | Smoke | Orta | Öneri (onay bekliyor) |
 | OPS-03 | Otomatik yedekleme ve geri yükleme (PITR), geri yükleme tatbikatı | P0 | — | 3 | CRITICAL | A | PLANNED | Belgelenmiş RPO/RTO; tatbikat başarılı | M | Kritik | Öneri (onay bekliyor) |
 | OPS-06 | Yük ve performans testi (senkron, sipariş içeri alma, raporlar) | P1 | INF-11 | 3 | STANDARD | B | PLANNED | Hedef p95 süreleri belgelendi ve karşılandı | L | Orta | Öneri (onay bekliyor) |
-| OPS-08 | `backup-and-rehearse.sh` genelleştirme: başlangıç noktası hedef DB'nin son uygulanmış migration'ından otomatik; yalnızca bekleyen migration'ların kontrolleri (migration klasöründe `verify.sql`); `down.sql` provası (boş ve dolu veriyle durma koşulu); Aşama 1 kontrolleri yalnızca Aşama 1 bekliyorken | P1 | — | 1 | STANDARD | A | PLANNED | Dev'in mevcut durumunda (CAT-01 uygulanmış) betik çıkış 0 verir; bekleyen migration yoksa açıkça bunu raporlar; CAT-01 benzeri yeni bir migration için `verify.sql` kontrolleri ve `down.sql` provası raporda görünür; hiçbir aşamada kaynak DB'ye yazılmaz (yalnızca `pg_dump`); `tm_` dışı DB oluşturulmaz/silinmez; rapor satır içeriği içermez | M (izole) | Orta (yanlış prova güveni) | Kullanıcı kararı (2026-10-30) |
+| OPS-08 | `backup-and-rehearse.sh` genelleştirme: başlangıç noktası hedef DB'nin son uygulanmış migration'ından otomatik; yalnızca bekleyen migration'ların kontrolleri (migration klasöründe `verify.sql`); `down.sql` provası (boş ve dolu veriyle durma koşulu); Aşama 1 kontrolleri yalnızca Aşama 1 bekliyorken | P1 | — | 1 | STANDARD | A | DONE-PR (PR #45) | Dev'in mevcut durumunda (CAT-01 uygulanmış) betik çıkış 0 verir; bekleyen migration yoksa açıkça bunu raporlar; CAT-01 benzeri yeni bir migration için `verify.sql` kontrolleri ve `down.sql` provası raporda görünür; hiçbir aşamada kaynak DB'ye yazılmaz (yalnızca `pg_dump`); `tm_` dışı DB oluşturulmaz/silinmez; rapor satır içeriği içermez | M (izole) | Orta (yanlış prova güveni) | Kullanıcı kararı (2026-10-30) |
 
 ### OPS-E2 Yönetim ve uyum
 
@@ -456,7 +456,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | RPT-01 | Satış raporları (dönem, kanal, ürün) | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
 | OPS-01 | Yapılandırılmış log + hata izleme (ör. Sentry), istek kimliği | PLANNED | 2 | STANDARD | Öneri (onay bekliyor) |
 | OPS-03 | Otomatik yedekleme ve geri yükleme (PITR), geri yükleme tatbikatı | PLANNED | 3 | CRITICAL | Öneri (onay bekliyor) |
-| OPS-08 | `backup-and-rehearse.sh` genelleştirme (son migration'dan başlangıç, `verify.sql`, `down.sql` provası) | PLANNED | 1 | STANDARD | Kullanıcı kararı (2026-10-30) |
+| OPS-08 | `backup-and-rehearse.sh` genelleştirme (son migration'dan başlangıç, `verify.sql`, `down.sql` provası) | DONE-PR (PR #45) | 1 | STANDARD | Kullanıcı kararı (2026-10-30) |
 
 ### Sürüm B — Ticari SaaS (62 görev: 0 tamamlandı + 62 kalan; kalan tahmin 190 iş günü; 23 EPIC)
 

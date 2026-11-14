@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
-# Backup + restore check + isolated migration rehearsal (spec "Migration güvenliği" 1, 2, 4, 5).
+# Backup + restore check + isolated rehearsal of every PENDING migration (OPS-08).
+#
+# Pending = migration folders not yet applied in the source database (all must be newer than the
+# last applied one). For them: prisma migrate deploy on a restored copy, optional per-migration
+# verify.sql (rows: name|t/f|detail), old tables' row counts unchanged, second deploy is a no-op;
+# on separate copies, down.sql in reverse order must restore the pre-migration schema, and with
+# an optional rehearsal-seed.sql (test rows in the new tables) down.sql must stop and change
+# nothing. With nothing pending the script says so and exits 0 after the backup/restore check.
+# The phase 1 (tenant_memberships) checks run only while that migration is pending.
 #
 # Usage: bash database/scripts/backup-and-rehearse.sh <out-dir>
 #   <out-dir> must be outside the repository (the dump holds real user data).
@@ -26,6 +34,9 @@ DB_REHEARSAL=tm_migration_rehearsal
 DB_ROLLBACK=tm_rollback_rehearsal
 DB_ROLLBACK_STOP=tm_rollback_stop_rehearsal
 DB_ROLLBACK_NULL=tm_rollback_null_rehearsal
+DB_DOWN=tm_down_rehearsal
+DB_DOWN_STOP=tm_down_stop_rehearsal
+MIGRATIONS="$REPO/database/prisma/migrations"
 
 die() { echo "HATA: $*" >&2; exit 2; }
 
@@ -55,7 +66,7 @@ assert_target() {
   case "$db" in tm_*) ;; *) die "hedef adı tm_ ile başlamalı: $db" ;; esac
   [ "$db" != "$SOURCE_DB" ] || die "hedef kaynak veritabanı olamaz: $db"
 }
-for d in $DB_CHECK $DB_REHEARSAL $DB_ROLLBACK $DB_ROLLBACK_STOP $DB_ROLLBACK_NULL; do assert_target "$d"; done
+for d in $DB_CHECK $DB_REHEARSAL $DB_ROLLBACK $DB_ROLLBACK_STOP $DB_ROLLBACK_NULL $DB_DOWN $DB_DOWN_STOP; do assert_target "$d"; done
 
 url_for() { assert_target "$1"; printf 'postgresql://%s:%s@%s:%s/%s' "$MIG_USER" "$MIG_PASS" "$MIG_HOST" "$MIG_PORT" "$1"; }
 
@@ -75,7 +86,7 @@ create_db() { assert_target "$1"; echo ">> HEDEF DB: $1 (CREATE${2:+ TEMPLATE $2
 restore_into() { assert_target "$1"; echo ">> HEDEF DB: $1 (pg_restore)"
   docker exec -i "$CONTAINER" pg_restore -U "$PG_SUPER" -d "$1" --exit-on-error < "$DUMP"; }
 
-cleanup() { set +e; for d in $DB_CHECK $DB_REHEARSAL $DB_ROLLBACK $DB_ROLLBACK_STOP $DB_ROLLBACK_NULL; do drop_db "$d" >/dev/null 2>&1; done; }
+cleanup() { set +e; for d in $DB_CHECK $DB_REHEARSAL $DB_ROLLBACK $DB_ROLLBACK_STOP $DB_ROLLBACK_NULL $DB_DOWN $DB_DOWN_STOP; do drop_db "$d" >/dev/null 2>&1; done; }
 trap cleanup EXIT
 
 # Verifies through the exact URL handed to prisma that it reaches the rehearsal db.
@@ -116,6 +127,19 @@ SELECT md5(
   || '|' || (SELECT string_agg(table_name || '.' || column_name || ':' || data_type || ':' || is_nullable, ',' ORDER BY table_name, column_name)
    FROM information_schema.columns WHERE table_schema = 'public')
   || '|' || (SELECT string_agg(migration_name || ':' || checksum || ':' || coalesce(finished_at::text, '-'), ',' ORDER BY migration_name) FROM _prisma_migrations));"
+COUNTS_SQL="SELECT coalesce(string_agg(t.table_name || '=' ||
+     (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from public.%I', t.table_name), false, true, '')))[1]::text, ',' ORDER BY t.table_name), '')
+   FROM information_schema.tables t WHERE t.table_schema = 'public' AND t.table_type = 'BASE TABLE' AND t.table_name <> '_prisma_migrations';"
+# Schema only (columns, indexes, constraints, functions, triggers, tm_app/tm_migrator grants).
+SCHEMA_SQL="SELECT md5(
+  coalesce((SELECT string_agg(table_name || '.' || column_name || ':' || data_type || ':' || is_nullable, ',' ORDER BY table_name, column_name)
+   FROM information_schema.columns WHERE table_schema = 'public' AND table_name <> '_prisma_migrations'), '')
+  || '|' || coalesce((SELECT string_agg(indexname || ':' || indexdef, ',' ORDER BY indexname) FROM pg_indexes WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'), '')
+  || '|' || coalesce((SELECT string_agg(conname || ':' || pg_get_constraintdef(oid), ',' ORDER BY conname) FROM pg_constraint WHERE connamespace = 'public'::regnamespace), '')
+  || '|' || coalesce((SELECT string_agg(proname, ',' ORDER BY proname) FROM pg_proc WHERE pronamespace = 'public'::regnamespace), '')
+  || '|' || coalesce((SELECT string_agg(tgname, ',' ORDER BY tgname) FROM pg_trigger WHERE NOT tgisinternal), '')
+  || '|' || coalesce((SELECT string_agg(table_name || ':' || grantee || ':' || privilege_type, ',' ORDER BY table_name, grantee, privilege_type)
+       FROM information_schema.role_table_grants WHERE table_schema = 'public' AND grantee IN ('tm_app', 'tm_migrator')), ''));"
 USERS_SQL="SELECT count(*) || '|' || md5(coalesce(string_agg(id::text, ',' ORDER BY id), '')) FROM users;"
 LATEST_SQL="SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY migration_name DESC LIMIT 1;"
 
@@ -123,7 +147,7 @@ TS="$(date +%Y%m%d-%H%M%S)"
 DUMP="$OUT/$SOURCE_DB-$TS.dump"
 : > "$REPORT"; : > "$RESTORE_REPORT"
 {
-  echo "Migration rehearsal — $PHASE1"
+  echo "Migration rehearsal — bekleyen migration'lar"
   echo "Kaynak: $SOURCE_DB (yalnızca pg_dump ile okundu)  Zaman: $TS"
   echo "Satır içerikleri yazılmaz; yalnızca sayılar ve kontrol adları."
 } >> "$REPORT"
@@ -160,6 +184,8 @@ fi
 echo "sonuç: $([ "$DUMP_COUNTS" = "$RESTORED_COUNTS" ] && echo ok || echo FARK)" >> "$RESTORE_REPORT"
 drop_db $DB_CHECK
 
+# --- phase 1 (tenant_memberships) checks: only while it is pending ---------------
+rehearse_phase1() {
 # --- 3. rehearsal ----------------------------------------------------------------
 create_db $DB_REHEARSAL
 restore_into $DB_REHEARSAL
@@ -279,6 +305,100 @@ NULL_MSG="$(echo "$NULL_ERR" | grep -o 'rollback durdu: tenant_id olmayan' | hea
 check rollback_stops_on_null_tenant_user "$([ "$NULL_RC" -ne 0 ] && [ -n "$NULL_MSG" ] && [ "$NULL_FP1" = "$NULL_FP2" ] && [ "$NULL_VERIFY" = 0 ] && echo t || echo f)" "psql çıkış=$NULL_RC mesaj='${NULL_MSG:-yok}' parmak izi değişmedi=$([ "$NULL_FP1" = "$NULL_FP2" ] && echo evet || echo HAYIR) verify-after başarısız_satır=$NULL_VERIFY"
 drop_db $DB_ROLLBACK_NULL
 drop_db $DB_REHEARSAL
+
+}
+
+# --- 3. pending migrations ------------------------------------------------------
+create_db $DB_REHEARSAL
+restore_into $DB_REHEARSAL
+section "2. Bekleyen migration'lar ($DB_REHEARSAL)"
+BEFORE_LATEST="$(psql_admin $DB_REHEARSAL -c "$LATEST_SQL")"
+APPLIED="$(psql_admin $DB_REHEARSAL -c "SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY 1;")"
+PENDING=()
+for dir in "$MIGRATIONS"/*/; do
+  name="$(basename "$dir")"
+  [[ "$name" =~ ^[0-9]{14}_ ]] || continue
+  grep -qx "$name" <<< "$APPLIED" && continue
+  [[ "$name" > "$BEFORE_LATEST" ]] || die "uygulanmamış eski migration: $name (son uygulanan $BEFORE_LATEST)"
+  PENDING+=("$name")
+done
+echo "son_uygulanan=$BEFORE_LATEST bekleyen=${#PENDING[@]} ${PENDING[*]:-}" >> "$REPORT"
+
+if [ ${#PENDING[@]} -eq 0 ]; then
+  echo "BEKLEYEN MIGRATION YOK: kaynak veritabanı güncel ($BEFORE_LATEST)." >> "$REPORT"
+  drop_db $DB_REHEARSAL
+elif [ "${PENDING[0]}" = "$PHASE1" ]; then
+  [ ${#PENDING[@]} -eq 1 ] || die "Aşama 1 ile birlikte başka migration bekliyor; önce yalnızca Aşama 1'i uygulayın"
+  drop_db $DB_REHEARSAL
+  rehearse_phase1
+else
+  for name in "${PENDING[@]}"; do [ -f "$MIGRATIONS/$name/down.sql" ] || die "down.sql yok: $name"; done
+  COUNTS_BEFORE="$(psql_admin $DB_REHEARSAL -c "$COUNTS_SQL")"
+  SCHEMA_BEFORE="$(psql_admin $DB_REHEARSAL -c "$SCHEMA_SQL")"
+  # Copy of the pre-migration state for the down.sql rehearsal.
+  create_db $DB_DOWN $DB_REHEARSAL
+
+  section "3. prisma migrate deploy ($DB_REHEARSAL)"
+  T0="$(now_ms)"
+  DEPLOY_OUT="$(prisma_deploy $DB_REHEARSAL)" || { echo "$DEPLOY_OUT" | grep -v -i 'postgresql://' >&2; check migrate_deploy f "başarısız"; exit 1; }
+  MIG_MS=$(( $(now_ms) - T0 ))
+  for name in "${PENDING[@]}"; do
+    check "applied:$name" "$(echo "$DEPLOY_OUT" | grep -q "$name" && echo t || echo f)" "süre_ms(toplam)=$MIG_MS"
+  done
+  STILL="$(psql_admin $DB_REHEARSAL -c "$LATEST_SQL")"
+  check latest_is_last_pending "$([ "$STILL" = "${PENDING[-1]}" ] && echo t || echo f)" "son_migration=$STILL"
+
+  section "4. verify.sql"
+  for name in "${PENDING[@]}"; do
+    vf="$MIGRATIONS/$name/verify.sql"
+    if [ -f "$vf" ]; then
+      VERIFY_OUT="$(psql_mig $DB_REHEARSAL -F '|' < "$vf")"
+      while IFS='|' read -r vname ok detail; do
+        [ -n "$vname" ] || continue
+        check "$name:$vname" "$ok" "$detail"
+      done <<< "$VERIFY_OUT"
+    else
+      echo "$name: verify.sql yok (yalnızca genel kontroller)" >> "$REPORT"
+    fi
+  done
+
+  section "5. Eski tablolar ve tekrar çalıştırma"
+  COUNTS_OLD_AFTER="$(psql_admin $DB_REHEARSAL -c "$COUNTS_SQL" | tr ',' '\n' | grep -F -f <(tr ',' '\n' <<< "$COUNTS_BEFORE" | sed 's/=.*/=/') | paste -sd, -)"
+  check old_tables_unchanged "$([ "$COUNTS_OLD_AFTER" = "$COUNTS_BEFORE" ] && echo t || echo f)" "tablo=$(tr ',' '\n' <<< "$COUNTS_BEFORE" | grep -c .) satır sayıları eşit=$([ "$COUNTS_OLD_AFTER" = "$COUNTS_BEFORE" ] && echo evet || echo HAYIR)"
+  FP1="$(psql_admin $DB_REHEARSAL -c "$FINGERPRINT_SQL")"
+  DEPLOY2="$(prisma_deploy $DB_REHEARSAL)" || DEPLOY2=""
+  FP2="$(psql_admin $DB_REHEARSAL -c "$FINGERPRINT_SQL")"
+  check second_deploy_noop "$(echo "$DEPLOY2" | grep -qi 'No pending migrations' && [ "$FP1" = "$FP2" ] && echo t || echo f)" "parmak izi değişmedi=$([ "$FP1" = "$FP2" ] && echo evet || echo HAYIR)"
+
+  section "6. down.sql provası (boş yeni tablolar, ters sıra, $DB_DOWN)"
+  for name in "${PENDING[@]}"; do echo ">> HEDEF DB: $DB_DOWN ($name/migration.sql)"; psql_mig $DB_DOWN < "$MIGRATIONS/$name/migration.sql" >/dev/null; done
+  DOWN_OK=t
+  for (( i=${#PENDING[@]}-1; i>=0; i-- )); do
+    name="${PENDING[$i]}"
+    set +e; psql_mig $DB_DOWN < "$MIGRATIONS/$name/down.sql" >/dev/null 2>&1; rc=$?; set -e
+    check "down:$name" "$([ "$rc" = 0 ] && echo t || echo f)" "psql çıkış=$rc"
+    [ "$rc" = 0 ] || DOWN_OK=f
+  done
+  SCHEMA_DOWN="$(psql_admin $DB_DOWN -c "$SCHEMA_SQL")"
+  COUNTS_DOWN="$(psql_admin $DB_DOWN -c "$COUNTS_SQL")"
+  check down_restores_schema "$([ "$DOWN_OK" = t ] && [ "$SCHEMA_DOWN" = "$SCHEMA_BEFORE" ] && [ "$COUNTS_DOWN" = "$COUNTS_BEFORE" ] && echo t || echo f)" "şema eşit=$([ "$SCHEMA_DOWN" = "$SCHEMA_BEFORE" ] && echo evet || echo HAYIR) satır sayıları eşit=$([ "$COUNTS_DOWN" = "$COUNTS_BEFORE" ] && echo evet || echo HAYIR)"
+  drop_db $DB_DOWN
+
+  section "7. down.sql durma koşulu (rehearsal-seed.sql ile dolu veri)"
+  for name in "${PENDING[@]}"; do
+    seed="$MIGRATIONS/$name/rehearsal-seed.sql"
+    if [ ! -f "$seed" ]; then echo "$name: rehearsal-seed.sql yok (durma koşulu denenmedi)" >> "$REPORT"; continue; fi
+    create_db $DB_DOWN_STOP $DB_REHEARSAL
+    echo ">> HEDEF DB: $DB_DOWN_STOP (rehearsal-seed.sql)"
+    psql_admin $DB_DOWN_STOP < "$seed" >/dev/null
+    S1="$(psql_admin $DB_DOWN_STOP -c "$FINGERPRINT_SQL")"
+    set +e; psql_mig $DB_DOWN_STOP < "$MIGRATIONS/$name/down.sql" >/dev/null 2>&1; rc=$?; set -e
+    S2="$(psql_admin $DB_DOWN_STOP -c "$FINGERPRINT_SQL")"
+    check "down_stops_with_data:$name" "$([ "$rc" -ne 0 ] && [ "$S1" = "$S2" ] && echo t || echo f)" "psql çıkış=$rc parmak izi değişmedi=$([ "$S1" = "$S2" ] && echo evet || echo HAYIR)"
+    drop_db $DB_DOWN_STOP
+  done
+  drop_db $DB_REHEARSAL
+fi
 
 section "Sonuç"
 TOTAL="$(grep -c ' ok=' "$REPORT")"
