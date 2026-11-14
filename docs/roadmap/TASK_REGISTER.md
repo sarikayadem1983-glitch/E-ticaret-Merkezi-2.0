@@ -379,7 +379,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 
 | ID | Görev | Öncelik | Bağımlılık | Tahmin | Mod | Sürüm | Durum | Kabul kriteri | Test | Güvenlik riski | Kaynak |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| OPS-01 | Yapılandırılmış log + hata izleme (ör. Sentry), istek kimliği | P0 | — | 2 | STANDARD | A | DONE-PR (PR #59; Sentry hariç, kullanıcı kararı) | Loglarda kişisel veri/secret yok (otomatik maskeleme testi) | U | Orta | Öneri (onay bekliyor) |
+| OPS-01 | Yapılandırılmış log + hata izleme (ör. Sentry), istek kimliği | P0 | — | 2 | STANDARD | A | DONE-MERGED (`ce85f36`, PR yok — süreç sapması, bkz. PROJECT_STATUS §3n; dev `ce85f36`, 2026-11-14; Sentry hariç, kullanıcı kararı) | Loglarda kişisel veri/secret yok (otomatik maskeleme testi) | U | Orta | Öneri (onay bekliyor) |
 | OPS-02 | Metrikler, uptime ve alarm (DB, Redis, kuyruk, entegrasyon hata oranı) | P0 | OPS-01, INF-11 | 3 | STANDARD | B | PLANNED | Alarm kanalı test edildi | Smoke | Orta | Öneri (onay bekliyor) |
 | OPS-03 | Otomatik yedekleme ve geri yükleme (PITR), geri yükleme tatbikatı | P0 | — | 3 | CRITICAL | A | PLANNED | Belgelenmiş RPO/RTO; tatbikat başarılı | M | Kritik | Öneri (onay bekliyor) |
 | OPS-06 | Yük ve performans testi (senkron, sipariş içeri alma, raporlar) | P1 | INF-11 | 3 | STANDARD | B | PLANNED | Hedef p95 süreleri belgelendi ve karşılandı | L | Orta | Öneri (onay bekliyor) |
@@ -454,7 +454,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | INV-03 | Stok UI, düşük stok eşiği ve uyarısı | DONE-MERGED (PR #55, merge `ad4de17`; dev `ad4de17`, 2026-11-14) | 2 | STANDARD | Öneri (onay bekliyor) |
 | SHP-02 | Pazaryeri kargo entegrasyonu üzerinden etiket ve takip numarası | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
 | RPT-01 | Satış raporları (dönem, kanal, ürün) | DONE-MERGED (PR #53, merge `633f250`; dev `633f250`, 2026-11-14) | 3 | STANDARD | Öneri (onay bekliyor) |
-| OPS-01 | Yapılandırılmış log + hata izleme (ör. Sentry), istek kimliği | DONE-PR (PR #59; Sentry hariç, kullanıcı kararı) | 2 | STANDARD | Öneri (onay bekliyor) |
+| OPS-01 | Yapılandırılmış log + hata izleme (ör. Sentry), istek kimliği | DONE-MERGED (`ce85f36`, PR yok — süreç sapması, bkz. PROJECT_STATUS §3n; dev `ce85f36`, 2026-11-14; Sentry hariç, kullanıcı kararı) | 2 | STANDARD | Öneri (onay bekliyor) |
 | OPS-03 | Otomatik yedekleme ve geri yükleme (PITR), geri yükleme tatbikatı | PLANNED | 3 | CRITICAL | Öneri (onay bekliyor) |
 | OPS-08 | `backup-and-rehearse.sh` genelleştirme (son migration'dan başlangıç, `verify.sql`, `down.sql` provası) | DONE-MERGED (PR #45, merge `63bbb94`; dev provasında kullanıldı, 2026-11-14) | 1 | STANDARD | Kullanıcı kararı (2026-10-30) |
 
