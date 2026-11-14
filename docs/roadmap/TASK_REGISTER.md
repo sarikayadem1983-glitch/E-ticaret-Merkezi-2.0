@@ -130,7 +130,7 @@ Kaynak: `docs/superpowers/plans/2026-10-28-user-management.md` (T1–T16 numaral
 | ID | Görev | Öncelik | Bağımlılık | Tahmin | Mod | Sürüm | Durum | Kabul kriteri | Test | Güvenlik riski | Kaynak |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | DSH-01 | Uygulama kabuğu ve dashboard iskeleti | P1 | INF-07 | — | FAST | A | DONE-MERGED (PR #4) | — | P | Düşük | Onaylı plan |
-| DSH-02 | KPI kartları: günlük sipariş, ciro, bekleyen kargo, düşük stok, entegrasyon hataları | P1 | ORD-02, INV-01, INT-03 | 3 | STANDARD | B | PLANNED | Değerler rapor sorgularıyla aynı; firma rolüne göre filtreli | E, P | Düşük | Öneri (onay bekliyor) |
+| DSH-02 | KPI kartları: günlük sipariş, ciro, bekleyen kargo, düşük stok, entegrasyon hataları | P1 | ORD-02, INV-01, INT-03 | 3 | STANDARD | B | DONE-PR (PR #64; Sürüm B görevi, bağımlılıkları bittiği için öne alındı) | Değerler rapor sorgularıyla aynı; firma rolüne göre filtreli | E, P | Düşük | Öneri (onay bekliyor) |
 | DSH-03 | Bildirim merkezi (uygulama içi + e-posta tercihleri) | P2 | INF-09, USR-T9 | 3 | STANDARD | B | PLANNED | Bildirim yalnızca yetkili kullanıcıya | E | Düşük | Öneri (onay bekliyor) |
 
 ## M04 — Ürün kataloğu (`CAT`)
@@ -481,7 +481,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | USR-18 | Aşama 2 migration: `users.tenant_id` / `users.is_active` eski kolonlarını kaldırma; önce guard ve login/refresh'in `users.is_active` okuması yeni modele taşınır | BLOCKED (T16 + ayrı migration onayı) | 3 | CRITICAL | Öneri (onay bekliyor) |
 | USR-20 | İki adımlı doğrulama (TOTP) ve kurtarma kodları | PLANNED | 3 | CRITICAL | Öneri (onay bekliyor) |
 | USR-21 | Sahiplik devri (owner rolünü devretme) | PLANNED | 1,5 | CRITICAL | Kullanıcı kararı (2026-10-30) |
-| DSH-02 | KPI kartları: günlük sipariş, ciro, bekleyen kargo, düşük stok, entegrasyon hataları | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
+| DSH-02 | KPI kartları: günlük sipariş, ciro, bekleyen kargo, düşük stok, entegrasyon hataları | DONE-PR (PR #64; Sürüm B görevi, bağımlılıkları bittiği için öne alındı) | 3 | STANDARD | Öneri (onay bekliyor) |
 | DSH-03 | Bildirim merkezi (uygulama içi + e-posta tercihleri) | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
 | IMP-02 | Asenkron içe aktarma işi (kuyruk), ilerleme ve hata raporu indirme | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
 | IMP-03 | URL'den ürün içe aktarma (sayfa/feed çekme) | PLANNED | 4 | CRITICAL | Öneri (onay bekliyor) |

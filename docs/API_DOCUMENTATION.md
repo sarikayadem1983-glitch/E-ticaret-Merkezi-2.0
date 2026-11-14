@@ -546,3 +546,15 @@ Yanıt 200 `{ data: { rows, products, variants, errors: [{ row, column, message 
 - `dryRun: false` yalnızca hata yoksa yazar; ürünler `ProductsService.create` ile tek tek oluşturulur (aynı kurallar ve Audit Log). Arada bir ürün başarısız olursa 422 `IMPORT_STOPPED` (kaç ürün oluşturulduğu mesajda).
 - 404 firma yok / erişim yok.
 
+### Dashboard (DSH-02)
+
+#### GET /api/v1/dashboard/kpis?company_id
+
+Tek bir izin istemez; her KPI kendi iznine bakar, görülemiyorsa `null` döner (kısmi sayı asla). Yanıt `{ data: { day, todaySales, pendingShipment, lowStock, integrationErrors } }`:
+- `day`: İstanbul tarihi (`YYYY-AA-GG`).
+- `todaySales` (`orders:read`): `GET /reports/sales?from=day&to=day` ile **aynı** `meta.totals` (para birimi başına; iptal/tedarik edilemeyen hariç, iade ayrı).
+- `pendingShipment` (`orders:read`): `awaiting, created, picking, invoiced, unpacked, repack` durumundaki siparişler.
+- `lowStock` (`inventory:read`): `GET /stock-levels/low` satır sayısı.
+- `integrationErrors` (`channels:manage`): son 7 günde başarısız senkron işleri.
+Hepsi üyenin firma rollerine göre süzülür.
+

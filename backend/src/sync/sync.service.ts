@@ -561,6 +561,17 @@ export class SyncService {
       throw new Error(failure.code);
     }
   }
+
+  /** Failed sync jobs since `since` (DSH-02). The caller checks channels:manage. */
+  failedCount(since: Date, companyId?: string): Promise<number> {
+    return this.prisma.syncJob.count({
+      where: {
+        status: 'failed',
+        finishedAt: { gte: since },
+        ...(companyId ? { companyId } : {}),
+      },
+    });
+  }
 }
 
 function notRetryable(code: 'SYNC_JOB_NOT_FAILED' | 'SYNC_JOB_ACTIVE') {
