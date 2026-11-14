@@ -237,6 +237,41 @@ export class ProductsService {
     };
   }
 
+  /**
+   * For exports (IMP-04): one row per active variant of active products in the given
+   * companies (all when undefined), with its list price. Caller checks products:read.
+   */
+  async exportRows(companyIds: string[] | undefined, limit: number) {
+    const rows = await this.repository.prisma.productVariant.findMany({
+      where: {
+        deletedAt: null,
+        product: { deletedAt: null },
+        ...(companyIds ? { companyId: { in: companyIds } } : {}),
+      },
+      select: {
+        sku: true,
+        barcode: true,
+        companyId: true,
+        product: { select: { name: true, vatRate: true } },
+        prices: {
+          where: { channel: 'list', deletedAt: null },
+          select: { amount: true, currency: true },
+        },
+      },
+      orderBy: [{ product: { name: 'asc' } }, { sku: 'asc' }],
+      take: limit + 1,
+    });
+    return rows.map((r) => ({
+      name: r.product.name,
+      sku: r.sku,
+      barcode: r.barcode,
+      vatRate: r.product.vatRate === null ? null : r.product.vatRate.toFixed(0),
+      price: r.prices[0]
+        ? { amount: money(r.prices[0].amount), currency: r.prices[0].currency }
+        : null,
+    }));
+  }
+
   /** For inventory lists: SKU and product name of variants (deleted ones included). */
   async variantLabels(
     ids: string[],
