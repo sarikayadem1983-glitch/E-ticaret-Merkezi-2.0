@@ -9,6 +9,8 @@ import { AuditService } from '../audit/audit.service.js';
 import type { AuthUser } from '../auth/decorators.js';
 import { money } from '../catalog/pricing.js';
 import { ProductsService } from '../catalog/products.service.js';
+import { ReservationsRepository } from '../inventory/inventory.repository.js';
+import { InventoryService } from '../inventory/inventory.service.js';
 import { CompaniesService } from '../companies/companies.service.js';
 import {
   InjectPrisma,
@@ -29,6 +31,15 @@ export const WRITE = 'orders:write';
 const MODULE = 'orders';
 const ENTITY = 'Order';
 export const MANUAL_CHANNEL = 'manual';
+/** Statuses before shipping: stock can still be reserved. */
+const RESERVABLE = new Set<OrderStatus>([
+  'awaiting',
+  'created',
+  'picking',
+  'invoiced',
+  'unpacked',
+  'repack',
+]);
 
 const notFound = () =>
   new NotFoundException({ code: 'NOT_FOUND', message: 'Sipariş bulunamadı' });
@@ -125,6 +136,8 @@ export class OrdersService {
     private readonly audit: AuditService,
     private readonly companies: CompaniesService,
     private readonly products: ProductsService,
+    private readonly reservations: ReservationsRepository,
+    private readonly inventory: InventoryService,
   ) {}
 
   async list(user: AuthUser, q: ListOrdersQuery) {
@@ -307,6 +320,56 @@ export class OrdersService {
     return this.get(user, id);
   }
 
+  /**
+   * Reserves stock for every matched line (INV-02) in one warehouse (default: the company's
+   * default warehouse). All lines or none: any shortage rolls the whole request back.
+   * Local stock only: nothing is sent to a marketplace.
+   */
+  async reserve(user: AuthUser, id: string, warehouseId?: string) {
+    await this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findFirst({
+        where: { id },
+        select: ORDER_FIELDS,
+      });
+      if (!order) throw notFound();
+      await this.assertPermission(user, order.companyId, 'inventory:write');
+      if (!RESERVABLE.has(order.status as OrderStatus)) {
+        throw new ConflictException({
+          code: 'ORDER_NOT_RESERVABLE',
+          message: 'Bu durumdaki siparişe stok ayrılamaz',
+        });
+      }
+      const target =
+        warehouseId ??
+        (await this.inventory.defaultWarehouse(order.companyId, tx));
+      if (!target) {
+        throw new ConflictException({
+          code: 'WAREHOUSE_REQUIRED',
+          message: 'Firmanın varsayılan deposu yok; depo seçin',
+        });
+      }
+      const items = await tx.orderItem.findMany({
+        where: { orderId: order.id, variantId: { not: null } },
+        select: { id: true, quantity: true },
+        orderBy: { id: 'asc' },
+      });
+      for (const item of items) {
+        await this.reservations.reserve(tx, item.id, target, item.quantity);
+      }
+      await this.audit.record(
+        {
+          action: 'UPDATE',
+          module: MODULE,
+          entityType: ENTITY,
+          entityId: order.id,
+          after: { reservedInWarehouse: target, lines: items.length },
+        },
+        tx,
+      );
+    });
+    return this.get(user, id);
+  }
+
   async changeStatus(user: AuthUser, id: string, dto: ChangeStatusDto) {
     await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findFirst({
@@ -361,6 +424,19 @@ export class OrdersService {
         code: 'CONCURRENT_UPDATE',
         message: 'Sipariş başka bir işlemle değişti; yeniden deneyin',
       });
+    }
+    // Stock follows the status (INV-02): shipping consumes reservations, cancelling releases them.
+    if (to === 'shipped' || to === 'cancelled' || to === 'unsupplied') {
+      const items = await tx.orderItem.findMany({
+        where: { orderId: order.id },
+        select: { id: true },
+        orderBy: { id: 'asc' },
+      });
+      for (const item of items) {
+        if (to === 'shipped')
+          await this.reservations.consume(tx, item.id, by.changedBy ?? null);
+        else await this.reservations.release(tx, item.id);
+      }
     }
     await tx.orderStatusHistory.create({
       data: {

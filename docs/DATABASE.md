@@ -136,6 +136,19 @@
 - `channels` — id, company_id, type, name, credentials_ref, is_active
 - `channel_listings` — id, channel_id, variant_id, external_id, price, sync_status
 
+### inventory — rezervasyon (INV-02; migration `20261114170000_stock_reservations`, izole veritabanında denendi)
+- `stock_reservations` — id, tenant_id, company_id, warehouse_id, variant_id, order_item_id, quantity (> 0), status (`active | released | consumed`), created_at, updated_at
+  - FK'lar firma dahil bileşik: depo, varyant ve sipariş kalemi (`order_items` üzerine `(tenant_id, company_id, id)` tekil indeksi eklendi) aynı firmanın olmak zorunda.
+  - Kısmi tekil `(tenant_id, order_item_id, warehouse_id) WHERE status = 'active'`.
+  - `tm_app`: yalnızca SELECT. Satırlar yalnızca aşağıdaki fonksiyonlarla değişir.
+- `stock_levels`: yeni CHECK `reserved <= on_hand` — ayrılmış birim satılamaz, düzeltme/sayımla düşülemez (`STOCK_RESERVED`).
+- Fonksiyonlar (`SECURITY DEFINER`, `search_path` sabit, `PUBLIC`'ten EXECUTE alındı, yalnızca `tm_app` çalıştırır). Uygulama bunları `TenantContext.runAsSystem` içinde ve **kendi tenant id'sini parametre vererek** çağırır (`inventory/inventory.repository.ts`, allowlist'te); fonksiyonlar her satırı bu tenant id ile süzer:
+  - `stock_reserve(tenant, order_item, warehouse, quantity)`: kalem ve etkin depo aynı firmada olmalı; stok satırı `FOR UPDATE` kilitlenir, `on_hand − reserved < quantity` ise `STOCK_INSUFFICIENT`. Aynı adetle tekrar → aynı rezervasyon (idempotent); farklı adet → `STOCK_ALREADY_RESERVED`.
+  - `stock_release(tenant, order_item)`: etkin rezervasyonları `released` yapar, `reserved` düşer.
+  - `stock_consume(tenant, order_item, created_by)`: önce `reserved` düşer, sonra `order` stok hareketi (`reference_type = order_item`) yazılır (tetikleyici `on_hand`'i düşürür), rezervasyon `consumed`.
+- Sipariş akışı (ORD-02 `transition`): `shipped` → consume, `cancelled`/`unsupplied` → release. Rezervasyon `POST /orders/:id/reserve` ile (tüm kalemler ya da hiçbiri).
+- Geri dönüş: `down.sql` (rezervasyon veya `reserved <> 0` varken durur). Prova: `verify.sql`, `rehearsal-seed.sql`.
+
 ### customers
 - `customers` — id, name, email, phone
 - `addresses` — id, customer_id, type, address fields

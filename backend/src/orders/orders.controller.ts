@@ -14,6 +14,7 @@ import {
   CurrentUser,
   RequirePermissions,
 } from '../auth/decorators.js';
+import { ReserveOrderDto } from '../inventory/inventory.dto.js';
 import {
   ChangeStatusDto,
   CreateOrderDto,
@@ -43,6 +44,17 @@ export class OrdersController {
   @RequirePermissions(WRITE)
   create(@CurrentUser() user: AuthUser, @Body() dto: CreateOrderDto) {
     return this.orders.create(user, dto);
+  }
+
+  @Post(':id/reserve')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('inventory:write')
+  reserve(
+    @CurrentUser() user: AuthUser,
+    @Param('id', uuid) id: string,
+    @Body() dto: ReserveOrderDto,
+  ) {
+    return this.orders.reserve(user, id, dto.warehouseId);
   }
 
   @Post(':id/status')

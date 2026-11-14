@@ -31,6 +31,8 @@ export const ROLE_CATALOG: Record<RoleKey, CatalogRole> = {
       'channels:manage',
       'orders:read',
       'orders:write',
+      'inventory:read',
+      'inventory:write',
     ],
   },
   operations: {
@@ -42,17 +44,29 @@ export const ROLE_CATALOG: Record<RoleKey, CatalogRole> = {
       'products:write',
       'orders:read',
       'orders:write',
+      'inventory:read',
+      'inventory:write',
     ],
   },
   accounting: {
     scope: 'company',
     name: 'Muhasebe',
-    permissions: ['companies:read', 'products:read', 'orders:read'],
+    permissions: [
+      'companies:read',
+      'products:read',
+      'orders:read',
+      'inventory:read',
+    ],
   },
   viewer: {
     scope: 'company',
     name: 'Görüntüleyici',
-    permissions: ['companies:read', 'products:read', 'orders:read'],
+    permissions: [
+      'companies:read',
+      'products:read',
+      'orders:read',
+      'inventory:read',
+    ],
   },
 };
 

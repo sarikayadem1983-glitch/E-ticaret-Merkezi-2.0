@@ -272,7 +272,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | ID | Görev | Öncelik | Bağımlılık | Tahmin | Mod | Sürüm | Durum | Kabul kriteri | Test | Güvenlik riski | Kaynak |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | INV-01 | Depo ve stok şeması; append-only stok hareketleri | P0 | CAT-01 | 3 | CRITICAL | A | DONE-MERGED (PR #44, merge `458ee82`; dev `458ee82`, 2026-11-14) | Stok = hareketlerin toplamı; hareket silinemez | M, E | Orta | Öneri (onay bekliyor) |
-| INV-02 | Rezervasyon ve sipariş bağlı düşüm (eşzamanlılık güvenli) | P0 | INV-01, ORD-01 | 4 | CRITICAL | A | PLANNED | Paralel siparişlerde negatif stok oluşmaz (satır kilidi/koşullu güncelleme) | U, E, L | Orta (veri bütünlüğü) | Öneri (onay bekliyor) |
+| INV-02 | Rezervasyon ve sipariş bağlı düşüm (eşzamanlılık güvenli) | P0 | INV-01, ORD-01 | 4 | CRITICAL | A | DONE-PR (PR #51) | Paralel siparişlerde negatif stok oluşmaz (satır kilidi/koşullu güncelleme) | U, E, L | Orta (veri bütünlüğü) | Öneri (onay bekliyor) |
 | INV-03 | Stok UI, düşük stok eşiği ve uyarısı | P1 | INV-01 | 2 | STANDARD | A | PLANNED | Eşik altı ürünler listelenir | F, P | Düşük | Öneri (onay bekliyor) |
 | INV-04 | Çoklu depo transferi ve stok sayımı | P2 | INV-02 | 3 | STANDARD | B | PLANNED | Transfer iki hareket olarak kaydedilir | E | Düşük | Öneri (onay bekliyor) |
 
@@ -450,7 +450,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | ORD-02 | Sipariş API ve durum makinesi (geçersiz geçiş reddi, audit) | DONE-MERGED (PR #47, merge `9062bb6`; dev `9062bb6`, 2026-11-14) | 4 | STANDARD | Öneri (onay bekliyor) |
 | ORD-03 | Sipariş UI: liste, filtre, detay, toplu işlem (etiket yazdır, durum) | DONE-MERGED (PR #49, merge `75ce1de`; dev `75ce1de`, 2026-11-14) | 3 | STANDARD | Öneri (onay bekliyor) |
 | INV-01 | Depo ve stok şeması; append-only stok hareketleri | DONE-MERGED (PR #44, merge `458ee82`; dev `458ee82`, 2026-11-14) | 3 | CRITICAL | Öneri (onay bekliyor) |
-| INV-02 | Rezervasyon ve sipariş bağlı düşüm (eşzamanlılık güvenli) | PLANNED | 4 | CRITICAL | Öneri (onay bekliyor) |
+| INV-02 | Rezervasyon ve sipariş bağlı düşüm (eşzamanlılık güvenli) | DONE-PR (PR #51) | 4 | CRITICAL | Öneri (onay bekliyor) |
 | INV-03 | Stok UI, düşük stok eşiği ve uyarısı | PLANNED | 2 | STANDARD | Öneri (onay bekliyor) |
 | SHP-02 | Pazaryeri kargo entegrasyonu üzerinden etiket ve takip numarası | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
 | RPT-01 | Satış raporları (dönem, kanal, ürün) | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |

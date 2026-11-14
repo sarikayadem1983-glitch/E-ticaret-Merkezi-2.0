@@ -1,0 +1,6 @@
+-- INV-02 post-migration checks for database/scripts/backup-and-rehearse.sh (rows: name|t/f|detail).
+SELECT 'table_exists', (to_regclass('public.stock_reservations') IS NOT NULL)::text::char, 'stock_reservations';
+SELECT 'reservations_read_only', (has_table_privilege('tm_app', 'stock_reservations', 'SELECT') AND NOT has_table_privilege('tm_app', 'stock_reservations', 'INSERT') AND NOT has_table_privilege('tm_app', 'stock_reservations', 'UPDATE') AND NOT has_table_privilege('tm_app', 'stock_reservations', 'DELETE'))::text::char, 'tm_app yalnızca SELECT';
+SELECT 'functions_executable', (has_function_privilege('tm_app', 'stock_reserve(uuid,uuid,uuid,integer)', 'EXECUTE') AND has_function_privilege('tm_app', 'stock_release(uuid,uuid)', 'EXECUTE') AND has_function_privilege('tm_app', 'stock_consume(uuid,uuid,uuid)', 'EXECUTE') AND NOT has_function_privilege('public', 'stock_reserve(uuid,uuid,uuid,integer)', 'EXECUTE'))::text::char, 'tm_app EXECUTE var, PUBLIC yok';
+SELECT 'reserved_within_on_hand', EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'stock_levels_reserved_within_on_hand')::text::char, 'CHECK reserved <= on_hand';
+SELECT 'no_reservations', (NOT EXISTS (SELECT 1 FROM stock_reservations))::text::char, 'yeni tablo boş';
