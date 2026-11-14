@@ -321,7 +321,7 @@ describe('Orders API (e2e, ORD-02)', () => {
       setStatus(tokenA, id, 'cancelled'),
       setStatus(tokenA, id, 'picking'),
     ]);
-    expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
+    expect(results.map((r) => r.status).sort((a, b) => a - b)).toEqual([200, 409]);
     const detail = (
       await http().get(`/api/v1/orders/${id}`).set(bearer(tokenA)).expect(200)
     ).body.data;

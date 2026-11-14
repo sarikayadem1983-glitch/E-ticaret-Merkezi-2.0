@@ -210,6 +210,33 @@ export class ProductsService {
     }));
   }
 
+  /**
+   * For imports (IMP-01): which of these SKUs (case-insensitive) and barcodes already exist
+   * in the tenant, soft-deleted variants included (their identifiers are never reused).
+   */
+  async takenIdentifiers(skus: string[], barcodes: string[]) {
+    const rows = await this.repository.prisma.productVariant.findMany({
+      where: {
+        OR: [
+          ...(skus.length
+            ? [{ sku: { in: skus, mode: 'insensitive' as const } }]
+            : []),
+          ...(barcodes.length ? [{ barcode: { in: barcodes } }] : []),
+        ],
+      },
+      select: { sku: true, barcode: true },
+    });
+    const wanted = new Set(barcodes);
+    return {
+      skus: new Set(rows.map((r) => r.sku.toLowerCase())),
+      barcodes: new Set(
+        rows.flatMap((r) =>
+          r.barcode && wanted.has(r.barcode) ? [r.barcode] : [],
+        ),
+      ),
+    };
+  }
+
   /** For inventory lists: SKU and product name of variants (deleted ones included). */
   async variantLabels(
     ids: string[],

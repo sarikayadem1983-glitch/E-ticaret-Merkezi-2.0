@@ -103,6 +103,8 @@ const ROUTES: readonly BffRoute[] = [
   { method: 'POST', path: /^stock-movements$/, body: true },
   { method: 'PUT', path: new RegExp(`^stock-thresholds/${UUID}$`), body: true },
   { method: 'POST', path: new RegExp(`^orders/${UUID}/reserve$`), body: true },
+  // Product import (IMP-01): CSV text in the JSON body; dry run by default.
+  { method: 'POST', path: /^imports\/products$/, body: true },
   // Reports (RPT-01): read-only.
   {
     method: 'GET',

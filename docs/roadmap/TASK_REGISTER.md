@@ -168,7 +168,7 @@ Kaynak: `docs/superpowers/plans/2026-10-28-user-management.md` (T1–T16 numaral
 
 | ID | Görev | Öncelik | Bağımlılık | Tahmin | Mod | Sürüm | Durum | Kabul kriteri | Test | Güvenlik riski | Kaynak |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| IMP-01 | Excel/CSV şablonu, satır doğrulama, deneme (dry-run) raporu | P0 | CAT-03 | 3 | STANDARD | A | PLANNED | Hatalı satırlar satır/kolon bazında raporlanır; formül enjeksiyonu (CSV injection) engellenir | U, E | Orta | Öneri (onay bekliyor) |
+| IMP-01 | Excel/CSV şablonu, satır doğrulama, deneme (dry-run) raporu | P0 | CAT-03 | 3 | STANDARD | A | DONE-PR (PR #57) | Hatalı satırlar satır/kolon bazında raporlanır; formül enjeksiyonu (CSV injection) engellenir | U, E | Orta | Öneri (onay bekliyor) |
 | IMP-02 | Asenkron içe aktarma işi (kuyruk), ilerleme ve hata raporu indirme | P0 | IMP-01, INF-09 | 3 | STANDARD | B | PLANNED | 10.000 satır zaman aşımına düşmeden işlenir; yarıda kalan iş yeniden başlatılabilir | E, L | Orta | Öneri (onay bekliyor) |
 | IMP-03 | URL'den ürün içe aktarma (sayfa/feed çekme) | P2 | IMP-02 | 4 | CRITICAL | B | PLANNED | SSRF koruması: özel IP/metadata adresleri reddedilir, boyut/süre sınırı, yönlendirme kontrolü | U, S | Yüksek (SSRF) | Öneri (onay bekliyor) |
 | IMP-04 | Toplu dışa aktarma (ürün, stok, fiyat) | P2 | IMP-01 | 2 | FAST | B | PLANNED | Yalnızca kullanıcının yetkili firmaları | E | Düşük | Öneri (onay bekliyor) |
@@ -438,7 +438,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | CAT-04 | Katalog UI: liste, filtre, ürün formu, varyant editörü | DONE-MERGED (PR #30, merge `6a3eea0`; dev `5ac1401`, 2026-11-12) | 4 | STANDARD | Öneri (onay bekliyor) |
 | CAT-05 | Fiyat yönetimi: liste fiyatı, kanal fiyatı, KDV oranı (`decimal` + para birimi) | DONE-MERGED (PR #29, merge `28a03ae`; dev `5ac1401`, 2026-11-12) | 2 | STANDARD | Öneri (onay bekliyor) |
 | CAT-06 | Kanal kategori ağacı ve zorunlu özellik eşleme modeli + UI | DONE-MERGED (PR #34, merge `8ee40bb`; dev `8ee40bb`, 2026-11-12; backend dilimi, UI → CAT-06b) | 4 | STANDARD | Öneri (onay bekliyor) |
-| IMP-01 | Excel/CSV şablonu, satır doğrulama, deneme (dry-run) raporu | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
+| IMP-01 | Excel/CSV şablonu, satır doğrulama, deneme (dry-run) raporu | DONE-PR (PR #57) | 3 | STANDARD | Öneri (onay bekliyor) |
 | IMG-01 | Görsel yükleme, sıralama, ürün/varyanta bağlama | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
 | INT-01 | `ChannelAdapter` arayüzü, kanal hesabı modeli, kimlik bilgisi şifreleme (envelope encryption, anahtar rotasyonu) | DONE-MERGED (PR #32, merge `7b3c0b9`; dev `7b3c0b9`, 2026-11-12) | 4 | CRITICAL | Öneri (onay bekliyor) |
 | INT-02 | Senkron motoru: kanal başına rate limiter, retry, idempotency, senkron logu, çakışma çözümü | DONE-MERGED | 5 | CRITICAL | Öneri (onay bekliyor) |
