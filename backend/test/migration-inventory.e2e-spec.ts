@@ -93,6 +93,17 @@ afterAll(async () => {
     await admin.end();
   }
 });
+/** Same throwaway database, but as the application role tm_app (DATABASE_URL credentials). */
+function appUrl(): string {
+  const app = new URL(env('DATABASE_URL'));
+  const target = urlFor(DB);
+  target.username = app.username;
+  target.password = app.password;
+  return target.toString();
+}
+
+type Ids = Awaited<ReturnType<typeof seed>>;
+
 /** Tenant, two companies, a warehouse per company and a variant per company. */
 async function seed(client: pg.Client) {
   const ids = {
@@ -144,6 +155,23 @@ async function seed(client: pg.Client) {
   return ids;
 }
 
+/** Removes one seeded tenant's rows (owner role, purge flag), never other tests' data. */
+async function purge(ids: Ids) {
+  await db.query('BEGIN');
+  await db.query("SET LOCAL app.allow_stock_purge = 'on'");
+  for (const table of [
+    'stock_movements',
+    'stock_levels',
+    'warehouses',
+    'product_variants',
+    'products',
+    'companies',
+  ])
+    await db.query(`delete from ${table} where tenant_id = $1`, [ids.t]);
+  await db.query('delete from tenants where id = $1', [ids.t]);
+  await db.query('COMMIT');
+}
+
 type MoveOpts = {
   company?: string;
   warehouse?: string;
@@ -151,28 +179,32 @@ type MoveOpts = {
   reason?: string;
   refType?: string | null;
   refId?: string | null;
+  by?: string | null;
 };
 
 const move = (
   client: pg.Client,
-  ids: Awaited<ReturnType<typeof seed>>,
+  ids: Ids,
   quantity: number,
   opts: MoveOpts = {},
-) =>
-  client.query(
-    `insert into stock_movements (id, tenant_id, company_id, warehouse_id, variant_id, quantity, reason, reference_type, reference_id)
-     values (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8)`,
+) => {
+  const reason = opts.reason ?? (quantity > 0 ? 'purchase' : 'adjustment');
+  return client.query(
+    `insert into stock_movements (id, tenant_id, company_id, warehouse_id, variant_id, quantity, reason, reference_type, reference_id, created_by)
+     values (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9)`,
     [
       ids.t,
       opts.company ?? ids.c,
       opts.warehouse ?? ids.w,
       opts.variant ?? ids.v,
       quantity,
-      opts.reason ?? (quantity > 0 ? 'purchase' : 'adjustment'),
+      reason,
       opts.refType === undefined ? null : opts.refType,
       opts.refId === undefined ? null : opts.refId,
+      opts.by === undefined ? randomUUID() : opts.by,
     ],
   );
+};
 
 const onHand = async (
   client: pg.Client,
@@ -186,64 +218,77 @@ const onHand = async (
   ).rows[0]?.on_hand;
 
 describe('inventory schema migration (INV-01)', () => {
-  it('grants: movements append-only, levels read + reserved only, no deletes', async () => {
+  it('grants: movements append-only, levels read-only, no deletes', async () => {
     expect(await hasTables()).toBe(true);
-    const priv = async (table: string, p: string) =>
-      (
-        await db.query<{ ok: boolean }>(
-          `select has_table_privilege('tm_app', $1, $2) ok`,
-          [table, p],
-        )
-      ).rows[0].ok;
-    const col = async (table: string, column: string, p: string) =>
-      (
-        await db.query<{ ok: boolean }>(
-          `select has_column_privilege('tm_app', $1, $2, $3) ok`,
-          [table, column, p],
-        )
-      ).rows[0].ok;
-    expect(
-      await Promise.all(
-        ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE'].map((p) =>
-          priv('warehouses', p),
+    const privs = async (table: string, list: string[]) =>
+      Promise.all(
+        list.map(
+          async (p) =>
+            (
+              await db.query<{ ok: boolean }>(
+                `select has_table_privilege('tm_app', $1, $2) ok`,
+                [table, p],
+              )
+            ).rows[0].ok,
         ),
-      ),
-    ).toEqual([true, true, true, false, false]);
-    expect(
-      await Promise.all(
-        ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE'].map((p) =>
-          priv('stock_movements', p),
-        ),
-      ),
-    ).toEqual([true, true, false, false, false]);
-    expect(
-      await Promise.all(
-        ['SELECT', 'INSERT', 'DELETE', 'TRUNCATE'].map((p) =>
-          priv('stock_levels', p),
-        ),
-      ),
-    ).toEqual([true, false, false, false]);
-    expect(await col('stock_levels', 'reserved', 'UPDATE')).toBe(true);
-    expect(await col('stock_levels', 'on_hand', 'UPDATE')).toBe(false);
-    expect(await col('stock_levels', 'variant_id', 'UPDATE')).toBe(false);
+      );
+    const all = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE'];
+    expect(await privs('warehouses', all)).toEqual([
+      true,
+      true,
+      true,
+      false,
+      false,
+    ]);
+    expect(await privs('stock_movements', all)).toEqual([
+      true,
+      true,
+      false,
+      false,
+      false,
+    ]);
+    expect(await privs('stock_levels', all)).toEqual([
+      true,
+      false,
+      false,
+      false,
+      false,
+    ]);
+    const col = await db.query<{ ok: boolean }>(
+      `select has_column_privilege('tm_app', 'stock_levels', 'reserved', 'UPDATE') ok`,
+    );
+    expect(col.rows[0].ok).toBe(false);
   });
 
-  it('stock = sum of movements; constraints, tenant/company links and references', async () => {
+  it('stock = sum of movements; constraints, links, references and guards', async () => {
     await db.query('BEGIN');
     try {
       const ids = await seed(db);
+      const line = randomUUID();
       await move(db, ids, 10, { reason: 'opening' });
       await move(db, ids, -3, {
         reason: 'order',
         refType: 'order_item',
-        refId: randomUUID(),
+        refId: line,
       });
-      await move(db, ids, 2, {
+      // Partial returns of the same order line are separate, legitimate movements.
+      await move(db, ids, 1, {
         reason: 'return',
         refType: 'order_item',
-        refId: randomUUID(),
+        refId: line,
       });
-      await move(db, ids, -1);
+      await move(db, ids, 1, {
+        reason: 'return',
+        refType: 'order_item',
+        refId: line,
+      });
+      // Counts by a sync job need no user.
+      await move(db, ids, -1, {
+        reason: 'count',
+        refType: 'sync_job',
+        refId: randomUUID(),
+        by: null,
+      });
       expect(await onHand(db, ids)).toBe(8);
       const sum = await db.query<{ s: number }>(
         `select sum(quantity)::int s from stock_movements where tenant_id = $1 and warehouse_id = $2 and variant_id = $3`,
@@ -251,24 +296,18 @@ describe('inventory schema migration (INV-01)', () => {
       );
       expect(sum.rows[0].s).toBe(8);
 
-      const ref = randomUUID();
-      await move(db, ids, -1, {
-        reason: 'order',
-        refType: 'order_item',
-        refId: ref,
-      });
       await db.query('SAVEPOINT s');
       const bad: [() => Promise<unknown>, RegExp][] = [
         // Would drive stock below zero: the trigger's update hits the CHECK, the movement is rejected.
-        [() => move(db, ids, -8), /stock_levels_on_hand_non_negative/],
+        [() => move(db, ids, -9), /stock_levels_on_hand_non_negative/],
         [
           () =>
             move(db, ids, -1, {
               reason: 'order',
               refType: 'order_item',
-              refId: ref,
+              refId: line,
             }),
-          /stock_movements_reference_key/,
+          /stock_movements_order_reference_key/,
         ],
         [() => move(db, ids, 0), /stock_movements_quantity_non_zero/],
         [
@@ -299,6 +338,10 @@ describe('inventory schema migration (INV-01)', () => {
         [
           () => move(db, ids, -1, { reason: 'purchase' }),
           /stock_movements_direction_matches_reason/,
+        ],
+        [
+          () => move(db, ids, -1, { reason: 'adjustment', by: null }),
+          /stock_movements_manual_has_actor/,
         ],
         // Company c's movement on company c2's variant or warehouse.
         [
@@ -333,6 +376,39 @@ describe('inventory schema migration (INV-01)', () => {
             ),
           /warehouses_name_not_blank/,
         ],
+        // Guards hold even for the owner role.
+        [
+          () =>
+            db.query(
+              `update stock_movements set quantity = 100 where tenant_id = $1`,
+              [ids.t],
+            ),
+          /stok hareketleri değiştirilemez/,
+        ],
+        [
+          () =>
+            db.query(`delete from stock_movements where tenant_id = $1`, [
+              ids.t,
+            ]),
+          /stok hareketleri değiştirilemez/,
+        ],
+        [
+          () => db.query(`truncate stock_movements cascade`),
+          /stok hareketleri değiştirilemez/,
+        ],
+        [
+          () =>
+            db.query(
+              `update stock_levels set on_hand = 100 where tenant_id = $1`,
+              [ids.t],
+            ),
+          /yalnızca stok hareketiyle değişir/,
+        ],
+        [
+          () =>
+            db.query(`delete from stock_levels where tenant_id = $1`, [ids.t]),
+          /stok hareketleri değiştirilemez/,
+        ],
         [
           () =>
             db.query(
@@ -346,7 +422,7 @@ describe('inventory schema migration (INV-01)', () => {
         await expect(run()).rejects.toThrow(err);
         await db.query('ROLLBACK TO SAVEPOINT s');
       }
-      expect(await onHand(db, ids)).toBe(7);
+      expect(await onHand(db, ids)).toBe(8);
 
       await expect(
         db.query(
@@ -360,21 +436,33 @@ describe('inventory schema migration (INV-01)', () => {
     }
   });
 
-  it('concurrent decreases never oversell: one of two -5 on 8 fails', async () => {
-    const other = new pg.Client({ connectionString: urlFor(DB).toString() });
-    await other.connect();
+  it('as tm_app: concurrent decreases wait on the row lock and never oversell', async () => {
+    const a = new pg.Client({ connectionString: appUrl() });
+    const b = new pg.Client({ connectionString: appUrl() });
+    await a.connect();
+    await b.connect();
+    const ids = await seed(db);
     try {
-      const ids = await seed(db);
-      await move(db, ids, 8, { reason: 'opening' });
-      await db.query('BEGIN');
-      await other.query('BEGIN');
-      await move(db, ids, -5, {
+      const who = await a.query<{ u: string }>('select current_user u');
+      expect(who.rows[0].u).toBe('tm_app');
+      // tm_app cannot touch on_hand directly; only movements change it.
+      await move(a, ids, 8, { reason: 'opening' });
+      await expect(
+        a.query(`update stock_levels set on_hand = 100 where tenant_id = $1`, [
+          ids.t,
+        ]),
+      ).rejects.toThrow(/permission denied/);
+
+      await a.query('BEGIN');
+      await b.query('BEGIN');
+      await move(a, ids, -5, {
         reason: 'order',
         refType: 'order_item',
         refId: randomUUID(),
       });
-      // Blocks on the stock_levels row lock until the first transaction commits.
-      const second = move(other, ids, -5, {
+      const bPid = (await b.query<{ p: number }>('select pg_backend_pid() p'))
+        .rows[0].p;
+      const second = move(b, ids, -5, {
         reason: 'order',
         refType: 'order_item',
         refId: randomUUID(),
@@ -382,16 +470,26 @@ describe('inventory schema migration (INV-01)', () => {
         () => 'ok',
         (e: Error) => e.message,
       );
-      await new Promise((r) => setTimeout(r, 200));
-      await db.query('COMMIT');
+      // Prove b is really blocked on a lock (not just slow) before a commits.
+      let waiting = false;
+      for (let i = 0; i < 50 && !waiting; i++) {
+        // Superuser view: other roles cannot see tm_app wait events.
+        const r = await admin.query<{ w: string | null }>(
+          'select wait_event_type w from pg_stat_activity where pid = $1',
+          [bPid],
+        );
+        waiting = r.rows[0]?.w === 'Lock';
+        if (!waiting) await new Promise((r2) => setTimeout(r2, 20));
+      }
+      expect(waiting).toBe(true);
+      await a.query('COMMIT');
       expect(await second).toMatch(/stock_levels_on_hand_non_negative/);
-      await other.query('ROLLBACK');
+      await b.query('ROLLBACK');
       expect(await onHand(db, ids)).toBe(3);
     } finally {
-      await other.end();
-      // Test data only (owner role); the app role cannot delete.
-      await db.query(`delete from stock_movements; delete from stock_levels; delete from warehouses;
-        delete from product_variants; delete from products; delete from companies; delete from tenants;`);
+      await a.end();
+      await b.end();
+      await purge(ids);
     }
   });
 

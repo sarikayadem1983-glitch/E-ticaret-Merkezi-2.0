@@ -873,8 +873,8 @@ model Warehouse {
   @@map("warehouses")
 }
 
-/// One row per warehouse and variant. on_hand changes only through the stock_movements trigger;
-/// tm_app may update reserved (INV-02) but not on_hand (column grants).
+/// One row per warehouse and variant. on_hand changes only through the stock_movements trigger
+/// (guard trigger rejects other changes); tm_app may only read. reserved: INV-02 functions.
 model StockLevel {
   id          String   @id @default(uuid()) @db.Uuid
   tenantId    String   @map("tenant_id") @db.Uuid
@@ -909,7 +909,7 @@ model StockMovement {
   quantity      Int
   /// opening | adjustment | count | purchase | order | order_cancel | return | transfer_in | transfer_out (SQL CHECK)
   reason        String   @db.VarChar(30)
-  /// order | order_item | sync_job | manual (SQL CHECK); reference_id required unless manual.
+  /// order | order_item | sync_job | transfer | manual (SQL CHECK); reference_id required unless manual.
   referenceType String?  @map("reference_type") @db.VarChar(30)
   referenceId   String?  @map("reference_id") @db.Uuid
   createdBy     String?  @map("created_by") @db.Uuid
@@ -920,8 +920,8 @@ model StockMovement {
   variant   ProductVariant @relation(fields: [tenantId, companyId, variantId], references: [tenantId, companyId, id], onDelete: Restrict)
 
   @@unique([tenantId, id])
-  // SQL-only: unique (tenant_id, reason, reference_type, reference_id, warehouse_id, variant_id) WHERE reference_id IS NOT NULL
-  // (the same order line cannot decrease stock twice).
+  // SQL-only: unique (tenant_id, reference_type, reference_id, warehouse_id, variant_id) WHERE reason = 'order'
+  // (the same order line cannot decrease stock twice; returns/cancellations may repeat).
   @@index([tenantId, variantId, createdAt(sort: Desc)])
   @@index([tenantId, warehouseId, createdAt(sort: Desc)])
   @@map("stock_movements")

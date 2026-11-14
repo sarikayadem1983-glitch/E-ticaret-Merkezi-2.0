@@ -14,6 +14,11 @@ END $$;
 
 DROP TRIGGER "stock_movements_apply" ON "stock_movements";
 DROP FUNCTION "stock_movements_apply"();
+DROP TRIGGER "stock_movements_guard" ON "stock_movements";
+DROP TRIGGER "stock_movements_guard_truncate" ON "stock_movements";
+DROP TRIGGER "stock_levels_guard" ON "stock_levels";
+DROP TRIGGER "stock_levels_guard_truncate" ON "stock_levels";
+DROP FUNCTION "stock_guard"();
 DROP TABLE "stock_movements";
 DROP TABLE "stock_levels";
 DROP TABLE "warehouses";
