@@ -123,4 +123,31 @@ describe('matchBffRoute', () => {
     });
     expect(match('GET', 'companies/summary', 'page=1')).toEqual({ ok: false, status: 400 });
   });
+
+  it('allows the integration routes and nothing around them (INT-03)', () => {
+    const acc = `companies/${ID}/channel-accounts`;
+    const allowed: [string, string, string][] = [
+      ['GET', 'channel-definitions', ''],
+      ['GET', acc, ''],
+      ['POST', acc, ''],
+      ['PATCH', `${acc}/${ID}`, ''],
+      ['DELETE', `${acc}/${ID}`, ''],
+      ['POST', `${acc}/${ID}/test-connection`, ''],
+      ['GET', `${acc}/${ID}/sync-jobs`, 'status=failed&limit=20&cursor=x'],
+      ['POST', `${acc}/${ID}/sync-jobs/${ID}/retry`, ''],
+    ];
+    for (const [method, path, query] of allowed) {
+      expect(match(method, path, query).ok).toBe(true);
+    }
+    expect(match('POST', acc)).toMatchObject({ ok: true, body: true });
+    expect(match('DELETE', `${acc}/${ID}`)).toMatchObject({ ok: true, body: false });
+    expect(match('GET', `${acc}/${ID}`)).toEqual({ ok: false, status: 404 });
+    expect(match('PUT', `${acc}/${ID}`)).toEqual({ ok: false, status: 404 });
+    expect(match('GET', `${acc}/${ID}/test-connection`)).toEqual({ ok: false, status: 404 });
+    expect(match('GET', `${acc}/${ID}/sync-jobs`, 'tenant=x')).toEqual({
+      ok: false,
+      status: 400,
+    });
+    expect(match('POST', `${acc}/${ID}/sync-jobs`)).toEqual({ ok: false, status: 404 });
+  });
 });

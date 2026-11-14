@@ -18,6 +18,8 @@ const CHANNEL = '[a-z0-9]+(?:-[a-z0-9]+)*';
 const PRODUCT = `products/${UUID}`;
 const VARIANT = `${PRODUCT}/variants/${UUID}`;
 const LIST_QUERY = ['page', 'per_page', 'search'] as const;
+const ACCOUNTS = `companies/${UUID}/channel-accounts`;
+const ACCOUNT = `${ACCOUNTS}/${UUID}`;
 
 const ROUTES: readonly BffRoute[] = [
   {
@@ -67,6 +69,19 @@ const ROUTES: readonly BffRoute[] = [
   { method: 'GET', path: /^(categories|brands|attributes)$/, query: LIST_QUERY },
   { method: 'POST', path: /^attributes$/, body: true },
   { method: 'POST', path: new RegExp(`^attributes/${UUID}/values$`), body: true },
+  // INT-03 integrations: credentials go in (POST/PATCH body), never come out (masked).
+  { method: 'GET', path: /^channel-definitions$/ },
+  { method: 'GET', path: new RegExp(`^${ACCOUNTS}$`) },
+  { method: 'POST', path: new RegExp(`^${ACCOUNTS}$`), body: true },
+  { method: 'PATCH', path: new RegExp(`^${ACCOUNT}$`), body: true },
+  { method: 'DELETE', path: new RegExp(`^${ACCOUNT}$`) },
+  { method: 'POST', path: new RegExp(`^${ACCOUNT}/test-connection$`) },
+  {
+    method: 'GET',
+    path: new RegExp(`^${ACCOUNT}/sync-jobs$`),
+    query: ['status', 'limit', 'cursor'],
+  },
+  { method: 'POST', path: new RegExp(`^${ACCOUNT}/sync-jobs/${UUID}/retry$`) },
 ];
 
 const SEGMENT = /^[a-z0-9-]{1,64}$/;
