@@ -57,9 +57,10 @@ function StatCard({
   );
 }
 
-const MODULES = [
-  { label: 'Siparişler', text: 'Tüm kanallardan gelen siparişler', icon: ShoppingCart },
-  { label: 'Ürünler ve Stok', text: 'Ürün kataloğu ve stok takibi', icon: Package },
+/** href = the module is usable now; without one it is still on the roadmap. */
+const MODULES: { label: string; text: string; icon: typeof Store; href?: string }[] = [
+  { label: 'Siparişler', text: 'Elle siparişler; pazaryeri siparişleri entegrasyonla gelir', icon: ShoppingCart, href: '/orders' },
+  { label: 'Ürünler ve Stok', text: 'Ürün kataloğu, toplu içe aktarma ve stok takibi', icon: Package, href: '/stock' },
   { label: 'Pazaryerleri', text: 'Trendyol, Hepsiburada ve diğerleri', icon: Store },
   { label: 'e-Fatura', text: 'e-Fatura ve e-Arşiv entegrasyonu', icon: FileText },
 ];
@@ -170,24 +171,43 @@ export default function DashboardPage() {
           <div className="border-b px-5 py-4">
             <h2 className="font-semibold text-brand-navy">Modüller</h2>
             <p className="text-xs text-muted-foreground">
-              Geliştirme planındaki modüller
+              Kullanıma açık ve geliştirme planındaki modüller
             </p>
           </div>
           <ul className="divide-y">
-            {MODULES.map(({ label, text, icon: Icon }) => (
-              <li key={label} className="flex items-center gap-3 px-5 py-3.5">
-                <span className="grid size-9 place-items-center rounded-lg bg-brand-orange-50 text-brand-orange-600">
-                  <Icon className="size-4" aria-hidden />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-medium">{label}</span>
-                  <span className="block text-xs text-muted-foreground">{text}</span>
-                </span>
-                <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                  Yakında
-                </span>
-              </li>
-            ))}
+            {MODULES.map(({ label, text, icon: Icon, href }) => {
+              const body = (
+                <>
+                  <span className="grid size-9 place-items-center rounded-lg bg-brand-orange-50 text-brand-orange-600">
+                    <Icon className="size-4" aria-hidden />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium">{label}</span>
+                    <span className="block text-xs text-muted-foreground">{text}</span>
+                  </span>
+                  {href ? (
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                      Açık
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                      Yakında
+                    </span>
+                  )}
+                </>
+              );
+              return (
+                <li key={label}>
+                  {href ? (
+                    <Link href={href} className="flex items-center gap-3 px-5 py-3.5 hover:bg-muted/60">
+                      {body}
+                    </Link>
+                  ) : (
+                    <div className="flex items-center gap-3 px-5 py-3.5">{body}</div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </section>
       </div>
