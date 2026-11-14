@@ -296,3 +296,11 @@ Pazaryeri API anahtarları `channel_accounts` tablosunda **zarf şifrelemesiyle*
 
 `stock_reserve` / `stock_release` / `stock_consume` `SECURITY DEFINER`'dır ve `tm_app` tarafından çalıştırılabilir. Tenant'ı parametre olarak alırlar ve aynı işlemde `app.tenant_id` ile eşleşmesini isterler; ancak `tm_app` ham SQL ile bu ayarı kendisi de yapabilir. Bu nedenle tenant sınırı veritabanında değil uygulamadadır: çağrılar yalnızca `backend/src/inventory/inventory.repository.ts` içinden, `TenantContext.requireTenantId()` ile yapılır (runAsSystem allowlist'inde). RLS gelene kadar kabul edilmiş risk; SQL enjeksiyonu yoksa istismar edilemez.
 
+### Loglama (OPS-01)
+
+- Tüm backend logları `AppLogger` (`backend/src/common/app-logger.ts`) üzerinden yazılır; her mesaj, bağlam ve yığın izi önce `redact()`'ten geçer: Bearer/Basic başlıkları, JWT, parola/sır/token/anahtar alanları (`key=value`, JSON), bağlantı dizesindeki parola, e-posta (`a***@alan`), TR IBAN, telefon, TCKN, 40+ karakterlik hex/base64 anahtarlar maskelenir (`redact.spec.ts` otomatik testi).
+- Üretimde (`NODE_ENV=production`) veya `LOG_FORMAT=json` ile satır başına bir JSON nesnesi: `{ time, level, context, msg, requestId, userId, stack? }`. Geliştirmede okunur metin (yine maskeli).
+- Her istek `X-Request-Id` taşır: gelen değer yalnızca `[A-Za-z0-9._-]{8,64}` ise korunur, değilse yeni UUID üretilir (log enjeksiyonu yok). Erişim logu: yöntem, sorgu dizesi olmadan yol, durum, süre.
+- Hata gövdesi değişmedi (`{ error: { code, message, details } }`); istek kimliği yalnızca yanıt başlığında — hesap varlığını sızdırmama testleri (birebir aynı gövde) korunur.
+- Harici hata izleme (Sentry vb.) kurulmadı: dış servis ve hesap gerektirir (kullanıcı kararı).
+
