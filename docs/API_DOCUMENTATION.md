@@ -473,3 +473,29 @@ Kayıtlı kimlik bilgileriyle pazaryerine tek bir salt-okuma isteği gönderir (
 Kodlar: `OK`, `INVALID_CREDENTIALS`, `FORBIDDEN`, `UNAVAILABLE`, `UNKNOWN`, `ACCOUNT_INACTIVE`, `SYNC_LIVE_CALLS_DISABLED` (canlı çağrılar kapalıyken istek gönderilmez), `CHANNEL_RATE_LIMITED`, `NOT_SUPPORTED`.
 
 Hesap başına dakikada en fazla 5 test yapılabilir (aşılırsa 429). Pazaryeri yanıt gövdesi okunmaz ve dönmez.
+
+### Siparişler (ORD-02)
+
+Yetki: `orders:read` (Owner, Admin, Operasyon, Muhasebe, Görüntüleyici), `orders:write` (Owner, Admin, Operasyon). Erişim, siparişin firmasındaki role göre her istekte veritabanından okunur: firmada rol yoksa 404, izin yoksa 403. Tutarlar her zaman ondalık metindir (`"199.90"`).
+
+#### GET /api/v1/orders
+
+Sorgu: `page`, `per_page` (≤ 100), `company_id`, `status`, `channel`, `search` (pazaryeri sipariş no, başından eşleşir). Yanıt `{ data: [order], meta: { page, per_page, total } }`; en yeni sipariş önce; kalemler listede dönmez.
+
+`order`: `{ id, companyId, channel, channelAccountId, externalOrderNo, status, currency, subtotal, discountTotal, channelDiscountTotal, shippingTotal, total, orderedAt, createdAt, updatedAt }`.
+
+#### GET /api/v1/orders/:id
+
+`order` + `items: [{ id, variantId, externalLineId, sku, name, quantity, unitPrice, discount, vatRate, lineTotal }]` + `statusHistory: [{ id, fromStatus, toStatus, source, changedBy, changedAt }]`. Müşteri kişisel verisi yok (CRM-01).
+
+#### POST /api/v1/orders
+
+Elle sipariş (`channel = "manual"`). Gövde: `{ companyId, currency (TRY|USD|EUR), orderedAt?, discountTotal?, shippingTotal?, items: [{ variantId, quantity (1–100000), unitPrice, discount? }] (1–100) }`. Kalemler firmanın etkin varyantlarının o anki kopyasıdır (sku, ürün adı, KDV oranı). `lineTotal = quantity × unitPrice − discount`, `subtotal = Σ lineTotal`, `total = subtotal − discountTotal + shippingTotal` (decimal, yuvarlama yok). 201 → detay.
+
+Hatalar: 404 `NOT_FOUND` (firma yok/erişim yok), 409 `COMPANY_INACTIVE`, 422 `VARIANT_NOT_FOUND` (yok, silinmiş veya başka firmanın), 422 `ORDER_ITEM_DUPLICATE`, 422 `VALIDATION_ERROR` (indirim tutarı aşıyor, sayı olarak tutar, 2'den fazla ondalık).
+
+#### POST /api/v1/orders/:id/status
+
+Gövde `{ status }`. Geçişler `backend/src/orders/order-status.ts` tablosuna göre (13 × 13 tablonun tamamı testli). Durum yalnızca okunan durum hâlâ geçerliyse değişir; her geçiş `order_status_history`'e (source `user`) ve Audit Log'a yazılır. 200 → detay.
+
+Hatalar: 409 `ORDER_TRANSITION_INVALID`, 409 `CONCURRENT_UPDATE` (eşzamanlı değişiklik), 409 `CHANNEL_MANAGED` (pazaryeri siparişi: durum pazaryerinden gelir, INT-TY-03), 422 bilinmeyen durum, 404.

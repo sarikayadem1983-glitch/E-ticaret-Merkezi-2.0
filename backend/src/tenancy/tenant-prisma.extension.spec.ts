@@ -318,7 +318,8 @@ describe('applyTenantScope', () => {
         'utf8',
       );
       const fields = new Set<string>();
-      for (const line of schema.split('\n')) {
+      // CRLF checkouts (Windows) must parse like LF ones.
+      for (const line of schema.split(/\r?\n/)) {
         const m = /^\s+(\w+)\s+(\w+)(\?|\[\])?\s/.exec(line);
         if (m && GLOBAL_MODELS.has(m[2])) fields.add(m[1]);
       }
