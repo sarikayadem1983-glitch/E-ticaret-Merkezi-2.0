@@ -690,12 +690,20 @@ export class AuthService {
     if (membership?.status !== 'active') {
       throw new NotFoundException('Kullanıcı bulunamadı');
     }
-    const [tenant, capabilities] = await Promise.all([
+    const [tenant, capabilities, verified] = await Promise.all([
       this.tenants.profile(this.repository.prisma, tenantId),
       this.access.capabilities(userId),
+      // users is global: read by own id only (this file is on the runAsSystem allowlist).
+      TenantContext.runAsSystem(() =>
+        this.repository.prisma.user.findUnique({
+          where: { id: userId },
+          select: { emailVerifiedAt: true },
+        }),
+      ),
     ]);
     return {
       ...membership.user,
+      emailVerified: !!verified?.emailVerifiedAt,
       tenantId,
       tenant,
       permissions,

@@ -37,6 +37,8 @@ export interface SessionInfo {
     permissions: string[];
     tenant: { id: string; name: string; slug: string } | null;
     canManageUsers?: boolean;
+    /** USR-19: whether the e-mail address has been confirmed. */
+    emailVerified?: boolean;
   };
   selectedCompanyId: string | null;
 }

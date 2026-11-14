@@ -186,6 +186,14 @@ describe('Password reset and e-mail verification (e2e, USR-19)', () => {
     await sql('UPDATE users SET email_verified_at = NULL WHERE email = $1', [
       email,
     ]);
+    const verified = async () =>
+      (
+        await http()
+          .get('/api/v1/auth/me')
+          .set({ Authorization: `Bearer ${access}` })
+          .expect(200)
+      ).body.data.emailVerified as boolean;
+    expect(await verified()).toBe(false);
     await http()
       .post('/api/v1/auth/email/verification')
       .set({ Authorization: `Bearer ${access}` })
@@ -202,5 +210,6 @@ describe('Password reset and e-mail verification (e2e, USR-19)', () => {
       [email],
     );
     expect(user.email_verified_at).not.toBeNull();
+    expect(await verified()).toBe(true);
   });
 });

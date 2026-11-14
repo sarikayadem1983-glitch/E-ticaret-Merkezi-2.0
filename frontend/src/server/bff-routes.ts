@@ -34,6 +34,8 @@ const ROUTES: readonly BffRoute[] = [
   { method: 'POST', path: new RegExp(`^companies/${UUID}/(de)?activate$`) },
   { method: 'GET', path: /^auth\/me$/ },
   { method: 'GET', path: /^auth\/memberships$/ },
+  // USR-19: ask for a new verification e-mail (no body; the backend uses the session user).
+  { method: 'POST', path: /^auth\/email\/verification$/ },
   // User management (USR-T11a/T12a). Session-less invitation lookup/accept
   // have their own routes under /api/invitations and are not proxied here.
   { method: 'GET', path: /^users$/ },

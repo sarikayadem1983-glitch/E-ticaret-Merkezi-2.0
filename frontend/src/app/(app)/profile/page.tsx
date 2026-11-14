@@ -1,16 +1,24 @@
 'use client';
 
+import { useMutation } from '@tanstack/react-query';
 import { LogOut } from 'lucide-react';
+import { toast } from 'sonner';
 import { PageHeader } from '@/components/page-header';
 import { initials } from '@/components/shell/user-menu';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLogout, useSession } from '@/hooks/queries';
+import { bff, errorMessage } from '@/lib/api';
 
 export default function ProfilePage() {
   const { data } = useSession();
   const logout = useLogout();
   const user = data?.user;
+  const sendVerification = useMutation({
+    mutationFn: () => bff('auth/email/verification', { method: 'POST' }),
+    onSuccess: () => toast.success('Doğrulama bağlantısı email adresinize gönderildi'),
+    onError: (e) => toast.error(errorMessage(e)),
+  });
 
   return (
     <>
@@ -50,6 +58,23 @@ export default function ProfilePage() {
             <div>
               <dt className="text-xs font-medium text-muted-foreground uppercase">Email</dt>
               <dd className="mt-1 text-sm">{user?.email}</dd>
+              {user && user.emailVerified === true && (
+                <dd className="mt-1 text-xs font-medium text-emerald-700">Doğrulandı</dd>
+              )}
+              {user && user.emailVerified === false && (
+                <dd className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                  <span className="font-medium text-amber-700">Doğrulanmadı</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="min-h-10"
+                    disabled={sendVerification.isPending || sendVerification.isSuccess}
+                    onClick={() => sendVerification.mutate()}
+                  >
+                    {sendVerification.isSuccess ? 'Gönderildi' : 'Doğrulama emaili gönder'}
+                  </Button>
+                </dd>
+              )}
             </div>
             <div>
               <dt className="text-xs font-medium text-muted-foreground uppercase">Mağaza</dt>
