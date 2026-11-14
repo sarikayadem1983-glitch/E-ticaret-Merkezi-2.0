@@ -11,6 +11,8 @@ const ALLOWED = new Set([
   'auth/auth.service.ts',
   'database/database-role.check.ts',
   'health/health.service.ts',
+  // INV-02: stock_* SQL functions filter by the tenant id passed in.
+  'inventory/inventory.repository.ts',
   'invitations/invitations.repository.ts',
   'memberships/memberships.repository.ts',
   // USR-19: users and tokens are global; every query filters by user id or token hash.

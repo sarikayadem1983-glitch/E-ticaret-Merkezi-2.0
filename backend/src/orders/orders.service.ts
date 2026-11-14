@@ -9,6 +9,8 @@ import { AuditService } from '../audit/audit.service.js';
 import type { AuthUser } from '../auth/decorators.js';
 import { money } from '../catalog/pricing.js';
 import { ProductsService } from '../catalog/products.service.js';
+import { ReservationsRepository } from '../inventory/inventory.repository.js';
+import { InventoryService } from '../inventory/inventory.service.js';
 import { CompaniesService } from '../companies/companies.service.js';
 import {
   InjectPrisma,
@@ -29,6 +31,15 @@ export const WRITE = 'orders:write';
 const MODULE = 'orders';
 const ENTITY = 'Order';
 export const MANUAL_CHANNEL = 'manual';
+/** Statuses before shipping: stock can still be reserved. */
+const RESERVABLE = new Set<OrderStatus>([
+  'awaiting',
+  'created',
+  'picking',
+  'invoiced',
+  'unpacked',
+  'repack',
+]);
 
 const notFound = () =>
   new NotFoundException({ code: 'NOT_FOUND', message: 'Sipariş bulunamadı' });
@@ -125,6 +136,8 @@ export class OrdersService {
     private readonly audit: AuditService,
     private readonly companies: CompaniesService,
     private readonly products: ProductsService,
+    private readonly reservations: ReservationsRepository,
+    private readonly inventory: InventoryService,
   ) {}
 
   async list(user: AuthUser, q: ListOrdersQuery) {
@@ -307,6 +320,84 @@ export class OrdersService {
     return this.get(user, id);
   }
 
+  /**
+   * Reserves stock for every matched line (INV-02) in one warehouse (default: the company's
+   * default warehouse). All lines or none: any shortage rolls the whole request back.
+   * Local stock only: nothing is sent to a marketplace.
+   */
+  async reserve(user: AuthUser, id: string, warehouseId?: string) {
+    await this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findFirst({
+        where: { id },
+        select: ORDER_FIELDS,
+      });
+      if (!order) throw notFound();
+      await this.assertPermission(user, order.companyId, 'inventory:write');
+      // Locks the order row and proves its status is still the one read: a concurrent
+      // ship/cancel either waits for us or has already changed the status (→ 409 here).
+      await this.lockStatus(tx, order);
+      if (!RESERVABLE.has(order.status as OrderStatus)) {
+        throw new ConflictException({
+          code: 'ORDER_NOT_RESERVABLE',
+          message: 'Bu durumdaki siparişe stok ayrılamaz',
+        });
+      }
+      const target =
+        warehouseId ??
+        (await this.inventory.defaultWarehouse(order.companyId, tx));
+      if (!target) {
+        throw new ConflictException({
+          code: 'WAREHOUSE_REQUIRED',
+          message: 'Firmanın varsayılan deposu yok; depo seçin',
+        });
+      }
+      const items = await this.matchedLines(tx, order.id);
+      for (const item of items) {
+        await this.reservations.reserve(tx, item.id, target, item.quantity);
+      }
+      await this.audit.record(
+        {
+          action: 'UPDATE',
+          module: MODULE,
+          entityType: ENTITY,
+          entityId: order.id,
+          after: { reservedInWarehouse: target, lines: items.length },
+        },
+        tx,
+      );
+    });
+    return this.get(user, id);
+  }
+
+  /** Row lock on the order, only if its status is still `order.status`. */
+  private async lockStatus(
+    tx: PrismaTx,
+    order: Pick<OrderRow, 'id' | 'status'>,
+  ) {
+    const { count } = await tx.order.updateMany({
+      where: { id: order.id, status: order.status },
+      data: { updatedAt: new Date() },
+    });
+    if (count !== 1) {
+      throw new ConflictException({
+        code: 'CONCURRENT_UPDATE',
+        message: 'Sipariş başka bir işlemle değişti; yeniden deneyin',
+      });
+    }
+  }
+
+  /**
+   * Lines linked to a variant, in variant order: every transaction locks stock rows in the
+   * same order, so two multi-line orders cannot deadlock on each other.
+   */
+  private matchedLines(tx: PrismaTx, orderId: string) {
+    return tx.orderItem.findMany({
+      where: { orderId, variantId: { not: null } },
+      select: { id: true, quantity: true, variantId: true },
+      orderBy: [{ variantId: 'asc' }, { id: 'asc' }],
+    });
+  }
+
   async changeStatus(user: AuthUser, id: string, dto: ChangeStatusDto) {
     await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findFirst({
@@ -337,7 +428,7 @@ export class OrdersService {
    */
   async transition(
     tx: PrismaTx,
-    order: Pick<OrderRow, 'id' | 'status'>,
+    order: Pick<OrderRow, 'id' | 'status' | 'companyId'>,
     to: OrderStatus,
     by: {
       source: 'user' | 'channel' | 'system';
@@ -361,6 +452,46 @@ export class OrdersService {
         code: 'CONCURRENT_UPDATE',
         message: 'Sipariş başka bir işlemle değişti; yeniden deneyin',
       });
+    }
+    // Stock follows the status (INV-02). Shipping lowers stock for every matched line: lines
+    // without a reservation are reserved first in the default warehouse, so an order never
+    // ships without its stock (shortage → 409, nothing changes). Cancelling releases.
+    // Returns ('returned') do not restock automatically: goods are inspected first and put
+    // back with a 'return' movement (SHP-01 / INT-TY-03).
+    if (to === 'shipped' || to === 'cancelled' || to === 'unsupplied') {
+      const items = await this.matchedLines(tx, order.id);
+      if (to === 'shipped') {
+        const covered = await this.reservations.coveredLines(
+          tx,
+          items.map((i) => i.id),
+        );
+        const missing = items.filter((i) => !covered.has(i.id));
+        // A company without any warehouse does not keep stock: shipping does not touch it.
+        if (
+          missing.length > 0 &&
+          (await this.inventory.usesStock(order.companyId, tx))
+        ) {
+          const target = await this.inventory.defaultWarehouse(
+            order.companyId,
+            tx,
+          );
+          if (!target) {
+            throw new ConflictException({
+              code: 'WAREHOUSE_REQUIRED',
+              message:
+                'Stok ayrılmamış ve firmanın varsayılan deposu yok; önce stok ayırın',
+            });
+          }
+          for (const item of missing) {
+            await this.reservations.reserve(tx, item.id, target, item.quantity);
+          }
+        }
+        for (const item of items) {
+          await this.reservations.consume(tx, item.id, by.changedBy ?? null);
+        }
+      } else {
+        for (const item of items) await this.reservations.release(tx, item.id);
+      }
     }
     await tx.orderStatusHistory.create({
       data: {

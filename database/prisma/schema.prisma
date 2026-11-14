@@ -48,6 +48,7 @@ model Tenant {
   warehouses                Warehouse[]
   stockLevels               StockLevel[]
   stockMovements            StockMovement[]
+  stockReservations         StockReservation[]
 
   @@map("tenants")
 }
@@ -434,13 +435,14 @@ model ProductVariant {
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz
 
-  tenant          Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  product         Product                 @relation(fields: [tenantId, companyId, productId], references: [tenantId, companyId, id], onDelete: Restrict)
-  attributeValues VariantAttributeValue[]
-  prices          VariantPrice[]
-  orderItems      OrderItem[]
-  stockLevels     StockLevel[]
-  stockMovements  StockMovement[]
+  tenant            Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  product           Product                 @relation(fields: [tenantId, companyId, productId], references: [tenantId, companyId, id], onDelete: Restrict)
+  attributeValues   VariantAttributeValue[]
+  prices            VariantPrice[]
+  orderItems        OrderItem[]
+  stockLevels       StockLevel[]
+  stockMovements    StockMovement[]
+  stockReservations StockReservation[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, companyId, id])
@@ -813,11 +815,13 @@ model OrderItem {
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  order   Order           @relation(fields: [tenantId, companyId, orderId], references: [tenantId, companyId, id], onDelete: Restrict)
-  variant ProductVariant? @relation(fields: [tenantId, companyId, variantId], references: [tenantId, companyId, id], onDelete: Restrict)
+  tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  order        Order              @relation(fields: [tenantId, companyId, orderId], references: [tenantId, companyId, id], onDelete: Restrict)
+  variant      ProductVariant?    @relation(fields: [tenantId, companyId, variantId], references: [tenantId, companyId, id], onDelete: Restrict)
+  reservations StockReservation[]
 
   @@unique([tenantId, id])
+  @@unique([tenantId, companyId, id])
   // SQL-only: unique (tenant_id, order_id, external_line_id) WHERE external_line_id IS NOT NULL.
   @@index([tenantId, orderId])
   @@index([tenantId, variantId])
@@ -861,10 +865,11 @@ model Warehouse {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  company        Company         @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict)
-  stockLevels    StockLevel[]
-  stockMovements StockMovement[]
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  company           Company            @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict)
+  stockLevels       StockLevel[]
+  stockMovements    StockMovement[]
+  stockReservations StockReservation[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, companyId, id])
@@ -925,4 +930,31 @@ model StockMovement {
   @@index([tenantId, variantId, createdAt(sort: Desc)])
   @@index([tenantId, warehouseId, createdAt(sort: Desc)])
   @@map("stock_movements")
+}
+
+/// INV-02: stock reserved for an order line in one warehouse. Changed only by the
+/// SECURITY DEFINER functions stock_reserve / stock_release / stock_consume; tm_app reads.
+model StockReservation {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  companyId   String   @map("company_id") @db.Uuid
+  warehouseId String   @map("warehouse_id") @db.Uuid
+  variantId   String   @map("variant_id") @db.Uuid
+  orderItemId String   @map("order_item_id") @db.Uuid
+  quantity    Int
+  /// active | released | consumed (SQL CHECK)
+  status      String   @default("active") @db.VarChar(20)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  warehouse Warehouse      @relation(fields: [tenantId, companyId, warehouseId], references: [tenantId, companyId, id], onDelete: Restrict)
+  variant   ProductVariant @relation(fields: [tenantId, companyId, variantId], references: [tenantId, companyId, id], onDelete: Restrict)
+  orderItem OrderItem      @relation(fields: [tenantId, companyId, orderItemId], references: [tenantId, companyId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  // SQL-only: unique (tenant_id, order_item_id, warehouse_id) WHERE status = 'active'.
+  @@index([tenantId, orderItemId])
+  @@index([tenantId, warehouseId, variantId])
+  @@map("stock_reservations")
 }

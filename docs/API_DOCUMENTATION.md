@@ -499,3 +499,15 @@ Hatalar: 404 `NOT_FOUND` (firma yok/erişim yok), 409 `COMPANY_INACTIVE`, 422 `V
 Gövde `{ status }`. Geçişler `backend/src/orders/order-status.ts` tablosuna göre (13 × 13 tablonun tamamı testli). Durum yalnızca okunan durum hâlâ geçerliyse değişir; her geçiş `order_status_history`'e (source `user`) ve Audit Log'a yazılır. 200 → detay.
 
 Hatalar: 409 `ORDER_TRANSITION_INVALID`, 409 `CONCURRENT_UPDATE` (eşzamanlı değişiklik), 409 `CHANNEL_MANAGED` (pazaryeri siparişi: durum pazaryerinden gelir, INT-TY-03), 422 bilinmeyen durum, 404.
+
+### Stok (INV-02)
+
+Yetki: `inventory:read` (tüm roller), `inventory:write` (Owner, Admin, Operasyon); firma rolü her istekte veritabanından okunur (rol yok → 404, izin yok → 403). Stok yalnızca hareketlerle değişir; pazaryerine hiçbir şey gönderilmez.
+
+- `GET /api/v1/warehouses?company_id` → `{ data: [{ id, companyId, name, isDefault, isActive, createdAt, updatedAt }] }`
+- `POST /api/v1/warehouses` `{ companyId, name, isDefault? }` → 201. 409 `WAREHOUSE_NAME_TAKEN` (büyük/küçük harf duyarsız), 409 `WAREHOUSE_DEFAULT_TAKEN`, 409 `COMPANY_INACTIVE`.
+- `GET /api/v1/stock-levels?company_id&warehouse_id&variant_id&page&per_page` → `{ data: [{ id, companyId, warehouseId, warehouseName, variantId, sku, productName, onHand, reserved, available, updatedAt }], meta }`. `available = onHand − reserved`.
+- `POST /api/v1/stock-movements` `{ warehouseId, variantId, quantity (≠ 0), reason: opening | adjustment | count | purchase }` → 201. Açılış/satın alma pozitif olmalı (422). Stok eksiye düşecekse 409 `STOCK_INSUFFICIENT`; ayrılmış stoğa dokunacaksa 409 `STOCK_RESERVED`. `order` hareketleri yalnızca sevkiyatta otomatik yazılır.
+- `GET /api/v1/stock-movements?warehouse_id&variant_id&limit` → en yeni önce.
+- `POST /api/v1/orders/:id/reserve` `{ warehouseId? }` (varsayılan: firmanın varsayılan deposu) → 200 sipariş detayı. Eşleşmiş tüm kalemler ayrılır ya da hiçbiri. 409 `STOCK_INSUFFICIENT`, 409 `STOCK_ALREADY_RESERVED`, 409 `ORDER_NOT_RESERVABLE` (sevk edilmiş/son durum), 409 `WAREHOUSE_REQUIRED`, 404 (depo yok/pasif/başka firma). Aynı istek tekrarlanırsa değişiklik olmaz.
+- Durum geçişi `shipped` rezervasyonu stok düşümüne çevirir; `cancelled`/`unsupplied` serbest bırakır.

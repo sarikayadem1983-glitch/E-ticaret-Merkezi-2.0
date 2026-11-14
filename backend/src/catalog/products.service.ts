@@ -210,6 +210,20 @@ export class ProductsService {
     }));
   }
 
+  /** For inventory lists: SKU and product name of variants (deleted ones included). */
+  async variantLabels(
+    ids: string[],
+  ): Promise<Map<string, { sku: string; name: string }>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.repository.prisma.productVariant.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, sku: true, product: { select: { name: true } } },
+    });
+    return new Map(
+      rows.map((r) => [r.id, { sku: r.sku, name: r.product.name }]),
+    );
+  }
+
   async get(user: AuthUser, id: string) {
     return { data: toProduct(await this.load(user, id, 'products:read')) };
   }

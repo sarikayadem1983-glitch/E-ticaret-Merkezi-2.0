@@ -136,6 +136,23 @@
 - `channels` — id, company_id, type, name, credentials_ref, is_active
 - `channel_listings` — id, channel_id, variant_id, external_id, price, sync_status
 
+### inventory — rezervasyon (INV-02; migration `20261114170000_stock_reservations`, izole veritabanında denendi)
+- `stock_reservations` — id, tenant_id, company_id, warehouse_id, variant_id, order_item_id, quantity (> 0), status (`active | released | consumed`), created_at, updated_at
+  - FK'lar firma dahil bileşik: depo, varyant ve sipariş kalemi (`order_items` üzerine `(tenant_id, company_id, id)` tekil indeksi eklendi) aynı firmanın olmak zorunda.
+  - Kısmi tekil `(tenant_id, order_item_id, warehouse_id) WHERE status = 'active'`.
+  - `tm_app`: yalnızca SELECT. Satırlar yalnızca aşağıdaki fonksiyonlarla değişir.
+- `stock_levels`: yeni CHECK `reserved <= on_hand` — ayrılmış birim satılamaz, düzeltme/sayımla düşülemez (`STOCK_RESERVED`).
+- Fonksiyonlar (`SECURITY DEFINER`, `search_path` sabit, `PUBLIC`'ten EXECUTE alındı, yalnızca `tm_app` çalıştırır). Uygulama bunları `TenantContext.runAsSystem` içinde ve **kendi tenant id'sini parametre vererek** çağırır (`inventory/inventory.repository.ts`, allowlist'te); fonksiyonlar her satırı bu tenant id ile süzer:
+  - `stock_reserve(tenant, order_item, warehouse, quantity)`: kalem ve etkin depo aynı firmada olmalı; stok satırı `FOR UPDATE` kilitlenir, `on_hand − reserved < quantity` ise `STOCK_INSUFFICIENT`. Aynı adetle tekrar → aynı rezervasyon (idempotent); farklı adet → `STOCK_ALREADY_RESERVED`.
+  - `stock_release(tenant, order_item)`: etkin rezervasyonları `released` yapar, `reserved` düşer.
+  - `stock_consume(tenant, order_item, created_by)`: önce `reserved` düşer, sonra `order` stok hareketi (`reference_type = order_item`) yazılır (tetikleyici `on_hand`'i düşürür), rezervasyon `consumed`.
+- **Derinlemesine savunma:** fonksiyonlar `p_tenant`'ın aynı işlemde ayarlanan `app.tenant_id` (`set_config(..., true)`) ile eşit olmasını ister, değilse `STOCK_TENANT_MISMATCH` (SQLSTATE `TS006`). Uygulama bunu her çağrıdan önce kendi tenant'ıyla ayarlar. `tm_app` ham SQL çalıştırabildiği için bu tam bir güvenlik sınırı değildir; asıl sınır uygulamanın tenant bağlamıdır (bkz. SECURITY.md notu).
+- Hata kodları SQLSTATE ile: `TS001` yetersiz stok, `TS002` farklı adetle tekrar, `TS003` kalem yok, `TS004` depo yok, `TS005` geçersiz istek, `TS006` tenant uyuşmazlığı (500, gizlenmez). Kilitlenme `40P01` / serileştirme `40001` → 409 `CONCURRENT_UPDATE`.
+- Kilit sırası: uygulama kalemleri **varyant id sırasıyla** işler; çok kalemli siparişler birbirini kilitlemez (testli).
+- Sipariş akışı (ORD-02 `transition`): sipariş satırı koşullu güncellemeyle kilitlenir (rezervasyon ile durum değişikliği yarışmaz). `shipped` → rezervasyonu olmayan eşleşmiş kalemler önce varsayılan depodan ayrılır, sonra tümü düşülür (stok yetmezse 409, hiçbir şey değişmez); firmanın **hiç deposu yoksa** stok tutulmuyor sayılır ve kargolama stoğa dokunmaz. `cancelled`/`unsupplied` → serbest bırakılır. **İade (`returned`) stoğa otomatik dönmez**: ürün kontrol edilip `return` hareketiyle eklenir (SHP-01 / INT-TY-03). Rezervasyon `POST /orders/:id/reserve` ile (tüm kalemler ya da hiçbiri).
+- Bakım notu: migration `order_items` üzerine `CONCURRENTLY` olmadan tekil indeks kurar; büyük tabloda yazmaları kısa süre kilitler (prod'da bakım penceresi).
+- Geri dönüş: `down.sql` (rezervasyon veya `reserved <> 0` varken durur). Prova: `verify.sql`, `rehearsal-seed.sql`.
+
 ### customers
 - `customers` — id, name, email, phone
 - `addresses` — id, customer_id, type, address fields
