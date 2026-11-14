@@ -1,19 +1,19 @@
 # Proje Durumu
 
-Son güncelleme: 2026-11-14 (`main` @ `4c029c0` dev'e deploy edildi) · Kaynak: `origin/main` @ `4c029c0` · Güncelleme kuralları: `AGENTS.md` → "Yol haritası ve durum takibi".
+Son güncelleme: 2026-11-14 (`main` @ `a9edbe5` dev'e deploy edildi) · Kaynak: `origin/main` @ `a9edbe5` · Güncelleme kuralları: `AGENTS.md` → "Yol haritası ve durum takibi".
 
 ## 1. Özet
 
 | Ölçü | Değer |
 |---|---|
-| Toplam EPIC / görev | 33 / 141 (133 + 6 kullanıcı yönetimi MVP dilimi + 2 kullanıcı kararı 2026-10-30: OPS-08, USR-21) |
-| Tamamlanan | 30 (%21,3) — 30 `DONE-MERGED` (hepsi dev'de, `0437c16`) |
+| Toplam EPIC / görev | 33 / 142 (133 + 6 kullanıcı yönetimi MVP dilimi + 2 kullanıcı kararı 2026-10-30: OPS-08, USR-21 + USR-19b, 2026-11-14) |
+| Tamamlanan | 53 (%37,3) — 53 `DONE-MERGED` (hepsi dev'de) |
 | BLOCKED | 1 — USR-18 (T16 + Aşama 2 migration onayı) |
-| Sürüm A (Trendyol-only MVP) ilerleme | 30 / 58 görev merge edildi ve dev'de; kalan 28 görev, 85 iş günü; tahmini hedef 2027-01-20 (taahhüt değil; OPS-08 ve USR-T11a sonrası yeniden hesaplanmadı) |
+| Sürüm A (Trendyol-only MVP) ilerleme | 52 / 59 görev merge edildi ve dev'de. Kalan 7: INF-12 → IMG-01 (yerel MinIO kararı bekliyor), INT-TY-01…03 ve SHP-02 (Trendyol stage/IP erişimi, BLK-01), OPS-03 (prod yedekleme/PITR altyapısı). Hepsi dış karar/erişime bağlı |
 | Sürüm B / C | 62 / 21 görev |
 | Açık PR | Yok |
-| `origin/main` | `4c029c0` (PR #65 merge; önce #64 DSH-02). PR CI ✓ (backend, frontend) |
-| Dev ortamı | `4c029c0` (2026-11-14, kullanıcı onayıyla, bkz. §3q). Önceki `cd83fea` (bkz. §3p). Önceki `70bae17` (2026-11-13, bkz. §3d). Backend `node dist/main` (WMI ile ayrık). Smoke: `tm-backups/smoke-70bae17.log`. Önceki: `736cb40` (bkz. §3c) |
+| `origin/main` | `a9edbe5` (PR #67 merge, profil e-posta doğrulama). PR CI ✓ (backend, frontend) |
+| Dev ortamı | `a9edbe5` (2026-11-14, kullanıcı onayıyla, bkz. §3r). Önceki `4c029c0` (bkz. §3q). Önceki `70bae17` (2026-11-13, bkz. §3d). Backend `node dist/main` (WMI ile ayrık). Smoke: `tm-backups/smoke-70bae17.log`. Önceki: `736cb40` (bkz. §3c) |
 | Dev DB şeması | Tüm migration'lar uygulandı; son `20261113120000_sync_engine` (INT-02, 2026-11-13, kullanıcı onayıyla; yedek `ticaret_merkezi-20261113-210949.dump`, izole prova ok). Önceki `20261112210000_user_tokens` (USR-19, kullanıcı onayıyla; yedek `ticaret_merkezi-20261112-210146.dump`; `migrate status` 2026-11-13: güncel). Önceki `20261112190000_channel_mapping` (CAT-06, 2026-11-12, kullanıcı onayıyla; yedek `ticaret_merkezi-20261112-184613.dump` + izole prova 10/10). Aşama 2 (`migrations-pending/`) uygulanmadı |
 | Son testler (`main` @ `0437c16`, CI run 41096842266) | backend unit 283/283, e2e 331/332 (1 skip: `mail.e2e-spec.ts`, Mailpit); frontend unit 124/124. Önceki tam tur (`8fc7ae3`, CI run 41053467144): build, lint, typecheck ok. Playwright CI'da koşmuyor. Önceki yerel tam tur (`95b5bdb`): build ok; frontend 81/81, lint ok, typecheck ok, `next build` ok; Playwright 13/13 yalnızca `next dev` ile — `next start` (prod modu, http) 11/13: `APP_ORIGIN` https koruması, bkz. R-24 |
 
@@ -23,7 +23,7 @@ Son güncelleme: 2026-11-14 (`main` @ `4c029c0` dev'e deploy edildi) · Kaynak: 
 |---|---|---|---|
 | M01 INF | 11 / 20 | 55 | Hepsi dev'de |
 | OPS | 2 / 8 | 25 | OPS-08 (`63bbb94`), OPS-01 (`ce85f36`) |
-| M02 USR | 20 / 28 | 71 | Hepsi dev'de (USR-19 dahil) |
+| M02 USR | 21 / 29 | 72 | Hepsi dev'de (USR-19, USR-19b dahil) |
 | M03 DSH | 2 / 3 | 67 | DSH-01 iskelet, DSH-02 KPI kartları (Sürüm B, öne alındı) dev'de |
 | M04 CAT | 6 / 6 | 100 | Hepsi dev'de; CAT-06 backend dilimi (UI: CAT-06b) |
 | M08 INT | 3 / 25 | 12 | INT-01 (`7b3c0b9`), INT-02 (`70bae17`), INT-03 (`65fcf85`) dev'de |
@@ -32,13 +32,17 @@ Son güncelleme: 2026-11-14 (`main` @ `4c029c0` dev'e deploy edildi) · Kaynak: 
 | RPT | 1 / 3 | 33 | RPT-01 (`633f250`) dev'de |
 | IMP | 1 / 3 | 33 | IMP-01 (`0568b56`) dev'de |
 | Diğer | 0 / 43 | 0 | Başlanmadı |
-| **Toplam** | **51 / 141** | **36,2** | Dev'e deploy edilmiş: 51 / 141 (%36,2) |
+| **Toplam** | **53 / 142** | **37,3** | Dev'e deploy edilmiş: 53 / 142 (%37,3) |
 
 ## 2. Merge edilen, deploy edilmemiş PR'lar
 
 Yok. #25–#30 (`5ac1401`) 2026-11-12'de dev'e deploy edildi. #6–#16 (`f010233`), #19 (`8fc7ae3`), #22 ve #23 (`0437c16`) 2026-10-30'da dev'e deploy edildi ve bu tablodan çıkarıldı; ayrıntı §3 ve §6.
 
 Aşama 2 SQL'i (`migrations-pending/`) uygulanmadı (USR-18).
+
+## 3r. Dev deploy kaydı (2026-11-14, `main` @ `a9edbe5`)
+
+Yalnızca dev ortamında, kullanıcı onayıyla. #67 (profil: e-posta doğrulama durumu ve yeniden gönderme; `/auth/me` `emailVerified`). Migration yok. PR CI ✓. Backend build + yeniden başlatma; `/health` ok. İlk smoke denemesi giriş ucunun IP hız sınırına (429, gün boyu çok sayıda test girişi) takıldı — uygulama hatası değil; pencere dolduktan sonra tekrar koşuldu: bkz. `tm-backups/smoke-a9edbe5.log`. Geri alma: `git checkout dab71fe`, backend build + yeniden başlatma.
 
 ## 3q. Dev deploy kaydı (2026-11-14, `main` @ `4c029c0`)
 
@@ -259,16 +263,15 @@ Kullanıcı onayıyla, yalnızca dev ortamında (`localhost:5432/ticaret_merkezi
 
 **Geri dönüş:** kod için önceki sürümü yeniden başlatmak yeterli (eski kod yeni tabloları kullanmaz). Smoke testi katalogda satır oluşturduğundan `down.sql` artık kendini durdurur; şemayı geri almak için 1. adımdaki yedekten geri yükleme gerekir (yedekten sonraki dev verisi kaybolur).
 
-## 4. Sıradaki görevler (önerilen sıra, 2 akış)
+## 4. Sıradaki görevler (2026-11-14 itibarıyla)
 
-| # | ID | Başlık | Not |
+| # | ID | Başlık | Engel / not |
 |---|---|---|---|
-| 1 | — | (USR-19 + USR-19b tamamlandı) | Şifre sıfırlama / doğrulama sayfaları dev'de |
-| 2 | CAT-06 | Kanal kategori ağacı ve zorunlu özellik eşleme | INT-01 bağımlılığı |
-| 3 | USR-T13b / USR-T15b | Kullanıcı yönetimi kalan dilimleri | Sürüm B |
-| 4 | — | — | — |
-| 5 | ORD-01 / INV-01 | Sipariş ve stok şemaları | CAT-01 tamam; migration dev'e uygulanması onay gerektirir |
-| 7 | INF-12 → IMG-01 | Dosya depolama, görsel yükleme | CAT-02 tamam |
+| 1 | INF-12 → IMG-01 | Nesne depolama (dev'de MinIO) → görsel yükleme | Yerel MinIO Docker imajı indirme kararı (kullanıcı); INT-TY-01'in ön koşulu |
+| 2 | INT-TY-01 → 02 → 03 → SHP-02 | Trendyol ürün, stok/fiyat, sipariş, kargo | BLK-01: stage/IP erişimi; pazaryerine yazma her adımda kullanıcı onayıyla |
+| 3 | OPS-03 | Otomatik yedekleme + PITR + geri yükleme tatbikatı | Prod altyapısı kararı (CRITICAL) |
+| 4 | IMP-02, RPT-02, CRM-01, SHP-01 | Sürüm B: asenkron içe aktarma, stok raporu, müşteri (KVKK), iade akışı | Sürüm A sonrası |
+| 5 | USR-18 | Aşama 2 migration (eski kullanıcı kolonları) | BLOCKED, onay |
 
 **Dış iş (kullanıcı, hemen):** Trendyol satıcı hesabı, API anahtarı ve stage erişimi / IP whitelist başvurusu — MVP'nin ana dış kapısı, en geç ≈ 2026-12-14 (INT-TY-01 başlangıcı).
 
