@@ -171,6 +171,16 @@ describe('matchBffRoute', () => {
     expect(match('GET', 'imports/products/template')).toEqual({ ok: false, status: 404 });
   });
 
+  it('allows asking for a verification e-mail without a body (USR-19)', () => {
+    expect(match('POST', 'auth/email/verification')).toEqual({
+      ok: true,
+      path: 'auth/email/verification',
+      search: new URLSearchParams(),
+      body: false,
+    });
+    expect(match('POST', 'auth/email/verify')).toEqual({ ok: false, status: 404 });
+  });
+
   it('allows the dashboard KPIs read-only (DSH-02)', () => {
     expect(match('GET', 'dashboard/kpis', 'company_id=x')).toMatchObject({ ok: true, body: false });
     expect(match('POST', 'dashboard/kpis')).toEqual({ ok: false, status: 404 });
