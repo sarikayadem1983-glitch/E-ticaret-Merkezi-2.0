@@ -26,7 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { useChangeOrderStatus, useOrder } from '@/hooks/orders';
+import { useChangeOrderStatus, useOrder, useReserveOrder } from '@/hooks/orders';
 import { useCompany, useSession } from '@/hooks/queries';
 import { errorMessage } from '@/lib/api';
 import { formatAmount } from '@/lib/money';
@@ -41,15 +41,20 @@ import {
   type OrderStatus,
 } from '@/lib/orders';
 
+/** Statuses before shipping: stock can still be reserved (backend checks again). */
+const RESERVABLE: readonly OrderStatus[] = ['awaiting', 'created', 'picking', 'invoiced', 'unpacked', 'repack'];
+
 export default function OrderPage() {
   const { id } = useParams<{ id: string }>();
   const order = useOrder(id);
   const session = useSession();
   const change = useChangeOrderStatus(id);
+  const reserve = useReserveOrder(id);
   const company = useCompany(order.data?.companyId ?? '');
   const [confirm, setConfirm] = useState<OrderStatus | null>(null);
   const perms = session.data?.user.permissions ?? [];
   const canWrite = perms.includes('*') || perms.includes('orders:write');
+  const canStock = perms.includes('*') || perms.includes('inventory:write');
 
   if (order.isLoading) {
     return (
@@ -111,6 +116,27 @@ export default function OrderPage() {
             pazaryerine hiçbir değişiklik gönderilmez.
           </AlertDescription>
         </Alert>
+      )}
+
+      {canStock && RESERVABLE.includes(o.status) && (
+        <section aria-label="Stok" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4 shadow-xs">
+          <p className="text-sm text-muted-foreground">
+            Stok, firmanın varsayılan deposundan ayrılır; kargoya verilince düşülür, iptalde serbest kalır.
+          </p>
+          <Button
+            variant="outline"
+            className="min-h-10"
+            disabled={reserve.isPending}
+            onClick={() =>
+              reserve.mutate(undefined, {
+                onSuccess: () => toast.success('Stok ayrıldı'),
+                onError: (e) => toast.error(errorMessage(e)),
+              })
+            }
+          >
+            Stok ayır
+          </Button>
+        </section>
       )}
 
       {next.length > 0 && (

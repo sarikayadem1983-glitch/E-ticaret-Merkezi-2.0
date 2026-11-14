@@ -22,6 +22,7 @@ import type {
   ListByCompanyQuery,
   ListLevelsQuery,
   ListMovementsQuery,
+  SetThresholdDto,
 } from './inventory.dto.js';
 import { mapStockError } from './inventory.repository.js';
 
@@ -173,6 +174,9 @@ export class InventoryService {
     const labels = await this.products.variantLabels([
       ...new Set(rows.map((r) => r.variantId)),
     ]);
+    const thresholds = await this.thresholds([
+      ...new Set(rows.map((r) => r.variantId)),
+    ]);
     return {
       data: rows.map(({ warehouse, ...l }) => ({
         ...l,
@@ -180,6 +184,7 @@ export class InventoryService {
         sku: labels.get(l.variantId)?.sku ?? null,
         productName: labels.get(l.variantId)?.name ?? null,
         warehouseName: warehouse.name,
+        threshold: thresholds.get(l.variantId) ?? null,
       })),
       meta: { page: q.page, per_page: q.per_page, total },
     };
@@ -281,5 +286,103 @@ export class InventoryService {
       take: q.limit,
     });
     return { data: rows };
+  }
+
+  /** Sets (or with null removes) the low-stock threshold of a variant (INV-03). */
+  async setThreshold(user: AuthUser, variantId: string, dto: SetThresholdDto) {
+    const variant = (await this.products.variantLabels([variantId])).get(
+      variantId,
+    );
+    if (!variant) throw notFound('Varyant');
+    await this.assertPermission(user, variant.companyId, WRITE, 'Varyant');
+    const threshold = dto.threshold ?? null;
+    await this.prisma.$transaction(async (tx) => {
+      const before = await tx.stockThreshold.findFirst({
+        where: { variantId },
+        select: { threshold: true },
+      });
+      if (threshold === null) {
+        await tx.stockThreshold.deleteMany({ where: { variantId } });
+      } else if (before) {
+        await tx.stockThreshold.updateMany({
+          where: { variantId },
+          data: { threshold },
+        });
+      } else {
+        await tx.stockThreshold.create({
+          data: {
+            tenantId: TenantContext.requireTenantId(),
+            companyId: variant.companyId,
+            variantId,
+            threshold,
+          },
+        });
+      }
+      await this.audit.record(
+        {
+          action: 'UPDATE',
+          module: MODULE,
+          entityType: 'StockThreshold',
+          entityId: variantId,
+          before: { threshold: before?.threshold ?? null },
+          after: { threshold },
+        },
+        tx,
+      );
+    });
+    return { data: { variantId, threshold } };
+  }
+
+  /**
+   * Variants at or below their threshold (INV-03): available = on_hand - reserved summed
+   * over all warehouses of the company; a variant without stock rows counts as 0.
+   */
+  async lowStock(user: AuthUser, q: ListByCompanyQuery) {
+    const companyIds = await this.readableCompanies(user, q.company_id);
+    const thresholds = await this.prisma.stockThreshold.findMany({
+      where: companyIds ? { companyId: { in: companyIds } } : {},
+      select: { variantId: true, companyId: true, threshold: true },
+    });
+    if (thresholds.length === 0) return { data: [] };
+    const ids = thresholds.map((t) => t.variantId);
+    const sums = await this.prisma.stockLevel.groupBy({
+      by: ['variantId'],
+      where: { variantId: { in: ids } },
+      _sum: { onHand: true, reserved: true },
+    });
+    const available = new Map(
+      sums.map((s) => [
+        s.variantId,
+        (s._sum.onHand ?? 0) - (s._sum.reserved ?? 0),
+      ]),
+    );
+    const labels = await this.products.variantLabels(ids);
+    const data = thresholds
+      .map((t) => ({
+        variantId: t.variantId,
+        companyId: t.companyId,
+        sku: labels.get(t.variantId)?.sku ?? null,
+        productName: labels.get(t.variantId)?.name ?? null,
+        threshold: t.threshold,
+        available: available.get(t.variantId) ?? 0,
+      }))
+      .filter((r) => r.available <= r.threshold)
+      .sort(
+        (a, b) =>
+          a.available - a.threshold - (b.available - b.threshold) ||
+          a.available - b.available ||
+          (a.sku ?? '').localeCompare(b.sku ?? ''),
+      );
+    return { data };
+  }
+
+  /** Thresholds of the given variants (for the stock list). */
+  async thresholds(variantIds: string[]): Promise<Map<string, number>> {
+    if (variantIds.length === 0) return new Map();
+    const rows = await this.prisma.stockThreshold.findMany({
+      where: { variantId: { in: variantIds } },
+      select: { variantId: true, threshold: true },
+    });
+    return new Map(rows.map((r) => [r.variantId, r.threshold]));
   }
 }

@@ -153,6 +153,11 @@
 - Bakım notu: migration `order_items` üzerine `CONCURRENTLY` olmadan tekil indeks kurar; büyük tabloda yazmaları kısa süre kilitler (prod'da bakım penceresi).
 - Geri dönüş: `down.sql` (rezervasyon veya `reserved <> 0` varken durur). Prova: `verify.sql`, `rehearsal-seed.sql`.
 
+### inventory — düşük stok eşiği (INV-03; migration `20261114190000_stock_thresholds`)
+- `stock_thresholds` — id, tenant_id, company_id, variant_id, threshold (0–1 000 000, CHECK), created_at, updated_at; tekil `(tenant_id, variant_id)`; FK `(tenant_id, company_id, variant_id)` → `product_variants`.
+- Varyant "düşük" sayılır: firmanın tüm depolarındaki `on_hand − reserved` toplamı eşiğe eşit veya altında (stok satırı yoksa 0).
+- `tm_app`: SELECT/INSERT/UPDATE/DELETE (ayar verisi; eşik kaldırılabilir). Prova: `verify.sql`, `rehearsal-seed.sql`.
+
 ### customers
 - `customers` — id, name, email, phone
 - `addresses` — id, customer_id, type, address fields

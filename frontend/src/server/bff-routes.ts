@@ -91,6 +91,18 @@ const ROUTES: readonly BffRoute[] = [
   { method: 'GET', path: new RegExp(`^orders/${UUID}$`) },
   { method: 'POST', path: /^orders$/, body: true },
   { method: 'POST', path: new RegExp(`^orders/${UUID}/status$`), body: true },
+  // Stock (INV-02/03).
+  { method: 'GET', path: /^warehouses$/, query: ['company_id'] },
+  { method: 'POST', path: /^warehouses$/, body: true },
+  {
+    method: 'GET',
+    path: /^stock-levels$/,
+    query: ['page', 'per_page', 'company_id', 'warehouse_id', 'variant_id'],
+  },
+  { method: 'GET', path: /^stock-levels\/low$/, query: ['company_id'] },
+  { method: 'POST', path: /^stock-movements$/, body: true },
+  { method: 'PUT', path: new RegExp(`^stock-thresholds/${UUID}$`), body: true },
+  { method: 'POST', path: new RegExp(`^orders/${UUID}/reserve$`), body: true },
   // Reports (RPT-01): read-only.
   {
     method: 'GET',

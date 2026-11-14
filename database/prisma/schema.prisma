@@ -49,6 +49,7 @@ model Tenant {
   stockLevels               StockLevel[]
   stockMovements            StockMovement[]
   stockReservations         StockReservation[]
+  stockThresholds           StockThreshold[]
 
   @@map("tenants")
 }
@@ -443,6 +444,7 @@ model ProductVariant {
   stockLevels       StockLevel[]
   stockMovements    StockMovement[]
   stockReservations StockReservation[]
+  stockThresholds   StockThreshold[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, companyId, id])
@@ -957,4 +959,25 @@ model StockReservation {
   @@index([tenantId, orderItemId])
   @@index([tenantId, warehouseId, variantId])
   @@map("stock_reservations")
+}
+
+/// INV-03: low-stock alert threshold per variant (all warehouses of its company together).
+/// A variant is "low" when its total available stock (on_hand - reserved) is at or below it.
+model StockThreshold {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  companyId String   @map("company_id") @db.Uuid
+  variantId String   @map("variant_id") @db.Uuid
+  /// 0..1 000 000 (SQL CHECK)
+  threshold Int
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  tenant  Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  variant ProductVariant @relation(fields: [tenantId, companyId, variantId], references: [tenantId, companyId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, variantId])
+  @@index([tenantId, companyId])
+  @@map("stock_thresholds")
 }

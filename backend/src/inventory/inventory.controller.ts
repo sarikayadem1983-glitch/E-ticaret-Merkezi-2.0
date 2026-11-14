@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import {
   type AuthUser,
   CurrentUser,
@@ -10,6 +20,7 @@ import {
   ListByCompanyQuery,
   ListLevelsQuery,
   ListMovementsQuery,
+  SetThresholdDto,
 } from './inventory.dto.js';
 import { InventoryService, READ, WRITE } from './inventory.service.js';
 
@@ -54,5 +65,25 @@ export class InventoryController {
     @Body() dto: CreateMovementDto,
   ) {
     return this.inventory.createMovement(user, dto);
+  }
+
+  @Get('stock-levels/low')
+  @RequirePermissions(READ)
+  lowStock(@CurrentUser() user: AuthUser, @Query() q: ListByCompanyQuery) {
+    return this.inventory.lowStock(user, q);
+  }
+
+  @Put('stock-thresholds/:variantId')
+  @RequirePermissions(WRITE)
+  setThreshold(
+    @CurrentUser() user: AuthUser,
+    @Param(
+      'variantId',
+      new ParseUUIDPipe({ errorHttpStatusCode: HttpStatus.NOT_FOUND }),
+    )
+    variantId: string,
+    @Body() dto: SetThresholdDto,
+  ) {
+    return this.inventory.setThreshold(user, variantId, dto);
   }
 }

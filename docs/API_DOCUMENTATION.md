@@ -511,6 +511,8 @@ Yetki: `inventory:read` (tüm roller), `inventory:write` (Owner, Admin, Operasyo
 - `GET /api/v1/stock-movements?warehouse_id&variant_id&limit` → en yeni önce.
 - `POST /api/v1/orders/:id/reserve` `{ warehouseId? }` (varsayılan: firmanın varsayılan deposu) → 200 sipariş detayı. Eşleşmiş tüm kalemler ayrılır ya da hiçbiri. 409 `STOCK_INSUFFICIENT`, 409 `STOCK_ALREADY_RESERVED`, 409 `ORDER_NOT_RESERVABLE` (sevk edilmiş/son durum), 409 `WAREHOUSE_REQUIRED`, 404 (depo yok/pasif/başka firma). Aynı istek tekrarlanırsa değişiklik olmaz.
 - Durum geçişi `shipped` rezervasyonu stok düşümüne çevirir; `cancelled`/`unsupplied` serbest bırakır.
+- `PUT /api/v1/stock-thresholds/:variantId` `{ threshold: 0–1000000 | null }` (`inventory:write`) → `{ data: { variantId, threshold } }`; `null` eşiği kaldırır. Varyant yok/başka firma → 404.
+- `GET /api/v1/stock-levels/low?company_id` (`inventory:read`) → `{ data: [{ variantId, companyId, sku, productName, threshold, available }] }`: tüm depolarda kullanılabilir toplamı eşiğe eşit veya altında olanlar, en acil olan önce. `GET /stock-levels` satırları `threshold` alanını da taşır.
 
 ### Raporlar (RPT-01)
 
