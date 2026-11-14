@@ -82,6 +82,15 @@ const ROUTES: readonly BffRoute[] = [
     query: ['status', 'limit', 'cursor'],
   },
   { method: 'POST', path: new RegExp(`^${ACCOUNT}/sync-jobs/${UUID}/retry$`) },
+  // Orders (ORD-03). Status changes of marketplace orders are refused by the backend.
+  {
+    method: 'GET',
+    path: /^orders$/,
+    query: [...LIST_QUERY, 'status', 'company_id', 'channel'],
+  },
+  { method: 'GET', path: new RegExp(`^orders/${UUID}$`) },
+  { method: 'POST', path: /^orders$/, body: true },
+  { method: 'POST', path: new RegExp(`^orders/${UUID}/status$`), body: true },
 ];
 
 const SEGMENT = /^[a-z0-9-]{1,64}$/;
