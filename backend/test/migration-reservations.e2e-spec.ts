@@ -176,28 +176,41 @@ async function purge(ids: Ids) {
   await db.query('COMMIT');
 }
 
-const reserve = (
+/** The functions require app.tenant_id (set in the same transaction/session) = p_tenant. */
+const as = async (c: pg.Client, tenant: string) => {
+  await c.query("select set_config('app.tenant_id', $1, false)", [tenant]);
+};
+const reserve = async (
   c: pg.Client,
   ids: Ids,
   item: string,
   qty: number,
   tenant = ids.t,
   wh = ids.w,
-) =>
-  c.query<{ id: string }>('select stock_reserve($1, $2, $3, $4) as id', [
+) => {
+  await as(c, tenant);
+  return c.query<{ id: string }>('select stock_reserve($1, $2, $3, $4) as id', [
     tenant,
     item,
     wh,
     qty,
   ]);
-const release = (c: pg.Client, ids: Ids, item: string) =>
-  c.query<{ n: number }>('select stock_release($1, $2) as n', [ids.t, item]);
-const consume = (c: pg.Client, ids: Ids, item: string) =>
-  c.query<{ n: number }>('select stock_consume($1, $2, $3) as n', [
+};
+const release = async (c: pg.Client, ids: Ids, item: string) => {
+  await as(c, ids.t);
+  return c.query<{ n: number }>('select stock_release($1, $2) as n', [
+    ids.t,
+    item,
+  ]);
+};
+const consume = async (c: pg.Client, ids: Ids, item: string) => {
+  await as(c, ids.t);
+  return c.query<{ n: number }>('select stock_consume($1, $2, $3) as n', [
     ids.t,
     item,
     randomUUID(),
   ]);
+};
 const level = async (ids: Ids) =>
   (
     await db.query<{ on_hand: number; reserved: number }>(
@@ -263,6 +276,26 @@ describe('stock reservation migration (INV-02)', () => {
       await expect(reserve(db, ids, ids.i2, 0)).rejects.toThrow(
         /STOCK_INVALID_REQUEST/,
       );
+      // A tenant id that differs from app.tenant_id is refused before anything is read.
+      await as(db, ids.t);
+      await expect(
+        db.query('select stock_reserve($1, $2, $3, 1)', [
+          randomUUID(),
+          ids.i2,
+          ids.w,
+        ]),
+      ).rejects.toThrow(/STOCK_TENANT_MISMATCH/);
+      await db.query("select set_config('app.tenant_id', '', false)");
+      await expect(
+        db.query('select stock_release($1, $2)', [ids.t, ids.i1]),
+      ).rejects.toThrow(/STOCK_TENANT_MISMATCH/);
+      await expect(
+        db.query('select stock_consume($1, $2, null)', [ids.t, ids.i1]),
+      ).rejects.toThrow(/STOCK_TENANT_MISMATCH/);
+      await as(db, ids.t);
+      await expect(
+        db.query('select stock_release($1, null)', [ids.t]),
+      ).rejects.toThrow(/STOCK_INVALID_REQUEST/);
 
       await reserve(db, ids, ids.i2, 2);
       expect(await level(ids)).toEqual({ on_hand: 5, reserved: 5 });
@@ -270,19 +303,28 @@ describe('stock reservation migration (INV-02)', () => {
       expect((await release(db, ids, ids.i2)).rows[0].n).toBe(0);
       expect(await level(ids)).toEqual({ on_hand: 5, reserved: 3 });
 
+      // Fully reserved stock (reserved = on_hand) can still be consumed: reserved goes
+      // down before the movement lowers on_hand, so the CHECK holds at every step.
+      await reserve(db, ids, ids.i2, 2);
+      expect(await level(ids)).toEqual({ on_hand: 5, reserved: 5 });
+      expect((await consume(db, ids, ids.i2)).rows[0].n).toBe(1);
+      expect(await level(ids)).toEqual({ on_hand: 3, reserved: 3 });
       expect((await consume(db, ids, ids.i1)).rows[0].n).toBe(1);
-      expect(await level(ids)).toEqual({ on_hand: 2, reserved: 0 });
+      expect(await level(ids)).toEqual({ on_hand: 0, reserved: 0 });
       expect((await consume(db, ids, ids.i1)).rows[0].n).toBe(0);
       const mv = await db.query<{ q: number; reason: string; ref: string }>(
         `select quantity q, reason, reference_id ref from stock_movements where tenant_id = $1 and reason = 'order'`,
         [ids.t],
       );
-      expect(mv.rows).toEqual([{ q: -3, reason: 'order', ref: ids.i1 }]);
+      expect(
+        mv.rows.map((r) => `${r.ref === ids.i1 ? 'i1' : 'i2'}:${r.q}`).sort(),
+      ).toEqual(['i1:-3', 'i2:-2']);
       const st = await db.query<{ status: string }>(
         'select status from stock_reservations where tenant_id = $1 order by created_at, status',
         [ids.t],
       );
       expect(st.rows.map((r) => r.status).sort()).toEqual([
+        'consumed',
         'consumed',
         'released',
       ]);
@@ -309,6 +351,8 @@ describe('stock reservation migration (INV-02)', () => {
       expect(
         (await a.query<{ u: string }>('select current_user u')).rows[0].u,
       ).toBe('tm_app');
+      await as(a, ids.t);
+      await as(b, ids.t);
       await expect(
         a.query('update stock_levels set reserved = 0 where tenant_id = $1', [
           ids.t,

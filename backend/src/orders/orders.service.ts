@@ -333,6 +333,9 @@ export class OrdersService {
       });
       if (!order) throw notFound();
       await this.assertPermission(user, order.companyId, 'inventory:write');
+      // Locks the order row and proves its status is still the one read: a concurrent
+      // ship/cancel either waits for us or has already changed the status (→ 409 here).
+      await this.lockStatus(tx, order);
       if (!RESERVABLE.has(order.status as OrderStatus)) {
         throw new ConflictException({
           code: 'ORDER_NOT_RESERVABLE',
@@ -348,11 +351,7 @@ export class OrdersService {
           message: 'Firmanın varsayılan deposu yok; depo seçin',
         });
       }
-      const items = await tx.orderItem.findMany({
-        where: { orderId: order.id, variantId: { not: null } },
-        select: { id: true, quantity: true },
-        orderBy: { id: 'asc' },
-      });
+      const items = await this.matchedLines(tx, order.id);
       for (const item of items) {
         await this.reservations.reserve(tx, item.id, target, item.quantity);
       }
@@ -368,6 +367,35 @@ export class OrdersService {
       );
     });
     return this.get(user, id);
+  }
+
+  /** Row lock on the order, only if its status is still `order.status`. */
+  private async lockStatus(
+    tx: PrismaTx,
+    order: Pick<OrderRow, 'id' | 'status'>,
+  ) {
+    const { count } = await tx.order.updateMany({
+      where: { id: order.id, status: order.status },
+      data: { updatedAt: new Date() },
+    });
+    if (count !== 1) {
+      throw new ConflictException({
+        code: 'CONCURRENT_UPDATE',
+        message: 'Sipariş başka bir işlemle değişti; yeniden deneyin',
+      });
+    }
+  }
+
+  /**
+   * Lines linked to a variant, in variant order: every transaction locks stock rows in the
+   * same order, so two multi-line orders cannot deadlock on each other.
+   */
+  private matchedLines(tx: PrismaTx, orderId: string) {
+    return tx.orderItem.findMany({
+      where: { orderId, variantId: { not: null } },
+      select: { id: true, quantity: true, variantId: true },
+      orderBy: [{ variantId: 'asc' }, { id: 'asc' }],
+    });
   }
 
   async changeStatus(user: AuthUser, id: string, dto: ChangeStatusDto) {
@@ -400,7 +428,7 @@ export class OrdersService {
    */
   async transition(
     tx: PrismaTx,
-    order: Pick<OrderRow, 'id' | 'status'>,
+    order: Pick<OrderRow, 'id' | 'status' | 'companyId'>,
     to: OrderStatus,
     by: {
       source: 'user' | 'channel' | 'system';
@@ -425,17 +453,44 @@ export class OrdersService {
         message: 'Sipariş başka bir işlemle değişti; yeniden deneyin',
       });
     }
-    // Stock follows the status (INV-02): shipping consumes reservations, cancelling releases them.
+    // Stock follows the status (INV-02). Shipping lowers stock for every matched line: lines
+    // without a reservation are reserved first in the default warehouse, so an order never
+    // ships without its stock (shortage → 409, nothing changes). Cancelling releases.
+    // Returns ('returned') do not restock automatically: goods are inspected first and put
+    // back with a 'return' movement (SHP-01 / INT-TY-03).
     if (to === 'shipped' || to === 'cancelled' || to === 'unsupplied') {
-      const items = await tx.orderItem.findMany({
-        where: { orderId: order.id },
-        select: { id: true },
-        orderBy: { id: 'asc' },
-      });
-      for (const item of items) {
-        if (to === 'shipped')
+      const items = await this.matchedLines(tx, order.id);
+      if (to === 'shipped') {
+        const covered = await this.reservations.coveredLines(
+          tx,
+          items.map((i) => i.id),
+        );
+        const missing = items.filter((i) => !covered.has(i.id));
+        // A company without any warehouse does not keep stock: shipping does not touch it.
+        if (
+          missing.length > 0 &&
+          (await this.inventory.usesStock(order.companyId, tx))
+        ) {
+          const target = await this.inventory.defaultWarehouse(
+            order.companyId,
+            tx,
+          );
+          if (!target) {
+            throw new ConflictException({
+              code: 'WAREHOUSE_REQUIRED',
+              message:
+                'Stok ayrılmamış ve firmanın varsayılan deposu yok; önce stok ayırın',
+            });
+          }
+          for (const item of missing) {
+            await this.reservations.reserve(tx, item.id, target, item.quantity);
+          }
+        }
+        for (const item of items) {
           await this.reservations.consume(tx, item.id, by.changedBy ?? null);
-        else await this.reservations.release(tx, item.id);
+        }
+      } else {
+        for (const item of items) await this.reservations.release(tx, item.id);
       }
     }
     await tx.orderStatusHistory.create({

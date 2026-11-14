@@ -252,6 +252,91 @@ describe('Inventory and reservations API (e2e, INV-02)', () => {
     ).toEqual(['order:-6', 'adjustment:-1', 'opening:10']);
   });
 
+  it('shipping without a reservation lowers stock; a shortage blocks shipping and changes nothing', async () => {
+    const before = await level();
+    const o = await order(1);
+    await http()
+      .post(`/api/v1/orders/${o}/status`)
+      .set(bearer(tokenA))
+      .send({ status: 'shipped' })
+      .expect(200);
+    expect(await level()).toMatchObject({
+      onHand: before.onHand - 1,
+      reserved: 0,
+    });
+    const big = await order(1000);
+    const res = await http()
+      .post(`/api/v1/orders/${big}/status`)
+      .set(bearer(tokenA))
+      .send({ status: 'shipped' })
+      .expect(409);
+    expect(res.body.error.code).toBe('STOCK_INSUFFICIENT');
+    const detail = await http()
+      .get(`/api/v1/orders/${big}`)
+      .set(bearer(tokenA))
+      .expect(200);
+    expect(detail.body.data.status).toBe('created');
+    expect(await level()).toMatchObject({
+      onHand: before.onHand - 1,
+      reserved: 0,
+    });
+  });
+
+  it('multi-line orders in opposite order never deadlock (409 at worst, never 500)', async () => {
+    const [v1, v2] = (
+      await http()
+        .post('/api/v1/products')
+        .set(bearer(tokenA))
+        .send({
+          companyId: companyA,
+          name: `Set ${run}`,
+          variants: [{ sku: `S1-${run}` }, { sku: `S2-${run}` }],
+        })
+        .expect(201)
+    ).body.data.variants.map((v: { id: string }) => v.id);
+    for (const v of [v1, v2])
+      await http()
+        .post('/api/v1/stock-movements')
+        .set(bearer(tokenA))
+        .send({
+          warehouseId: warehouse,
+          variantId: v,
+          quantity: 100,
+          reason: 'opening',
+        })
+        .expect(201);
+    const make = async (a: string, b: string) =>
+      (
+        await http()
+          .post('/api/v1/orders')
+          .set(bearer(tokenA))
+          .send({
+            companyId: companyA,
+            currency: 'TRY',
+            items: [
+              { variantId: a, quantity: 1, unitPrice: '1.00' },
+              { variantId: b, quantity: 1, unitPrice: '1.00' },
+            ],
+          })
+          .expect(201)
+      ).body.data.id as string;
+    const ids = await Promise.all(
+      Array.from({ length: 8 }, (_, i) =>
+        i % 2 ? make(v1, v2) : make(v2, v1),
+      ),
+    );
+    const res = await Promise.all(
+      ids.map((id) =>
+        http()
+          .post(`/api/v1/orders/${id}/reserve`)
+          .set(bearer(tokenA))
+          .send({}),
+      ),
+    );
+    expect(res.every((r) => r.status === 200 || r.status === 409)).toBe(true);
+    expect(res.filter((r) => r.status === 200).length).toBeGreaterThan(0);
+  });
+
   it('other tenant: no reservation on foreign orders, no levels, foreign warehouse refused', async () => {
     const id = await order(1);
     await http()

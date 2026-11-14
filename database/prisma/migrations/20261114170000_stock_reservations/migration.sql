@@ -54,8 +54,11 @@ ALTER TABLE "stock_levels" ADD CONSTRAINT "stock_levels_reserved_within_on_hand"
 
 -- Reservation functions --------------------------------------------------------------
 -- The application runs them through TenantContext.runAsSystem and passes its tenant id;
--- every row they read or write is filtered by that tenant id, so a caller can never touch
--- another tenant's stock. Errors carry a stable code as the message (mapped to HTTP 409/404).
+-- every row they read or write is filtered by that tenant id. Defence in depth: the same
+-- transaction must first set app.tenant_id (set_config(..., true)) to that id, otherwise the
+-- call is refused (TS006). Errors carry a stable code as message and a custom SQLSTATE:
+-- TS001 insufficient, TS002 already reserved, TS003 order line not found, TS004 warehouse
+-- not found, TS005 invalid request, TS006 tenant mismatch.
 -- The level row is locked (FOR UPDATE) before it is checked, so concurrent reservations of
 -- the same stock are serialized: available = on_hand - reserved can never go below zero.
 
@@ -67,17 +70,20 @@ DECLARE
   v_existing stock_reservations%ROWTYPE;
   v_id uuid;
 BEGIN
-  IF p_tenant IS NULL OR p_quantity IS NULL OR p_quantity <= 0 THEN
-    RAISE EXCEPTION 'STOCK_INVALID_REQUEST' USING ERRCODE = 'check_violation';
+  IF p_tenant IS NULL OR p_tenant::text IS DISTINCT FROM current_setting('app.tenant_id', true) THEN
+    RAISE EXCEPTION 'STOCK_TENANT_MISMATCH' USING ERRCODE = 'TS006';
+  END IF;
+  IF p_order_item IS NULL OR p_warehouse IS NULL OR p_quantity IS NULL OR p_quantity <= 0 THEN
+    RAISE EXCEPTION 'STOCK_INVALID_REQUEST' USING ERRCODE = 'TS005';
   END IF;
   SELECT * INTO v_item FROM order_items WHERE tenant_id = p_tenant AND id = p_order_item;
   IF NOT FOUND OR v_item.variant_id IS NULL THEN
-    RAISE EXCEPTION 'STOCK_ORDER_ITEM_NOT_FOUND' USING ERRCODE = 'no_data_found';
+    RAISE EXCEPTION 'STOCK_ORDER_ITEM_NOT_FOUND' USING ERRCODE = 'TS003';
   END IF;
   PERFORM 1 FROM warehouses
    WHERE tenant_id = p_tenant AND company_id = v_item.company_id AND id = p_warehouse AND is_active;
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'STOCK_WAREHOUSE_NOT_FOUND' USING ERRCODE = 'no_data_found';
+    RAISE EXCEPTION 'STOCK_WAREHOUSE_NOT_FOUND' USING ERRCODE = 'TS004';
   END IF;
   SELECT * INTO v_existing FROM stock_reservations
    WHERE tenant_id = p_tenant AND order_item_id = p_order_item AND warehouse_id = p_warehouse AND status = 'active'
@@ -86,13 +92,13 @@ BEGIN
     IF v_existing.quantity = p_quantity THEN
       RETURN v_existing.id; -- idempotent repeat
     END IF;
-    RAISE EXCEPTION 'STOCK_ALREADY_RESERVED' USING ERRCODE = 'unique_violation';
+    RAISE EXCEPTION 'STOCK_ALREADY_RESERVED' USING ERRCODE = 'TS002';
   END IF;
   SELECT * INTO v_level FROM stock_levels
    WHERE tenant_id = p_tenant AND warehouse_id = p_warehouse AND variant_id = v_item.variant_id
    FOR UPDATE;
   IF NOT FOUND OR v_level.on_hand - v_level.reserved < p_quantity THEN
-    RAISE EXCEPTION 'STOCK_INSUFFICIENT' USING ERRCODE = 'check_violation';
+    RAISE EXCEPTION 'STOCK_INSUFFICIENT' USING ERRCODE = 'TS001';
   END IF;
   UPDATE stock_levels SET reserved = reserved + p_quantity, updated_at = now() WHERE id = v_level.id;
   INSERT INTO stock_reservations (id, tenant_id, company_id, warehouse_id, variant_id, order_item_id, quantity, status, created_at, updated_at)
@@ -108,6 +114,12 @@ DECLARE
   r stock_reservations%ROWTYPE;
   n integer := 0;
 BEGIN
+  IF p_tenant IS NULL OR p_tenant::text IS DISTINCT FROM current_setting('app.tenant_id', true) THEN
+    RAISE EXCEPTION 'STOCK_TENANT_MISMATCH' USING ERRCODE = 'TS006';
+  END IF;
+  IF p_order_item IS NULL THEN
+    RAISE EXCEPTION 'STOCK_INVALID_REQUEST' USING ERRCODE = 'TS005';
+  END IF;
   FOR r IN SELECT * FROM stock_reservations
     WHERE tenant_id = p_tenant AND order_item_id = p_order_item AND status = 'active'
     ORDER BY warehouse_id FOR UPDATE
@@ -128,6 +140,12 @@ DECLARE
   r stock_reservations%ROWTYPE;
   n integer := 0;
 BEGIN
+  IF p_tenant IS NULL OR p_tenant::text IS DISTINCT FROM current_setting('app.tenant_id', true) THEN
+    RAISE EXCEPTION 'STOCK_TENANT_MISMATCH' USING ERRCODE = 'TS006';
+  END IF;
+  IF p_order_item IS NULL THEN
+    RAISE EXCEPTION 'STOCK_INVALID_REQUEST' USING ERRCODE = 'TS005';
+  END IF;
   FOR r IN SELECT * FROM stock_reservations
     WHERE tenant_id = p_tenant AND order_item_id = p_order_item AND status = 'active'
     ORDER BY warehouse_id FOR UPDATE

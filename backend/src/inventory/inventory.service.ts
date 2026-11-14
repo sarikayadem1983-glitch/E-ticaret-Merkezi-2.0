@@ -185,6 +185,11 @@ export class InventoryService {
     };
   }
 
+  /** Whether the company keeps stock at all (has any warehouse). */
+  async usesStock(companyId: string, tx: PrismaTx): Promise<boolean> {
+    return (await tx.warehouse.count({ where: { companyId } })) > 0;
+  }
+
   /** The company's default active warehouse, for reservations without an explicit one. */
   async defaultWarehouse(
     companyId: string,

@@ -291,3 +291,8 @@ Pazaryeri API anahtarları `channel_accounts` tablosunda **zarf şifrelemesiyle*
 - Rotasyon: yeni KEK'i ekleyip etkin yapın, `ChannelsService.rewrapAll` ile DEK'leri yeniden sarın (şifreli veri değişmez), tüm kayıtlar geçtikten sonra eski KEK'i kaldırın.
 - Sınır: Sürüm A'da KEK ortam değişkenindedir. Production öncesi KMS gerekir (INF-13, R-25).
 - Silme: soft delete canlı satırdaki şifreli veriyi ve sarılı DEK'i rastgele baytlarla ezer; API ve adapter'lar artık çözemez. Eski satır sürümleri, WAL ve yedekler vacuum/saklama süresi dolana kadar eski baytları tutar ve yerel KEK ile çözülebilir kalır. Gerçek "kripto-imha" KMS gerektirir (INF-13, R-25).
+
+### Not: stok fonksiyonları (INV-02)
+
+`stock_reserve` / `stock_release` / `stock_consume` `SECURITY DEFINER`'dır ve `tm_app` tarafından çalıştırılabilir. Tenant'ı parametre olarak alırlar ve aynı işlemde `app.tenant_id` ile eşleşmesini isterler; ancak `tm_app` ham SQL ile bu ayarı kendisi de yapabilir. Bu nedenle tenant sınırı veritabanında değil uygulamadadır: çağrılar yalnızca `backend/src/inventory/inventory.repository.ts` içinden, `TenantContext.requireTenantId()` ile yapılır (runAsSystem allowlist'inde). RLS gelene kadar kabul edilmiş risk; SQL enjeksiyonu yoksa istismar edilemez.
+

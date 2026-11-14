@@ -16,5 +16,6 @@ INSERT INTO orders (id, tenant_id, company_id, channel, currency, subtotal, tota
   VALUES ('00000000-0000-4000-8000-0000000052b6', '00000000-0000-4000-8000-0000000052b1', '00000000-0000-4000-8000-0000000052b2', 'manual', 'TRY', 0, 0, now(), now());
 INSERT INTO order_items (id, tenant_id, company_id, order_id, variant_id, sku, name, quantity, unit_price, line_total, updated_at)
   VALUES ('00000000-0000-4000-8000-0000000052b7', '00000000-0000-4000-8000-0000000052b1', '00000000-0000-4000-8000-0000000052b2', '00000000-0000-4000-8000-0000000052b6', '00000000-0000-4000-8000-0000000052b4', 'S', 'Prova', 2, 0, 0, now());
+SELECT set_config('app.tenant_id', '00000000-0000-4000-8000-0000000052b1', true);
 SELECT stock_reserve('00000000-0000-4000-8000-0000000052b1', '00000000-0000-4000-8000-0000000052b7', '00000000-0000-4000-8000-0000000052b5', 2);
 COMMIT;

@@ -146,7 +146,11 @@
   - `stock_reserve(tenant, order_item, warehouse, quantity)`: kalem ve etkin depo aynı firmada olmalı; stok satırı `FOR UPDATE` kilitlenir, `on_hand − reserved < quantity` ise `STOCK_INSUFFICIENT`. Aynı adetle tekrar → aynı rezervasyon (idempotent); farklı adet → `STOCK_ALREADY_RESERVED`.
   - `stock_release(tenant, order_item)`: etkin rezervasyonları `released` yapar, `reserved` düşer.
   - `stock_consume(tenant, order_item, created_by)`: önce `reserved` düşer, sonra `order` stok hareketi (`reference_type = order_item`) yazılır (tetikleyici `on_hand`'i düşürür), rezervasyon `consumed`.
-- Sipariş akışı (ORD-02 `transition`): `shipped` → consume, `cancelled`/`unsupplied` → release. Rezervasyon `POST /orders/:id/reserve` ile (tüm kalemler ya da hiçbiri).
+- **Derinlemesine savunma:** fonksiyonlar `p_tenant`'ın aynı işlemde ayarlanan `app.tenant_id` (`set_config(..., true)`) ile eşit olmasını ister, değilse `STOCK_TENANT_MISMATCH` (SQLSTATE `TS006`). Uygulama bunu her çağrıdan önce kendi tenant'ıyla ayarlar. `tm_app` ham SQL çalıştırabildiği için bu tam bir güvenlik sınırı değildir; asıl sınır uygulamanın tenant bağlamıdır (bkz. SECURITY.md notu).
+- Hata kodları SQLSTATE ile: `TS001` yetersiz stok, `TS002` farklı adetle tekrar, `TS003` kalem yok, `TS004` depo yok, `TS005` geçersiz istek, `TS006` tenant uyuşmazlığı (500, gizlenmez). Kilitlenme `40P01` / serileştirme `40001` → 409 `CONCURRENT_UPDATE`.
+- Kilit sırası: uygulama kalemleri **varyant id sırasıyla** işler; çok kalemli siparişler birbirini kilitlemez (testli).
+- Sipariş akışı (ORD-02 `transition`): sipariş satırı koşullu güncellemeyle kilitlenir (rezervasyon ile durum değişikliği yarışmaz). `shipped` → rezervasyonu olmayan eşleşmiş kalemler önce varsayılan depodan ayrılır, sonra tümü düşülür (stok yetmezse 409, hiçbir şey değişmez); firmanın **hiç deposu yoksa** stok tutulmuyor sayılır ve kargolama stoğa dokunmaz. `cancelled`/`unsupplied` → serbest bırakılır. **İade (`returned`) stoğa otomatik dönmez**: ürün kontrol edilip `return` hareketiyle eklenir (SHP-01 / INT-TY-03). Rezervasyon `POST /orders/:id/reserve` ile (tüm kalemler ya da hiçbiri).
+- Bakım notu: migration `order_items` üzerine `CONCURRENTLY` olmadan tekil indeks kurar; büyük tabloda yazmaları kısa süre kilitler (prod'da bakım penceresi).
 - Geri dönüş: `down.sql` (rezervasyon veya `reserved <> 0` varken durur). Prova: `verify.sql`, `rehearsal-seed.sql`.
 
 ### customers
