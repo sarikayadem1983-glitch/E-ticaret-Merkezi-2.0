@@ -68,7 +68,8 @@ const DETAIL_FIELDS = {
       vatRate: true,
       lineTotal: true,
     },
-    orderBy: { createdAt: 'asc' },
+    // Lines of one order share created_at: SKU makes the order stable.
+    orderBy: [{ createdAt: 'asc' }, { sku: 'asc' }],
   },
   statusHistory: {
     select: {
