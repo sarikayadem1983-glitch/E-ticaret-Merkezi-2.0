@@ -344,7 +344,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 
 | ID | Görev | Öncelik | Bağımlılık | Tahmin | Mod | Sürüm | Durum | Kabul kriteri | Test | Güvenlik riski | Kaynak |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| RPT-01 | Satış raporları (dönem, kanal, ürün) | P1 | ORD-02 | 3 | STANDARD | A | DONE-PR (PR #53) | Firma rolüne göre filtreli | E | Düşük | Öneri (onay bekliyor) |
+| RPT-01 | Satış raporları (dönem, kanal, ürün) | P1 | ORD-02 | 3 | STANDARD | A | DONE-MERGED (PR #53, merge `633f250`; dev `633f250`, 2026-11-14) | Firma rolüne göre filtreli | E | Düşük | Öneri (onay bekliyor) |
 | RPT-02 | Stok raporları (değer, devir, stoksuz kalma) | P1 | INV-02 | 2 | STANDARD | B | PLANNED | — | E | Düşük | Öneri (onay bekliyor) |
 | RPT-03 | Excel/PDF dışa aktarma ve zamanlanmış e-posta raporu | P2 | RPT-01, INF-09, USR-T9 | 3 | STANDARD | B | PLANNED | Rapor yalnızca yetkili alıcıya | E | Düşük | Öneri (onay bekliyor) |
 | RPT-04 | Gelişmiş analitik (kanal karşılaştırma, kohort, trend) | P3 | RPT-01, PRF-02 | 5 | STANDARD | C | PLANNED | Ağır sorgular okuma replikasında/ön-hesaplı | E, L | Düşük | Öneri (onay bekliyor) |
@@ -453,7 +453,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | INV-02 | Rezervasyon ve sipariş bağlı düşüm (eşzamanlılık güvenli) | DONE-MERGED (PR #51, merge `9d4eb11`; dev `9d4eb11`, 2026-11-14) | 4 | CRITICAL | Öneri (onay bekliyor) |
 | INV-03 | Stok UI, düşük stok eşiği ve uyarısı | PLANNED | 2 | STANDARD | Öneri (onay bekliyor) |
 | SHP-02 | Pazaryeri kargo entegrasyonu üzerinden etiket ve takip numarası | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
-| RPT-01 | Satış raporları (dönem, kanal, ürün) | DONE-PR (PR #53) | 3 | STANDARD | Öneri (onay bekliyor) |
+| RPT-01 | Satış raporları (dönem, kanal, ürün) | DONE-MERGED (PR #53, merge `633f250`; dev `633f250`, 2026-11-14) | 3 | STANDARD | Öneri (onay bekliyor) |
 | OPS-01 | Yapılandırılmış log + hata izleme (ör. Sentry), istek kimliği | PLANNED | 2 | STANDARD | Öneri (onay bekliyor) |
 | OPS-03 | Otomatik yedekleme ve geri yükleme (PITR), geri yükleme tatbikatı | PLANNED | 3 | CRITICAL | Öneri (onay bekliyor) |
 | OPS-08 | `backup-and-rehearse.sh` genelleştirme (son migration'dan başlangıç, `verify.sql`, `down.sql` provası) | DONE-MERGED (PR #45, merge `63bbb94`; dev provasında kullanıldı, 2026-11-14) | 1 | STANDARD | Kullanıcı kararı (2026-10-30) |
