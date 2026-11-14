@@ -67,6 +67,11 @@ function LoginForm() {
           {...form.register('password')}
         />
       </FormField>
+      <p className="-mt-2 text-right text-sm">
+        <Link href="/forgot-password" className="text-muted-foreground hover:text-foreground hover:underline">
+          Şifremi unuttum
+        </Link>
+      </p>
       <Button
         type="submit"
         variant="brand"

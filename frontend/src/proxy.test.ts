@@ -28,4 +28,11 @@ describe('proxy', () => {
       expect(visit(path).headers.get('location') ?? '').not.toContain(TOKEN);
     }
   });
+
+  it('opens recovery pages and token links without a session (USR-19)', () => {
+    for (const path of ['/forgot-password', `/reset-password/${TOKEN}`, `/verify-email/${TOKEN}`]) {
+      const res = visit(path);
+      expect(res.headers.get('location')).toBeNull();
+    }
+  });
 });
