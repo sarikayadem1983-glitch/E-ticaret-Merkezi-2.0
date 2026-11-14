@@ -64,7 +64,11 @@ const WHERE_OPERATIONS = new Set([
 ]);
 
 /** Append-only models: only create and read operations are ever allowed, even in system context. */
-const APPEND_ONLY_MODELS = new Set(['AuditLog', 'OrderStatusHistory']);
+const APPEND_ONLY_MODELS = new Set([
+  'AuditLog',
+  'OrderStatusHistory',
+  'StockMovement',
+]);
 const APPEND_ONLY_ALLOWED = new Set([
   'create',
   'createMany',

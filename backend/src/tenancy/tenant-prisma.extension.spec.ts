@@ -352,9 +352,9 @@ describe('applyTenantScope', () => {
     });
   });
 
-  describe('append-only models (AuditLog, OrderStatusHistory)', () => {
+  describe('append-only models (AuditLog, OrderStatusHistory, StockMovement)', () => {
     it.each(
-      ['AuditLog', 'OrderStatusHistory'].flatMap((model) =>
+      ['AuditLog', 'OrderStatusHistory', 'StockMovement'].flatMap((model) =>
         ['update', 'updateMany', 'delete', 'deleteMany', 'upsert'].map(
           (op) => [model, op] as const,
         ),

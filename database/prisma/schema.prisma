@@ -45,6 +45,9 @@ model Tenant {
   orders                    Order[]
   orderItems                OrderItem[]
   orderStatusHistory        OrderStatusHistory[]
+  warehouses                Warehouse[]
+  stockLevels               StockLevel[]
+  stockMovements            StockMovement[]
 
   @@map("tenants")
 }
@@ -169,6 +172,7 @@ model Company {
   channelAccounts ChannelAccount[]
   syncJobs        SyncJob[]
   orders          Order[]
+  warehouses      Warehouse[]
 
   @@unique([tenantId, taxNumber])
   @@unique([tenantId, id])
@@ -435,6 +439,8 @@ model ProductVariant {
   attributeValues VariantAttributeValue[]
   prices          VariantPrice[]
   orderItems      OrderItem[]
+  stockLevels     StockLevel[]
+  stockMovements  StockMovement[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, companyId, id])
@@ -839,4 +845,84 @@ model OrderStatusHistory {
   @@unique([tenantId, id])
   @@index([tenantId, orderId, changedAt])
   @@map("order_status_history")
+}
+
+// INV-01: warehouses and stock. Stock = sum of movements. Movements are append-only;
+// stock_levels.on_hand is maintained only by a database trigger on stock_movements.
+model Warehouse {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  companyId String   @map("company_id") @db.Uuid
+  name      String   @db.VarChar(100)
+  /// At most one default warehouse per company (SQL partial unique).
+  isDefault Boolean  @default(false) @map("is_default")
+  /// No deletion: a warehouse with history is deactivated.
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  company        Company         @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict)
+  stockLevels    StockLevel[]
+  stockMovements StockMovement[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, companyId, id])
+  // SQL-only: unique (tenant_id, company_id, lower(name)); unique (tenant_id, company_id) WHERE is_default.
+  @@index([tenantId, companyId])
+  @@map("warehouses")
+}
+
+/// One row per warehouse and variant. on_hand changes only through the stock_movements trigger
+/// (guard trigger rejects other changes); tm_app may only read. reserved: INV-02 functions.
+model StockLevel {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  companyId   String   @map("company_id") @db.Uuid
+  warehouseId String   @map("warehouse_id") @db.Uuid
+  variantId   String   @map("variant_id") @db.Uuid
+  /// Sum of stock_movements.quantity for this warehouse and variant; never negative (SQL CHECK).
+  onHand      Int      @default(0) @map("on_hand")
+  /// Reserved for open orders (INV-02); 0 <= reserved (SQL CHECK).
+  reserved    Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  warehouse Warehouse      @relation(fields: [tenantId, companyId, warehouseId], references: [tenantId, companyId, id], onDelete: Restrict)
+  variant   ProductVariant @relation(fields: [tenantId, companyId, variantId], references: [tenantId, companyId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, warehouseId, variantId])
+  @@index([tenantId, variantId])
+  @@map("stock_levels")
+}
+
+/// Append-only: tm_app may only SELECT and INSERT. Each insert updates stock_levels.on_hand (trigger).
+model StockMovement {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  companyId     String   @map("company_id") @db.Uuid
+  warehouseId   String   @map("warehouse_id") @db.Uuid
+  variantId     String   @map("variant_id") @db.Uuid
+  /// Signed change; never 0 (SQL CHECK).
+  quantity      Int
+  /// opening | adjustment | count | purchase | order | order_cancel | return | transfer_in | transfer_out (SQL CHECK)
+  reason        String   @db.VarChar(30)
+  /// order | order_item | sync_job | transfer | manual (SQL CHECK); reference_id required unless manual.
+  referenceType String?  @map("reference_type") @db.VarChar(30)
+  referenceId   String?  @map("reference_id") @db.Uuid
+  createdBy     String?  @map("created_by") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  warehouse Warehouse      @relation(fields: [tenantId, companyId, warehouseId], references: [tenantId, companyId, id], onDelete: Restrict)
+  variant   ProductVariant @relation(fields: [tenantId, companyId, variantId], references: [tenantId, companyId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  // SQL-only: unique (tenant_id, reference_type, reference_id, warehouse_id, variant_id) WHERE reason = 'order'
+  // (the same order line cannot decrease stock twice; returns/cancellations may repeat).
+  @@index([tenantId, variantId, createdAt(sort: Desc)])
+  @@index([tenantId, warehouseId, createdAt(sort: Desc)])
+  @@map("stock_movements")
 }

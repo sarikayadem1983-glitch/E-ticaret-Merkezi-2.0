@@ -55,6 +55,7 @@ export async function purgeTenants(slugs: string[]): Promise<void> {
         [ids],
       );
       await client.query("SET LOCAL app.allow_audit_purge = 'on'");
+      await client.query("SET LOCAL app.allow_stock_purge = 'on'");
       for (const table of [
         'audit_logs',
         'invitations',
@@ -62,6 +63,9 @@ export async function purgeTenants(slugs: string[]): Promise<void> {
         'user_roles',
         'refresh_tokens',
         'tenant_memberships',
+        'stock_movements',
+        'stock_levels',
+        'warehouses',
         'order_status_history',
         'order_items',
         'orders',

@@ -116,10 +116,21 @@
   - Ürünün `vat_rate`'i yoksa net/KDV `null` döner.
 - Geri dönüş: `down.sql` (`variant_prices`'ta satır veya `vat_rate` dolu ürün varsa hiçbir şey değiştirmeden durur).
 
-### inventory
-- `warehouses` — id, name
-- `stock_levels` — variant_id, warehouse_id, quantity
-- `stock_movements` — id, variant_id, warehouse_id, change, reason, reference
+### inventory (INV-01; migration `20261114150000_inventory_schema`, izole veritabanında denendi)
+- **Kural: stok = hareketlerin toplamı.** Stok yalnızca `stock_movements`'a satır eklenerek değişir; `stock_levels.on_hand` bu toplamın veritabanı tetikleyicisiyle tutulan kopyasıdır.
+- `warehouses` — id, tenant_id, company_id, name (100), is_default, is_active, created_at, updated_at
+  - Firma içinde ad tekil (büyük/küçük harf duyarsız: `lower(name)`), firma başına en çok bir varsayılan depo (kısmi tekil). Silme yok; pasife alınır. `tm_app`: SELECT/INSERT/UPDATE.
+- `stock_movements` — id, tenant_id, company_id, warehouse_id, variant_id, quantity (işaretli, ≠ 0), reason, reference_type, reference_id, created_by, created_at
+  - **Append-only:** `tm_app` yalnızca SELECT/INSERT; Prisma tenant eklentisi de güncelleme/silmeyi reddeder. Ayrıca `stock_guard` tetikleyicisi **sahip rol dahil** UPDATE/DELETE/TRUNCATE'i reddeder (yalnızca test temizliği `SET LOCAL app.allow_stock_purge = 'on'` ile geçer; süper kullanıcının tetikleyici atlaması kapsam dışı). Düzeltme yeni bir `adjustment` hareketiyle yapılır.
+  - `reason` ∈ `opening | adjustment | count | purchase | order | order_cancel | return | transfer_in | transfer_out`; yön CHECK'i: giriş nedenleri > 0, `order`/`transfer_out` < 0, `adjustment`/`count` iki yönlü.
+  - `reference_type` ∈ `order | order_item | sync_job | transfer | manual`; `reference_id` yalnızca kayda işaret eden türlerde dolu (CHECK). Kısmi tekil `(tenant_id, reference_type, reference_id, warehouse_id, variant_id) WHERE reason = 'order'`: aynı sipariş satırı stoku iki kez düşüremez. İade, iptal ve transfer aynı referansla tekrarlanabilir (kısmi iade); fazlası uygulamada miktar toplamıyla denetlenir (INV-02/INT-TY-03).
+  - `adjustment` ve `count` hareketlerinde `created_by` zorunlu (ya da `reference_type = 'sync_job'`).
+  - FK `(tenant_id, company_id, warehouse_id)` → `warehouses` ve `(tenant_id, company_id, variant_id)` → `product_variants`: depo ve varyant hareketin firmasına ait olmak zorunda.
+- `stock_levels` — id, tenant_id, company_id, warehouse_id, variant_id, on_hand, reserved, created_at, updated_at; tekil `(tenant_id, warehouse_id, variant_id)`
+  - Tetikleyici `stock_movements_apply` (AFTER INSERT, `SECURITY DEFINER`, `search_path` sabit): önce `UPDATE … on_hand = on_hand + quantity` (satır kilidi; eşzamanlı düşümler sıraya girer), satır yoksa INSERT. CHECK `on_hand >= 0`: stoku eksiye düşürecek hareket tümüyle reddedilir (izole testte iki eşzamanlı −5 / 8 stok: biri reddedildi).
+  - `tm_app`: yalnızca SELECT. `on_hand` ve yeni satır yalnızca tetikleyiciden gelir; `stock_guard` doğrudan `on_hand` değişikliğini ve satır silmeyi her rolde reddeder.
+  - **INV-02 kararı:** `reserved` (≥ 0) yalnızca tenant kontrollü `SECURITY DEFINER` fonksiyonlarla (`reserve`/`release`) değişecek; doğrudan UPDATE yetkisi verilmeyecek. Kullanılabilir stok `on_hand − reserved`; `reserved <= on_hand` kuralı ve sipariş düşümünde önce rezervasyonun azaltılması INV-02'de.
+- Geri dönüş: `down.sql` (üç tablodan birinde satır varsa hiçbir şey değiştirmeden durur; tetikleyicileri ve fonksiyonları da kaldırır). Prova dosyaları: `verify.sql` (yetki, tetikleyici, boş tablo kontrolleri) ve `rehearsal-seed.sql` (durma koşulu için test satırları), `backup-and-rehearse.sh` (OPS-08) tarafından kullanılır.
 
 ### channels
 - `channels` — id, company_id, type, name, credentials_ref, is_active
