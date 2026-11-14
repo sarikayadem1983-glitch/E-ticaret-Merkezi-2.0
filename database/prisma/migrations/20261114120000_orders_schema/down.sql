@@ -16,5 +16,6 @@ DROP TABLE "order_status_history";
 DROP TABLE "order_items";
 DROP TABLE "orders";
 DROP INDEX "channel_accounts_tenant_id_company_id_channel_id_key";
+DROP INDEX "product_variants_tenant_id_company_id_id_key";
 
 COMMIT;

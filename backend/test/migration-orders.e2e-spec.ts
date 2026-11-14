@@ -128,6 +128,8 @@ describe('order schema migration (ORD-01)', () => {
       const a = randomUUID();
       const p = randomUUID();
       const v = randomUUID();
+      const p2 = randomUUID();
+      const v2 = randomUUID();
       for (const id of [t, t2])
         await db.query(
           `insert into tenants (id, name, slug, updated_at) values ($1, 'T', $2, now())`,
@@ -159,6 +161,15 @@ describe('order schema migration (ORD-01)', () => {
         `insert into product_variants (id, tenant_id, company_id, product_id, sku, updated_at)
          values ($1, $2, $3, $4, 'SKU-1', now())`,
         [v, t, c, p],
+      );
+      await db.query(
+        `insert into products (id, tenant_id, company_id, name, updated_at) values ($1, $2, $3, 'Ürün 2', now())`,
+        [p2, t, c2],
+      );
+      await db.query(
+        `insert into product_variants (id, tenant_id, company_id, product_id, sku, updated_at)
+         values ($1, $2, $3, $4, 'SKU-2', now())`,
+        [v2, t, c2, p2],
       );
 
       type OrderOpts = {
@@ -195,12 +206,15 @@ describe('order schema migration (ORD-01)', () => {
           )
         ).rows[0].id;
       const o = await order('TY-1');
+      // Channel totals are stored verbatim (per-line rounding): they need not add up exactly.
+      await order('TY-R', { total: '189.89', discount: '0' });
       // Manual order: no account, no marketplace number. Two manual orders never collide.
       await order(null, { channel: 'manual', account: null });
       await order(null, { channel: 'manual', account: null });
 
       type ItemOpts = {
         tenant?: string;
+        company?: string;
         variant?: string | null;
         line?: string | null;
         qty?: number;
@@ -212,9 +226,9 @@ describe('order schema migration (ORD-01)', () => {
       };
       const item = (opts: ItemOpts = {}) =>
         db.query(
-          `insert into order_items (id, tenant_id, order_id, variant_id, external_line_id, sku, name, quantity,
+          `insert into order_items (id, tenant_id, company_id, order_id, variant_id, external_line_id, sku, name, quantity,
              unit_price, discount, vat_rate, line_total, updated_at)
-           values (gen_random_uuid(), $1, $2, $3, $4, $5, 'Ürün', $6, $7, $8, $9, $10, now())`,
+           values (gen_random_uuid(), $1, $11, $2, $3, $4, $5, 'Ürün', $6, $7, $8, $9, $10, now())`,
           [
             opts.tenant ?? t,
             o,
@@ -226,6 +240,7 @@ describe('order schema migration (ORD-01)', () => {
             opts.discount ?? '10.00',
             opts.vat === undefined ? '20' : opts.vat,
             opts.total ?? '189.90',
+            opts.company ?? c,
           ],
         );
       await item();
@@ -255,6 +270,13 @@ describe('order schema migration (ORD-01)', () => {
           ],
         );
       await history();
+      for (const status of [
+        'awaiting',
+        'unpacked',
+        'repack',
+        'at_collection_point',
+      ])
+        await history({ to: status });
       await history({
         from: 'created',
         to: 'picking',
@@ -273,7 +295,11 @@ describe('order schema migration (ORD-01)', () => {
           () => order('HB-1', { channel: 'hepsiburada' }),
           /orders_account_company_channel_fkey/,
         ],
-        [() => order('TY-3', { tenant: t2 }), /fkey/],
+        // t2 has no company c: the tenant-scoped company FK rejects it.
+        [
+          () => order('TY-3', { tenant: t2 }),
+          /orders_tenant_id_company_id_fkey/,
+        ],
         [() => order(null), /orders_account_has_external_no/],
         [
           () => order(' ', { account: null }),
@@ -285,24 +311,35 @@ describe('order schema migration (ORD-01)', () => {
           () => order('TY-6', { channel: 'Trendyol', account: null }),
           /orders_channel_format/,
         ],
-        [() => order('TY-7', { total: '190.00' }), /orders_total_consistent/],
         [
-          () =>
-            order('TY-8', { subtotal: '0', discount: '5.00', total: '-5.00' }),
+          () => order('TY-8', { subtotal: '0', discount: '0', total: '-5.00' }),
           /orders_amounts_non_negative/,
         ],
         [() => item(), /order_items_tenant_id_order_id_external_line_id_key/],
-        [() => item({ line: 'L2', qty: 0, total: '-10.00' }), /order_items_/],
         [
-          () => item({ line: 'L3', total: '199.90' }),
-          /order_items_line_total_consistent/,
+          () => item({ line: 'L2', qty: 0, discount: '0', total: '0' }),
+          /order_items_quantity_positive/,
+        ],
+        [
+          () => item({ line: 'L3', discount: '-1.00' }),
+          /order_items_amounts_non_negative/,
         ],
         [() => item({ line: 'L4', vat: '120' }), /order_items_vat_rate_range/],
         [() => item({ line: 'L5', sku: ' ' }), /order_items_sku_not_blank/],
-        [() => item({ line: 'L6', tenant: t2 }), /fkey/],
+        [() => item({ line: ' ' }), /order_items_external_line_id_not_blank/],
+        // Order of company c, line claims company c2: the order FK (with company) rejects it.
         [
-          () => item({ line: 'L7', variant: randomUUID() }),
-          /order_items_tenant_id_variant_id_fkey/,
+          () => item({ line: 'L6', company: c2, variant: null }),
+          /order_items_tenant_id_company_id_order_id_fkey/,
+        ],
+        // A variant of company c2 cannot be sold on an order of company c.
+        [
+          () => item({ line: 'L7', variant: v2 }),
+          /order_items_tenant_id_company_id_variant_id_fkey/,
+        ],
+        [
+          () => item({ line: 'L8', variant: randomUUID() }),
+          /order_items_tenant_id_company_id_variant_id_fkey/,
         ],
         [() => history({ to: 'done' }), /order_status_history_to_status_known/],
         [

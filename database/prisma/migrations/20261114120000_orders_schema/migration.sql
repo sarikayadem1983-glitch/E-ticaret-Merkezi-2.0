@@ -1,6 +1,7 @@
 -- ORD-01 order schema: orders, order_items, order_status_history. Additive only. Undo: down.sql.
 -- Generated with `prisma migrate diff`, then CHECKs, partial uniques, the account/company/channel
--- FK, the sync job FK and grants added by hand. No personal customer data (CRM-01).
+-- FK, the sync job FK and grants added by hand. Amounts are stored as the channel reports
+-- them (channel rounds per line), so there is no equality CHECK between totals. No personal customer data (CRM-01).
 -- CreateTable
 CREATE TABLE "orders" (
     "id" UUID NOT NULL,
@@ -13,6 +14,7 @@ CREATE TABLE "orders" (
     "currency" CHAR(3) NOT NULL,
     "subtotal" DECIMAL(12,2) NOT NULL,
     "discount_total" DECIMAL(12,2) NOT NULL DEFAULT 0,
+    "channel_discount_total" DECIMAL(12,2) NOT NULL DEFAULT 0,
     "shipping_total" DECIMAL(12,2) NOT NULL DEFAULT 0,
     "total" DECIMAL(12,2) NOT NULL,
     "ordered_at" TIMESTAMPTZ NOT NULL,
@@ -26,6 +28,7 @@ CREATE TABLE "orders" (
 CREATE TABLE "order_items" (
     "id" UUID NOT NULL,
     "tenant_id" UUID NOT NULL,
+    "company_id" UUID NOT NULL,
     "order_id" UUID NOT NULL,
     "variant_id" UUID,
     "external_line_id" VARCHAR(100),
@@ -70,6 +73,9 @@ CREATE INDEX "orders_tenant_id_channel_account_id_idx" ON "orders"("tenant_id", 
 CREATE UNIQUE INDEX "orders_tenant_id_id_key" ON "orders"("tenant_id", "id");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "orders_tenant_id_company_id_id_key" ON "orders"("tenant_id", "company_id", "id");
+
+-- CreateIndex
 CREATE INDEX "order_items_tenant_id_order_id_idx" ON "order_items"("tenant_id", "order_id");
 
 -- CreateIndex
@@ -84,6 +90,9 @@ CREATE INDEX "order_status_history_tenant_id_order_id_changed_at_idx" ON "order_
 -- CreateIndex
 CREATE UNIQUE INDEX "order_status_history_tenant_id_id_key" ON "order_status_history"("tenant_id", "id");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "product_variants_tenant_id_company_id_id_key" ON "product_variants"("tenant_id", "company_id", "id");
+
 -- AddForeignKey
 ALTER TABLE "orders" ADD CONSTRAINT "orders_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
@@ -97,10 +106,10 @@ ALTER TABLE "orders" ADD CONSTRAINT "orders_tenant_id_channel_account_id_fkey" F
 ALTER TABLE "order_items" ADD CONSTRAINT "order_items_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "order_items" ADD CONSTRAINT "order_items_tenant_id_order_id_fkey" FOREIGN KEY ("tenant_id", "order_id") REFERENCES "orders"("tenant_id", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "order_items" ADD CONSTRAINT "order_items_tenant_id_company_id_order_id_fkey" FOREIGN KEY ("tenant_id", "company_id", "order_id") REFERENCES "orders"("tenant_id", "company_id", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "order_items" ADD CONSTRAINT "order_items_tenant_id_variant_id_fkey" FOREIGN KEY ("tenant_id", "variant_id") REFERENCES "product_variants"("tenant_id", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "order_items" ADD CONSTRAINT "order_items_tenant_id_company_id_variant_id_fkey" FOREIGN KEY ("tenant_id", "company_id", "variant_id") REFERENCES "product_variants"("tenant_id", "company_id", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "order_status_history" ADD CONSTRAINT "order_status_history_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -122,20 +131,18 @@ CREATE UNIQUE INDEX "order_items_tenant_id_order_id_external_line_id_key" ON "or
 
 -- SQL-only CHECKs ------------------------------------------------------------------
 ALTER TABLE "orders" ADD CONSTRAINT "orders_channel_format" CHECK ("channel" ~ '^[a-z0-9]+(-[a-z0-9]+)*$');
-ALTER TABLE "orders" ADD CONSTRAINT "orders_status_known" CHECK ("status" IN ('created', 'picking', 'invoiced', 'shipped', 'delivered', 'undelivered', 'cancelled', 'unsupplied', 'returned'));
+ALTER TABLE "orders" ADD CONSTRAINT "orders_status_known" CHECK ("status" IN ('awaiting', 'created', 'picking', 'invoiced', 'unpacked', 'repack', 'shipped', 'at_collection_point', 'delivered', 'undelivered', 'cancelled', 'unsupplied', 'returned'));
 ALTER TABLE "orders" ADD CONSTRAINT "orders_currency_format" CHECK ("currency" ~ '^[A-Z]{3}$');
 ALTER TABLE "orders" ADD CONSTRAINT "orders_external_order_no_not_blank" CHECK ("external_order_no" IS NULL OR length(btrim("external_order_no")) > 0);
 ALTER TABLE "orders" ADD CONSTRAINT "orders_account_has_external_no" CHECK ("channel_account_id" IS NULL OR "external_order_no" IS NOT NULL);
-ALTER TABLE "orders" ADD CONSTRAINT "orders_amounts_non_negative" CHECK ("subtotal" >= 0 AND "discount_total" >= 0 AND "shipping_total" >= 0 AND "total" >= 0);
-ALTER TABLE "orders" ADD CONSTRAINT "orders_total_consistent" CHECK ("total" = "subtotal" - "discount_total" + "shipping_total");
+ALTER TABLE "orders" ADD CONSTRAINT "orders_amounts_non_negative" CHECK ("subtotal" >= 0 AND "discount_total" >= 0 AND "channel_discount_total" >= 0 AND "shipping_total" >= 0 AND "total" >= 0);
 ALTER TABLE "order_items" ADD CONSTRAINT "order_items_quantity_positive" CHECK ("quantity" > 0);
 ALTER TABLE "order_items" ADD CONSTRAINT "order_items_amounts_non_negative" CHECK ("unit_price" >= 0 AND "discount" >= 0 AND "line_total" >= 0);
-ALTER TABLE "order_items" ADD CONSTRAINT "order_items_line_total_consistent" CHECK ("line_total" = "quantity" * "unit_price" - "discount");
 ALTER TABLE "order_items" ADD CONSTRAINT "order_items_vat_rate_range" CHECK ("vat_rate" IS NULL OR ("vat_rate" >= 0 AND "vat_rate" <= 100));
 ALTER TABLE "order_items" ADD CONSTRAINT "order_items_sku_not_blank" CHECK (length(btrim("sku")) > 0);
 ALTER TABLE "order_items" ADD CONSTRAINT "order_items_external_line_id_not_blank" CHECK ("external_line_id" IS NULL OR length(btrim("external_line_id")) > 0);
-ALTER TABLE "order_status_history" ADD CONSTRAINT "order_status_history_from_status_known" CHECK ("from_status" IS NULL OR "from_status" IN ('created', 'picking', 'invoiced', 'shipped', 'delivered', 'undelivered', 'cancelled', 'unsupplied', 'returned'));
-ALTER TABLE "order_status_history" ADD CONSTRAINT "order_status_history_to_status_known" CHECK ("to_status" IN ('created', 'picking', 'invoiced', 'shipped', 'delivered', 'undelivered', 'cancelled', 'unsupplied', 'returned'));
+ALTER TABLE "order_status_history" ADD CONSTRAINT "order_status_history_from_status_known" CHECK ("from_status" IS NULL OR "from_status" IN ('awaiting', 'created', 'picking', 'invoiced', 'unpacked', 'repack', 'shipped', 'at_collection_point', 'delivered', 'undelivered', 'cancelled', 'unsupplied', 'returned'));
+ALTER TABLE "order_status_history" ADD CONSTRAINT "order_status_history_to_status_known" CHECK ("to_status" IN ('awaiting', 'created', 'picking', 'invoiced', 'unpacked', 'repack', 'shipped', 'at_collection_point', 'delivered', 'undelivered', 'cancelled', 'unsupplied', 'returned'));
 ALTER TABLE "order_status_history" ADD CONSTRAINT "order_status_history_source_known" CHECK ("source" IN ('channel', 'user', 'system'));
 ALTER TABLE "order_status_history" ADD CONSTRAINT "order_status_history_user_source_has_actor" CHECK ("source" <> 'user' OR "changed_by" IS NOT NULL);
 
