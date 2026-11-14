@@ -352,18 +352,21 @@ describe('applyTenantScope', () => {
     });
   });
 
-  describe('append-only models (AuditLog)', () => {
-    it.each(['update', 'updateMany', 'delete', 'deleteMany', 'upsert'])(
-      'refuses AuditLog.%s in tenant and system context',
-      (op) => {
-        expect(() => asA(() => applyTenantScope('AuditLog', op, {}))).toThrow(
-          TenantViolationError,
-        );
-        expect(() =>
-          TenantContext.runAsSystem(() => applyTenantScope('AuditLog', op, {})),
-        ).toThrow(TenantViolationError);
-      },
-    );
+  describe('append-only models (AuditLog, OrderStatusHistory)', () => {
+    it.each(
+      ['AuditLog', 'OrderStatusHistory'].flatMap((model) =>
+        ['update', 'updateMany', 'delete', 'deleteMany', 'upsert'].map(
+          (op) => [model, op] as const,
+        ),
+      ),
+    )('refuses %s.%s in tenant and system context', (model, op) => {
+      expect(() => asA(() => applyTenantScope(model, op, {}))).toThrow(
+        TenantViolationError,
+      );
+      expect(() =>
+        TenantContext.runAsSystem(() => applyTenantScope(model, op, {})),
+      ).toThrow(TenantViolationError);
+    });
 
     it('allows create and reads, scoped to the tenant', () => {
       expect(
