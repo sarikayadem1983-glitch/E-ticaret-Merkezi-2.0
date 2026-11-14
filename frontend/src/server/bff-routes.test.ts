@@ -171,6 +171,11 @@ describe('matchBffRoute', () => {
     expect(match('GET', 'imports/products/template')).toEqual({ ok: false, status: 404 });
   });
 
+  it('allows the dashboard KPIs read-only (DSH-02)', () => {
+    expect(match('GET', 'dashboard/kpis', 'company_id=x')).toMatchObject({ ok: true, body: false });
+    expect(match('POST', 'dashboard/kpis')).toEqual({ ok: false, status: 404 });
+  });
+
   it('allows the sales report read-only (RPT-01)', () => {
     expect(
       match('GET', 'reports/sales', 'from=2026-11-01&to=2026-11-14&group_by=day&company_id=x&channel=manual'),

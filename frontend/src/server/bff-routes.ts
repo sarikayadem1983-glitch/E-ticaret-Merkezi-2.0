@@ -105,6 +105,8 @@ const ROUTES: readonly BffRoute[] = [
   { method: 'POST', path: new RegExp(`^orders/${UUID}/reserve$`), body: true },
   // Product import (IMP-01): CSV text in the JSON body; dry run by default.
   { method: 'POST', path: /^imports\/products$/, body: true },
+  // Dashboard KPIs (DSH-02).
+  { method: 'GET', path: /^dashboard\/kpis$/, query: ['company_id'] },
   // Reports (RPT-01): read-only.
   {
     method: 'GET',

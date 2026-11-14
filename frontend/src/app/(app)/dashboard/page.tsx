@@ -12,6 +12,7 @@ import {
   Store,
 } from 'lucide-react';
 import Link from 'next/link';
+import { KpiCards } from '@/components/dashboard/kpi-cards';
 import { CompanyStatus, PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -83,6 +84,8 @@ export default function DashboardPage() {
           </Button>
         }
       />
+
+      <KpiCards />
 
       <section aria-label="Firma özeti" className="grid gap-4 sm:grid-cols-3">
         <StatCard
