@@ -11,13 +11,7 @@ import pg from 'pg';
 
 config({ path: '../.env', quiet: true });
 
-const MIGRATIONS = join(
-  process.cwd(),
-  '..',
-  'database',
-  'prisma',
-  'migrations',
-);
+const MIGRATIONS = join(process.cwd(), '..', 'database', 'prisma', 'migrations');
 const NAME = '20261111090000_catalog_variant_attributes';
 const DB = `tm_migration_test_attr_${process.pid}`;
 const TABLES = ['attribute_values', 'attributes', 'variant_attribute_values'];
@@ -32,22 +26,15 @@ function env(name: string): string {
 function urlFor(db: string): URL {
   const url = new URL(env('MIGRATION_DATABASE_URL'));
   const devDb = url.pathname.replace(/^\//, '');
-  if (!db.startsWith('tm_migration_test'))
-    throw new Error(`unsafe database name: ${db}`);
-  if (db === devDb || db === process.env.POSTGRES_DB)
-    throw new Error('refusing the development database');
-  if (!['localhost', '127.0.0.1'].includes(url.hostname))
-    throw new Error(`unsafe host: ${url.hostname}`);
+  if (!db.startsWith('tm_migration_test')) throw new Error(`unsafe database name: ${db}`);
+  if (db === devDb || db === process.env.POSTGRES_DB) throw new Error('refusing the development database');
+  if (!['localhost', '127.0.0.1'].includes(url.hostname)) throw new Error(`unsafe host: ${url.hostname}`);
   url.pathname = `/${db}`;
   return url;
 }
 
-const read = (name: string, file: string) =>
-  readFileSync(join(MIGRATIONS, name, file), 'utf8');
-const allMigrations = () =>
-  readdirSync(MIGRATIONS)
-    .filter((n) => /^\d{14}_/.test(n))
-    .sort();
+const read = (name: string, file: string) => readFileSync(join(MIGRATIONS, name, file), 'utf8');
+const allMigrations = () => readdirSync(MIGRATIONS).filter((n) => /^\d{14}_/.test(n)).sort();
 
 let admin: pg.Client;
 let db: pg.Client;
@@ -74,9 +61,7 @@ beforeAll(async () => {
   await admin.query(`CREATE DATABASE "${DB}" OWNER tm_migrator`);
   db = new pg.Client({ connectionString: target.toString() });
   await db.connect();
-  const { rows } = await db.query<{ d: string }>(
-    'select current_database() as d',
-  );
+  const { rows } = await db.query<{ d: string }>('select current_database() as d');
   if (rows[0].d !== DB) throw new Error(`connected to ${rows[0].d}`);
   await db.query(`create table _prisma_migrations (
     id varchar(36) primary key, checksum varchar(64) not null, finished_at timestamptz,
@@ -84,8 +69,7 @@ beforeAll(async () => {
     started_at timestamptz not null default now(), applied_steps_count integer not null default 0)`);
   const all = allMigrations();
   if (!all.includes(NAME)) throw new Error(`${NAME} missing`);
-  for (const name of all.slice(0, all.indexOf(NAME) + 1))
-    await db.query(read(name, 'migration.sql'));
+  for (const name of all.slice(0, all.indexOf(NAME) + 1)) await db.query(read(name, 'migration.sql'));
 }, 180_000);
 
 afterAll(async () => {
@@ -109,16 +93,7 @@ describe('variant attribute migration (CAT-03)', () => {
        from unnest($1::text[]) t order by t`,
       [TABLES],
     );
-    expect(rows).toEqual(
-      TABLES.map((t) => ({
-        t,
-        s: true,
-        i: true,
-        u: true,
-        d: false,
-        tr: false,
-      })),
-    );
+    expect(rows).toEqual(TABLES.map((t) => ({ t, s: true, i: true, u: true, d: false, tr: false })));
   });
 
   it('SQL-only constraints and partial unique indexes exist', async () => {
@@ -137,8 +112,7 @@ describe('variant attribute migration (CAT-03)', () => {
       'attribute_values_tenant_id_attribute_id_value_active_key',
       'attributes_tenant_id_name_active_key',
     ]);
-    for (const r of idx.rows)
-      expect(r.def).toMatch(/lower\(btrim.*WHERE \(deleted_at IS NULL\)/);
+    for (const r of idx.rows) expect(r.def).toMatch(/lower\(btrim.*WHERE \(deleted_at IS NULL\)/);
   });
 
   it('links a value only under its own attribute and tenant', async () => {
@@ -151,19 +125,13 @@ describe('variant attribute migration (CAT-03)', () => {
       const colour = randomUUID();
       const size = randomUUID();
       const red = randomUUID();
-      await db.query(
-        `insert into tenants (id, name, slug, updated_at) values ($1, 'T', $2, now())`,
-        [t, `t-${t}`],
-      );
+      await db.query(`insert into tenants (id, name, slug, updated_at) values ($1, 'T', $2, now())`, [t, `t-${t}`]);
       await db.query(
         `insert into companies (id, tenant_id, legal_name, tax_number, tax_office, address_line, district, city, updated_at)
          values ($1, $2, 'A', '1234567890', 'X', 'Y', 'Z', 'W', now())`,
         [c, t],
       );
-      await db.query(
-        `insert into products (id, tenant_id, company_id, name, updated_at) values ($1, $2, $3, 'P', now())`,
-        [p, t, c],
-      );
+      await db.query(`insert into products (id, tenant_id, company_id, name, updated_at) values ($1, $2, $3, 'P', now())`, [p, t, c]);
       await db.query(
         `insert into product_variants (id, tenant_id, company_id, product_id, sku, updated_at) values ($1, $2, $3, $4, 'S', now())`,
         [v, t, c, p],
@@ -213,11 +181,7 @@ describe('variant attribute migration (CAT-03)', () => {
       await db.query('ROLLBACK TO SAVEPOINT s');
       // down.sql refuses while attribute rows exist (its own BEGIN/COMMIT stripped).
       await expect(
-        db.query(
-          read(NAME, 'down.sql')
-            .replace(/^BEGIN;$/m, '')
-            .replace(/^COMMIT;$/m, ''),
-        ),
+        db.query(read(NAME, 'down.sql').replace(/^BEGIN;$/m, '').replace(/^COMMIT;$/m, '')),
       ).rejects.toThrow(/özellik verisi var/);
     } finally {
       await db.query('ROLLBACK');
@@ -225,9 +189,7 @@ describe('variant attribute migration (CAT-03)', () => {
   });
 
   it('fails safely when applied twice; down.sql removes it and it re-applies', async () => {
-    await expect(db.query(read(NAME, 'migration.sql'))).rejects.toThrow(
-      /already exists/,
-    );
+    await expect(db.query(read(NAME, 'migration.sql'))).rejects.toThrow(/already exists/);
     expect(await tables()).toEqual(TABLES);
     await db.query(read(NAME, 'down.sql'));
     expect(await tables()).toEqual([]);

@@ -11,13 +11,7 @@ import pg from 'pg';
 
 config({ path: '../.env', quiet: true });
 
-const MIGRATIONS = join(
-  process.cwd(),
-  '..',
-  'database',
-  'prisma',
-  'migrations',
-);
+const MIGRATIONS = join(process.cwd(), '..', 'database', 'prisma', 'migrations');
 const CATALOG = '20261029120000_catalog_schema';
 const FRESH_DB = `tm_migration_test_cat_fresh_${process.pid}`;
 const DATA_DB = `tm_migration_test_cat_data_${process.pid}`;
@@ -33,24 +27,17 @@ function env(name: string): string {
 function urlFor(db: string): URL {
   const url = new URL(env('MIGRATION_DATABASE_URL'));
   const devDb = url.pathname.replace(/^\//, '');
-  if (!db.startsWith('tm_migration_test'))
-    throw new Error(`unsafe database name: ${db}`);
-  if (db === devDb || db === process.env.POSTGRES_DB)
-    throw new Error('refusing the development database');
-  if (!['localhost', '127.0.0.1'].includes(url.hostname))
-    throw new Error(`unsafe host: ${url.hostname}`);
+  if (!db.startsWith('tm_migration_test')) throw new Error(`unsafe database name: ${db}`);
+  if (db === devDb || db === process.env.POSTGRES_DB) throw new Error('refusing the development database');
+  if (!['localhost', '127.0.0.1'].includes(url.hostname)) throw new Error(`unsafe host: ${url.hostname}`);
   url.pathname = `/${db}`;
   return url;
 }
 
 const read = (path: string) => readFileSync(path, 'utf8');
-const migrationSql = (name: string) =>
-  read(join(MIGRATIONS, name, 'migration.sql'));
+const migrationSql = (name: string) => read(join(MIGRATIONS, name, 'migration.sql'));
 const downSql = (name: string) => read(join(MIGRATIONS, name, 'down.sql'));
-const allMigrations = () =>
-  readdirSync(MIGRATIONS)
-    .filter((n) => /^\d{14}_/.test(n))
-    .sort();
+const allMigrations = () => readdirSync(MIGRATIONS).filter((n) => /^\d{14}_/.test(n)).sort();
 
 let admin: pg.Client;
 const clients: pg.Client[] = [];
@@ -61,11 +48,8 @@ async function createDb(name: string): Promise<pg.Client> {
   const client = new pg.Client({ connectionString: urlFor(name).toString() });
   await client.connect();
   clients.push(client);
-  const { rows } = await client.query<{ db: string }>(
-    'select current_database() as db',
-  );
-  if (rows[0].db !== name)
-    throw new Error(`connected to ${rows[0].db}, expected ${name}`);
+  const { rows } = await client.query<{ db: string }>('select current_database() as db');
+  if (rows[0].db !== name) throw new Error(`connected to ${rows[0].db}, expected ${name}`);
   // Same shape as Prisma's own bookkeeping table (earlier migrations reference it).
   await client.query(`create table _prisma_migrations (
     id varchar(36) primary key, checksum varchar(64) not null, finished_at timestamptz,
@@ -113,10 +97,7 @@ beforeAll(async () => {
   // Existing data: every earlier migration, a tenant with system roles and a company, then CAT-01.
   data = await createDb(DATA_DB);
   await apply(data, all.slice(0, all.indexOf(CATALOG)));
-  await data.query(
-    `insert into tenants (id, name, slug, updated_at) values ($1, 'A', 'a', now())`,
-    [tenantId],
-  );
+  await data.query(`insert into tenants (id, name, slug, updated_at) values ($1, 'A', 'a', now())`, [tenantId]);
   await data.query(
     `insert into roles (id, tenant_id, name, permissions, key, scope, is_system, updated_at)
      select gen_random_uuid(), $1, c.name, c.perms, c.key, c.scope::role_scope, true, now()
@@ -137,8 +118,7 @@ beforeAll(async () => {
 afterAll(async () => {
   for (const c of clients) await c.end();
   if (admin) {
-    for (const db of [FRESH_DB, DATA_DB])
-      await admin.query(`DROP DATABASE IF EXISTS "${db}" WITH (FORCE)`);
+    for (const db of [FRESH_DB, DATA_DB]) await admin.query(`DROP DATABASE IF EXISTS "${db}" WITH (FORCE)`);
     await admin.end();
   }
 });
@@ -182,10 +162,7 @@ describe('catalog migration (CAT-01)', () => {
       sql.indexOf('-- Application role privileges'),
     );
     const snapshot = () =>
-      data.query(
-        'select key, permissions from roles where tenant_id = $1 order by key',
-        [tenantId],
-      );
+      data.query('select key, permissions from roles where tenant_id = $1 order by key', [tenantId]);
     const before = (await snapshot()).rows;
     await data.query(section);
     await data.query(section);
@@ -200,32 +177,13 @@ describe('catalog migration (CAT-01)', () => {
        from unnest($1::text[]) t order by t`,
       [TABLES],
     );
-    expect(rows).toEqual(
-      TABLES.map((t) => ({
-        t,
-        s: true,
-        i: true,
-        u: true,
-        d: false,
-        tr: false,
-      })),
-    );
+    expect(rows).toEqual(TABLES.map((t) => ({ t, s: true, i: true, u: true, d: false, tr: false })));
   });
 
   it('SQL-only constraints exist after migration', async () => {
     const { rows } = await fresh.query<{ c: string }>(
       `select conname as c from pg_constraint where conname = any($1) order by 1`,
-      [
-        [
-          'brands_name_trimmed',
-          'categories_no_self_parent',
-          'categories_slug_format',
-          'product_variants_barcode_not_blank',
-          'product_variants_barcode_trimmed',
-          'product_variants_sku_not_blank',
-          'product_variants_sku_trimmed',
-        ],
-      ],
+      [['brands_name_trimmed', 'categories_no_self_parent', 'categories_slug_format', 'product_variants_barcode_not_blank', 'product_variants_barcode_trimmed', 'product_variants_sku_not_blank', 'product_variants_sku_trimmed']],
     );
     expect(rows.map((r) => r.c)).toEqual([
       'brands_name_trimmed',
@@ -241,37 +199,23 @@ describe('catalog migration (CAT-01)', () => {
        where indexname in ('brands_tenant_id_name_active_key', 'categories_tenant_id_slug_active_key', 'brands_tenant_id_name_key', 'categories_tenant_id_slug_key')
        order by 1`,
     );
-    expect(idx.rows.map((r) => r.i)).toEqual([
-      'brands_tenant_id_name_active_key',
-      'categories_tenant_id_slug_active_key',
-    ]);
-    for (const r of idx.rows)
-      expect(r.def).toMatch(/WHERE \(deleted_at IS NULL\)/);
+    expect(idx.rows.map((r) => r.i)).toEqual(['brands_tenant_id_name_active_key', 'categories_tenant_id_slug_active_key']);
+    for (const r of idx.rows) expect(r.def).toMatch(/WHERE \(deleted_at IS NULL\)/);
   });
 
   it('down.sql leaves custom roles (key IS NULL) untouched', async () => {
     await fresh.query('BEGIN');
     try {
       const t = randomUUID();
-      await fresh.query(
-        `insert into tenants (id, name, slug, updated_at) values ($1, 'C', $2, now())`,
-        [t, `c-${t}`],
-      );
+      await fresh.query(`insert into tenants (id, name, slug, updated_at) values ($1, 'C', $2, now())`, [t, `c-${t}`]);
       await fresh.query(
         `insert into roles (id, tenant_id, name, permissions, scope, updated_at)
          values (gen_random_uuid(), $1, 'Özel', '{products:read}', 'tenant', now())`,
         [t],
       );
       // down.sql has its own BEGIN/COMMIT; run its body only, inside this transaction.
-      await fresh.query(
-        downSql(CATALOG)
-          .replace(/^BEGIN;$/m, '')
-          .replace(/^COMMIT;$/m, ''),
-      );
-      const { rows } = await fresh.query(
-        `select permissions from roles where tenant_id = $1`,
-        [t],
-      );
+      await fresh.query(downSql(CATALOG).replace(/^BEGIN;$/m, '').replace(/^COMMIT;$/m, ''));
+      const { rows } = await fresh.query(`select permissions from roles where tenant_id = $1`, [t]);
       expect(rows[0].permissions).toEqual(['products:read']);
     } finally {
       await fresh.query('ROLLBACK');
@@ -279,9 +223,7 @@ describe('catalog migration (CAT-01)', () => {
   });
 
   it('fails safely when applied a second time', async () => {
-    await expect(fresh.query(migrationSql(CATALOG))).rejects.toThrow(
-      /already exists/,
-    );
+    await expect(fresh.query(migrationSql(CATALOG))).rejects.toThrow(/already exists/);
     expect(await tablesOf(fresh)).toEqual(TABLES);
   });
 
@@ -289,9 +231,7 @@ describe('catalog migration (CAT-01)', () => {
     await data.query('BEGIN');
     try {
       // Products exist: down.sql must refuse to drop catalog data.
-      await expect(data.query(downSql(CATALOG))).rejects.toThrow(
-        /katalog verisi var/,
-      );
+      await expect(data.query(downSql(CATALOG))).rejects.toThrow(/katalog verisi var/);
     } finally {
       await data.query('ROLLBACK');
     }
