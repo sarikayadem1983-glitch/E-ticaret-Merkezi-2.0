@@ -271,7 +271,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 
 | ID | Görev | Öncelik | Bağımlılık | Tahmin | Mod | Sürüm | Durum | Kabul kriteri | Test | Güvenlik riski | Kaynak |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| INV-01 | Depo ve stok şeması; append-only stok hareketleri | P0 | CAT-01 | 3 | CRITICAL | A | DONE-PR (PR #44) | Stok = hareketlerin toplamı; hareket silinemez | M, E | Orta | Öneri (onay bekliyor) |
+| INV-01 | Depo ve stok şeması; append-only stok hareketleri | P0 | CAT-01 | 3 | CRITICAL | A | DONE-MERGED (PR #44, merge `458ee82`; dev `458ee82`, 2026-11-14) | Stok = hareketlerin toplamı; hareket silinemez | M, E | Orta | Öneri (onay bekliyor) |
 | INV-02 | Rezervasyon ve sipariş bağlı düşüm (eşzamanlılık güvenli) | P0 | INV-01, ORD-01 | 4 | CRITICAL | A | PLANNED | Paralel siparişlerde negatif stok oluşmaz (satır kilidi/koşullu güncelleme) | U, E, L | Orta (veri bütünlüğü) | Öneri (onay bekliyor) |
 | INV-03 | Stok UI, düşük stok eşiği ve uyarısı | P1 | INV-01 | 2 | STANDARD | A | PLANNED | Eşik altı ürünler listelenir | F, P | Düşük | Öneri (onay bekliyor) |
 | INV-04 | Çoklu depo transferi ve stok sayımı | P2 | INV-02 | 3 | STANDARD | B | PLANNED | Transfer iki hareket olarak kaydedilir | E | Düşük | Öneri (onay bekliyor) |
@@ -383,7 +383,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | OPS-02 | Metrikler, uptime ve alarm (DB, Redis, kuyruk, entegrasyon hata oranı) | P0 | OPS-01, INF-11 | 3 | STANDARD | B | PLANNED | Alarm kanalı test edildi | Smoke | Orta | Öneri (onay bekliyor) |
 | OPS-03 | Otomatik yedekleme ve geri yükleme (PITR), geri yükleme tatbikatı | P0 | — | 3 | CRITICAL | A | PLANNED | Belgelenmiş RPO/RTO; tatbikat başarılı | M | Kritik | Öneri (onay bekliyor) |
 | OPS-06 | Yük ve performans testi (senkron, sipariş içeri alma, raporlar) | P1 | INF-11 | 3 | STANDARD | B | PLANNED | Hedef p95 süreleri belgelendi ve karşılandı | L | Orta | Öneri (onay bekliyor) |
-| OPS-08 | `backup-and-rehearse.sh` genelleştirme: başlangıç noktası hedef DB'nin son uygulanmış migration'ından otomatik; yalnızca bekleyen migration'ların kontrolleri (migration klasöründe `verify.sql`); `down.sql` provası (boş ve dolu veriyle durma koşulu); Aşama 1 kontrolleri yalnızca Aşama 1 bekliyorken | P1 | — | 1 | STANDARD | A | DONE-PR (PR #45) | Dev'in mevcut durumunda (CAT-01 uygulanmış) betik çıkış 0 verir; bekleyen migration yoksa açıkça bunu raporlar; CAT-01 benzeri yeni bir migration için `verify.sql` kontrolleri ve `down.sql` provası raporda görünür; hiçbir aşamada kaynak DB'ye yazılmaz (yalnızca `pg_dump`); `tm_` dışı DB oluşturulmaz/silinmez; rapor satır içeriği içermez | M (izole) | Orta (yanlış prova güveni) | Kullanıcı kararı (2026-10-30) |
+| OPS-08 | `backup-and-rehearse.sh` genelleştirme: başlangıç noktası hedef DB'nin son uygulanmış migration'ından otomatik; yalnızca bekleyen migration'ların kontrolleri (migration klasöründe `verify.sql`); `down.sql` provası (boş ve dolu veriyle durma koşulu); Aşama 1 kontrolleri yalnızca Aşama 1 bekliyorken | P1 | — | 1 | STANDARD | A | DONE-MERGED (PR #45, merge `63bbb94`; dev provasında kullanıldı, 2026-11-14) | Dev'in mevcut durumunda (CAT-01 uygulanmış) betik çıkış 0 verir; bekleyen migration yoksa açıkça bunu raporlar; CAT-01 benzeri yeni bir migration için `verify.sql` kontrolleri ve `down.sql` provası raporda görünür; hiçbir aşamada kaynak DB'ye yazılmaz (yalnızca `pg_dump`); `tm_` dışı DB oluşturulmaz/silinmez; rapor satır içeriği içermez | M (izole) | Orta (yanlış prova güveni) | Kullanıcı kararı (2026-10-30) |
 
 ### OPS-E2 Yönetim ve uyum
 
@@ -449,14 +449,14 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | ORD-01 | Sipariş şeması: sipariş, kalem, durum geçmişi, kanal referansı (tekil `channel + external_id`) | DONE-MERGED (PR #42, merge `93c03b1`; dev `93c03b1`, 2026-11-14) | 2 | CRITICAL | Öneri (onay bekliyor) |
 | ORD-02 | Sipariş API ve durum makinesi (geçersiz geçiş reddi, audit) | PLANNED | 4 | STANDARD | Öneri (onay bekliyor) |
 | ORD-03 | Sipariş UI: liste, filtre, detay, toplu işlem (etiket yazdır, durum) | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
-| INV-01 | Depo ve stok şeması; append-only stok hareketleri | DONE-PR (PR #44) | 3 | CRITICAL | Öneri (onay bekliyor) |
+| INV-01 | Depo ve stok şeması; append-only stok hareketleri | DONE-MERGED (PR #44, merge `458ee82`; dev `458ee82`, 2026-11-14) | 3 | CRITICAL | Öneri (onay bekliyor) |
 | INV-02 | Rezervasyon ve sipariş bağlı düşüm (eşzamanlılık güvenli) | PLANNED | 4 | CRITICAL | Öneri (onay bekliyor) |
 | INV-03 | Stok UI, düşük stok eşiği ve uyarısı | PLANNED | 2 | STANDARD | Öneri (onay bekliyor) |
 | SHP-02 | Pazaryeri kargo entegrasyonu üzerinden etiket ve takip numarası | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
 | RPT-01 | Satış raporları (dönem, kanal, ürün) | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
 | OPS-01 | Yapılandırılmış log + hata izleme (ör. Sentry), istek kimliği | PLANNED | 2 | STANDARD | Öneri (onay bekliyor) |
 | OPS-03 | Otomatik yedekleme ve geri yükleme (PITR), geri yükleme tatbikatı | PLANNED | 3 | CRITICAL | Öneri (onay bekliyor) |
-| OPS-08 | `backup-and-rehearse.sh` genelleştirme (son migration'dan başlangıç, `verify.sql`, `down.sql` provası) | DONE-PR (PR #45) | 1 | STANDARD | Kullanıcı kararı (2026-10-30) |
+| OPS-08 | `backup-and-rehearse.sh` genelleştirme (son migration'dan başlangıç, `verify.sql`, `down.sql` provası) | DONE-MERGED (PR #45, merge `63bbb94`; dev provasında kullanıldı, 2026-11-14) | 1 | STANDARD | Kullanıcı kararı (2026-10-30) |
 
 ### Sürüm B — Ticari SaaS (62 görev: 0 tamamlandı + 62 kalan; kalan tahmin 190 iş günü; 23 EPIC)
 

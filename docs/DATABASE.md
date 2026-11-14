@@ -116,7 +116,7 @@
   - Ürünün `vat_rate`'i yoksa net/KDV `null` döner.
 - Geri dönüş: `down.sql` (`variant_prices`'ta satır veya `vat_rate` dolu ürün varsa hiçbir şey değiştirmeden durur).
 
-### inventory (INV-01; migration `20261114150000_inventory_schema`, izole veritabanında denendi)
+### inventory (INV-01; migration `20261114150000_inventory_schema`, dev'e uygulandı 2026-11-14)
 - **Kural: stok = hareketlerin toplamı.** Stok yalnızca `stock_movements`'a satır eklenerek değişir; `stock_levels.on_hand` bu toplamın veritabanı tetikleyicisiyle tutulan kopyasıdır.
 - `warehouses` — id, tenant_id, company_id, name (100), is_default, is_active, created_at, updated_at
   - Firma içinde ad tekil (büyük/küçük harf duyarsız: `lower(name)`), firma başına en çok bir varsayılan depo (kısmi tekil). Silme yok; pasife alınır. `tm_app`: SELECT/INSERT/UPDATE.
