@@ -11,7 +11,7 @@ Son güncelleme: 2026-11-14 (`main` @ `65fcf85` dev'e deploy edildi) · Kaynak: 
 | BLOCKED | 1 — USR-18 (T16 + Aşama 2 migration onayı) |
 | Sürüm A (Trendyol-only MVP) ilerleme | 30 / 58 görev merge edildi ve dev'de; kalan 28 görev, 85 iş günü; tahmini hedef 2027-01-20 (taahhüt değil; OPS-08 ve USR-T11a sonrası yeniden hesaplanmadı) |
 | Sürüm B / C | 62 / 21 görev |
-| Açık PR | Yok |
+| Açık PR | #42 ORD-01 (sipariş şeması; CRITICAL inceleme 2. tur APPROVE) |
 | `origin/main` | `65fcf85` (PR #40 merge, INT-03). PR CI ✓ (backend, frontend) |
 | Dev ortamı | `65fcf85` (2026-11-14, kullanıcı onayıyla, bkz. §3e). Önceki `70bae17` (2026-11-13, bkz. §3d). Backend `node dist/main` (WMI ile ayrık). Smoke: `tm-backups/smoke-70bae17.log`. Önceki: `736cb40` (bkz. §3c) |
 | Dev DB şeması | Tüm migration'lar uygulandı; son `20261113120000_sync_engine` (INT-02, 2026-11-13, kullanıcı onayıyla; yedek `ticaret_merkezi-20261113-210949.dump`, izole prova ok). Önceki `20261112210000_user_tokens` (USR-19, kullanıcı onayıyla; yedek `ticaret_merkezi-20261112-210146.dump`; `migrate status` 2026-11-13: güncel). Önceki `20261112190000_channel_mapping` (CAT-06, 2026-11-12, kullanıcı onayıyla; yedek `ticaret_merkezi-20261112-184613.dump` + izole prova 10/10). Aşama 2 (`migrations-pending/`) uygulanmadı |
@@ -256,4 +256,5 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 | 2026-11-13 | INT-02 → DONE-PR (merge edilmedi) | [#38](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/38) | yerel (izole `tm_e2e_sync`): unit 348/348, e2e 411/412 (1 skip Mailpit), lint ok, build ok; bağımsız CRITICAL inceleme 2 tur → APPROVE | yok; migration dev DB'ye uygulanmadı |
 | 2026-11-13 | INT-02 → DONE-MERGED (merge `70bae17`, dev `70bae17`, kullanıcı onayı) | [#38](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/38) | CI ✓; izole prova ok; dev smoke 22/22 + USR-19 kontrolü | dev `70bae17` |
 | 2026-11-13 | INT-03 → DONE-PR (merge edilmedi) | [#40](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/40) | backend: bağlantı testi e2e 6/6 (sahte Trendyol sunucusu), sync e2e 21/21; frontend unit 177/177, lint ok, typecheck ok. `next build` ve Playwright yerelde koşulmadı (bellek); CI'ye bırakıldı | yok; migration yok |
+| 2026-11-14 | ORD-01 → DONE-PR | [#42](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/42) | yerel: unit 353/353; izole `tm_e2e_orders` e2e 421/422 (1 skip Mailpit); migration testi 3/3; lint ok, build ok; bağımsız CRITICAL inceleme 2 tur → APPROVE (kalan 2 Düşük: içe alımda tutar sapma uyarısı, `channel_discount_total` negatif test vakası) | yok; migration dev DB'ye uygulanmadı |
 | 2026-11-14 | INT-03 → DONE-MERGED (merge `65fcf85`, dev `65fcf85`, kullanıcı onayı) | [#40](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/40) | PR CI ✓; dev smoke 21/21 | dev `65fcf85` |
