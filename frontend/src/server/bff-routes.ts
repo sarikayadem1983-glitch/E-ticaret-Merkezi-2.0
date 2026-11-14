@@ -103,6 +103,7 @@ const ROUTES: readonly BffRoute[] = [
   },
   { method: 'GET', path: /^stock-levels\/low$/, query: ['company_id'] },
   { method: 'POST', path: /^stock-movements$/, body: true },
+  { method: 'POST', path: /^stock-(transfers|counts)$/, body: true },
   { method: 'PUT', path: new RegExp(`^stock-thresholds/${UUID}$`), body: true },
   { method: 'POST', path: new RegExp(`^orders/${UUID}/reserve$`), body: true },
   // Exports (IMP-04): CSV text inside a JSON body.

@@ -157,6 +157,9 @@ describe('matchBffRoute', () => {
     expect(match('GET', 'stock-levels', 'page=1&per_page=50&warehouse_id=x')).toMatchObject({ ok: true });
     expect(match('GET', 'stock-levels/low', 'company_id=x')).toMatchObject({ ok: true });
     expect(match('POST', 'stock-movements')).toMatchObject({ ok: true, body: true });
+    expect(match('POST', 'stock-transfers')).toMatchObject({ ok: true, body: true });
+    expect(match('POST', 'stock-counts')).toMatchObject({ ok: true, body: true });
+    expect(match('GET', 'stock-transfers')).toEqual({ ok: false, status: 404 });
     expect(match('PUT', `stock-thresholds/${ID}`)).toMatchObject({ ok: true, body: true });
     expect(match('POST', `orders/${ID}/reserve`)).toMatchObject({ ok: true, body: true });
     expect(match('DELETE', `stock-thresholds/${ID}`)).toEqual({ ok: false, status: 404 });

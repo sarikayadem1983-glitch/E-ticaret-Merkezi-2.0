@@ -11,6 +11,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { NativeSelect } from "@/components/catalog/common";
 import { ExportButton } from "@/components/export-button";
+import { TransferCountDialog } from "@/components/stock/transfer-count-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -69,7 +70,9 @@ export default function StockPage() {
   const [companyId, setCompanyId] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
   const [page, setPage] = useState(1);
-  const [dialog, setDialog] = useState<"warehouse" | "movement" | null>(null);
+  const [dialog, setDialog] = useState<
+    "warehouse" | "movement" | "transfer" | null
+  >(null);
   const [thresholdFor, setThresholdFor] = useState<{
     variantId: string;
     sku: string | null;
@@ -109,6 +112,12 @@ export default function StockPage() {
                 >
                   <Plus className="size-4" aria-hidden />
                   Depo
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setDialog("transfer")}
+                >
+                  Transfer / sayım
                 </Button>
                 <Button variant="brand" onClick={() => setDialog("movement")}>
                   <Plus className="size-4" aria-hidden />
@@ -386,6 +395,12 @@ export default function StockPage() {
       )}
       {dialog === "movement" && (
         <MovementDialog
+          companies={companies.data?.data ?? []}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog === "transfer" && (
+        <TransferCountDialog
           companies={companies.data?.data ?? []}
           onClose={() => setDialog(null)}
         />
