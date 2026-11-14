@@ -172,7 +172,7 @@ Kaynak: `docs/superpowers/plans/2026-10-28-user-management.md` (T1–T16 numaral
 | IMP-01 | Excel/CSV şablonu, satır doğrulama, deneme (dry-run) raporu | P0 | CAT-03 | 3 | STANDARD | A | DONE-MERGED (PR #57, merge `0568b56`; dev `0568b56`, 2026-11-14) | Hatalı satırlar satır/kolon bazında raporlanır; formül enjeksiyonu (CSV injection) engellenir | U, E | Orta | Öneri (onay bekliyor) |
 | IMP-02 | Asenkron içe aktarma işi (kuyruk), ilerleme ve hata raporu indirme | P0 | IMP-01, INF-09 | 3 | STANDARD | B | PLANNED | 10.000 satır zaman aşımına düşmeden işlenir; yarıda kalan iş yeniden başlatılabilir | E, L | Orta | Öneri (onay bekliyor) |
 | IMP-03 | URL'den ürün içe aktarma (sayfa/feed çekme) | P2 | IMP-02 | 4 | CRITICAL | B | PLANNED | SSRF koruması: özel IP/metadata adresleri reddedilir, boyut/süre sınırı, yönlendirme kontrolü | U, S | Yüksek (SSRF) | Öneri (onay bekliyor) |
-| IMP-04 | Toplu dışa aktarma (ürün, stok, fiyat) | P2 | IMP-01 | 2 | FAST | B | DONE-PR (PR #69; Sürüm B, öne alındı) | Yalnızca kullanıcının yetkili firmaları | E | Düşük | Öneri (onay bekliyor) |
+| IMP-04 | Toplu dışa aktarma (ürün, stok, fiyat) | P2 | IMP-01 | 2 | FAST | B | DONE-MERGED (PR #69, merge `dc64348`; dev `dc64348`, 2026-11-14; Sürüm B, öne alındı) | Yalnızca kullanıcının yetkili firmaları | E | Düşük | Öneri (onay bekliyor) |
 
 ## M07 — Ürün görsel yönetimi (`IMG`)
 
@@ -485,7 +485,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | DSH-03 | Bildirim merkezi (uygulama içi + e-posta tercihleri) | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
 | IMP-02 | Asenkron içe aktarma işi (kuyruk), ilerleme ve hata raporu indirme | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
 | IMP-03 | URL'den ürün içe aktarma (sayfa/feed çekme) | PLANNED | 4 | CRITICAL | Öneri (onay bekliyor) |
-| IMP-04 | Toplu dışa aktarma (ürün, stok, fiyat) | DONE-PR (PR #69; Sürüm B, öne alındı) | 2 | FAST | Öneri (onay bekliyor) |
+| IMP-04 | Toplu dışa aktarma (ürün, stok, fiyat) | DONE-MERGED (PR #69, merge `dc64348`; dev `dc64348`, 2026-11-14; Sürüm B, öne alındı) | 2 | FAST | Öneri (onay bekliyor) |
 | IMG-02 | Yeniden boyutlandırma/türev üretimi ve pazaryeri görsel kurallarına uygunluk kontrolü | PLANNED | 2 | STANDARD | Öneri (onay bekliyor) |
 | INT-04 | Webhook alıcısı (imza doğrulama, tekrar oynatma koruması) | PLANNED | 2 | CRITICAL | Öneri (onay bekliyor) |
 | INT-HB-01 | Hepsiburada bağlantısı + listeleme/katalog eşleme | PLANNED | 5 | STANDARD | Öneri (onay bekliyor) |
