@@ -1,6 +1,6 @@
 # Proje Durumu
 
-Son güncelleme: 2026-11-14 (`main` @ `ce85f36` dev'e deploy edildi) · Kaynak: `origin/main` @ `ce85f36` · Güncelleme kuralları: `AGENTS.md` → "Yol haritası ve durum takibi".
+Son güncelleme: 2026-11-14 (`main` @ `cfb9689` dev'e deploy edildi) · Kaynak: `origin/main` @ `cfb9689` · Güncelleme kuralları: `AGENTS.md` → "Yol haritası ve durum takibi".
 
 ## 1. Özet
 
@@ -12,8 +12,8 @@ Son güncelleme: 2026-11-14 (`main` @ `ce85f36` dev'e deploy edildi) · Kaynak: 
 | Sürüm A (Trendyol-only MVP) ilerleme | 30 / 58 görev merge edildi ve dev'de; kalan 28 görev, 85 iş günü; tahmini hedef 2027-01-20 (taahhüt değil; OPS-08 ve USR-T11a sonrası yeniden hesaplanmadı) |
 | Sürüm B / C | 62 / 21 görev |
 | Açık PR | Yok |
-| `origin/main` | `ce85f36` (OPS-01; **PR olmadan doğrudan push**, bkz. §3n). `main` CI ✓ (backend, frontend) |
-| Dev ortamı | `ce85f36` (2026-11-14, kullanıcı onayıyla, bkz. §3n). Önceki `0568b56` (bkz. §3m). Önceki `70bae17` (2026-11-13, bkz. §3d). Backend `node dist/main` (WMI ile ayrık). Smoke: `tm-backups/smoke-70bae17.log`. Önceki: `736cb40` (bkz. §3c) |
+| `origin/main` | `cfb9689` (PR #60 merge, R-26 düzeltmesi). PR CI ✓ (backend, frontend) |
+| Dev ortamı | `cfb9689` (2026-11-14, kullanıcı onayıyla, bkz. §3o). Önceki `ce85f36` (bkz. §3n). Önceki `70bae17` (2026-11-13, bkz. §3d). Backend `node dist/main` (WMI ile ayrık). Smoke: `tm-backups/smoke-70bae17.log`. Önceki: `736cb40` (bkz. §3c) |
 | Dev DB şeması | Tüm migration'lar uygulandı; son `20261113120000_sync_engine` (INT-02, 2026-11-13, kullanıcı onayıyla; yedek `ticaret_merkezi-20261113-210949.dump`, izole prova ok). Önceki `20261112210000_user_tokens` (USR-19, kullanıcı onayıyla; yedek `ticaret_merkezi-20261112-210146.dump`; `migrate status` 2026-11-13: güncel). Önceki `20261112190000_channel_mapping` (CAT-06, 2026-11-12, kullanıcı onayıyla; yedek `ticaret_merkezi-20261112-184613.dump` + izole prova 10/10). Aşama 2 (`migrations-pending/`) uygulanmadı |
 | Son testler (`main` @ `0437c16`, CI run 41096842266) | backend unit 283/283, e2e 331/332 (1 skip: `mail.e2e-spec.ts`, Mailpit); frontend unit 124/124. Önceki tam tur (`8fc7ae3`, CI run 41053467144): build, lint, typecheck ok. Playwright CI'da koşmuyor. Önceki yerel tam tur (`95b5bdb`): build ok; frontend 81/81, lint ok, typecheck ok, `next build` ok; Playwright 13/13 yalnızca `next dev` ile — `next start` (prod modu, http) 11/13: `APP_ORIGIN` https koruması, bkz. R-24 |
 
@@ -39,6 +39,10 @@ Son güncelleme: 2026-11-14 (`main` @ `ce85f36` dev'e deploy edildi) · Kaynak: 
 Yok. #25–#30 (`5ac1401`) 2026-11-12'de dev'e deploy edildi. #6–#16 (`f010233`), #19 (`8fc7ae3`), #22 ve #23 (`0437c16`) 2026-10-30'da dev'e deploy edildi ve bu tablodan çıkarıldı; ayrıntı §3 ve §6.
 
 Aşama 2 SQL'i (`migrations-pending/`) uygulanmadı (USR-18).
+
+## 3o. Dev deploy kaydı (2026-11-14, `main` @ `cfb9689`)
+
+Yalnızca dev ortamında, kullanıcı onayıyla. #60 (R-26: katalog yazımında serileştirme çakışmasında yeniden deneme). Migration yok. PR CI ✓; backend build + yeniden başlatma; `/health` ok; smoke 32/32 (`tm-backups/smoke-cfb9689.log`). Geri alma: `git checkout e14612e`, backend build + yeniden başlatma.
 
 ## 3n. Dev deploy kaydı (2026-11-14, `main` @ `ce85f36`) — süreç sapması
 
