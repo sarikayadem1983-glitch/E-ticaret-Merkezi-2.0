@@ -177,7 +177,7 @@ describe('Inventory and reservations API (e2e, INV-02)', () => {
           .send({}),
       ),
     );
-    const statuses = results.map((r) => r.status).sort();
+    const statuses = results.map((r) => r.status).sort((a, b) => a - b);
     expect(statuses).toEqual([200, 409]);
     expect(results.find((r) => r.status === 409)!.body.error.code).toBe(
       'STOCK_INSUFFICIENT',

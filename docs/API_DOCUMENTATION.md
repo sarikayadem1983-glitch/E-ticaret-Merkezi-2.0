@@ -527,3 +527,22 @@ Yanıt `{ data: [{ key, label, currency, orders, quantity, revenue, returned }],
 - Gün, siparişin İstanbul saatine göre tarihidir.
 - Dönemde 20 000'den fazla sipariş varsa 422 `REPORT_TOO_LARGE`; geçersiz aralık 422 `VALIDATION_ERROR`.
 
+### Toplu ürün içe aktarma (IMP-01)
+
+Yetki: `products:write` ve firmada ürün yazma rolü. Senkron, satır sınırlı (asenkron iş: IMP-02).
+
+#### GET /api/v1/imports/products/template
+
+`text/csv` şablon (UTF-8 BOM, `;` ayraç): `urun_adi;sku;barkod;kdv_orani;liste_fiyati;para_birimi`. Her satır bir varyant; aynı ürün adlı satırlar (büyük/küçük harf duyarsız) tek ürünün varyantları olur. Arayüz şablonu kendisi üretir (aynı kolonlar, testli).
+
+#### POST /api/v1/imports/products
+
+Gövde `{ companyId, csv (en çok 95 000 karakter; genel 100 KB gövde sınırı yükseltilmedi), dryRun? (varsayılan true) }`. En çok 1000 satır; ayraç `;` veya `,` otomatik.
+
+Yanıt 200 `{ data: { rows, products, variants, errors: [{ row, column, message }], dryRun, created, productIds? } }`. `row` dosyadaki satır numarasıdır (başlık = 1).
+
+- Doğrulama: zorunlu ad/SKU, uzunluklar, KDV (0/1/10/20), fiyat (virgül veya nokta, en çok 2 ondalık), para birimi, dosya içinde tekrar eden SKU (büyük/küçük harf duyarsız) ve barkod, aynı ürünün satırlarında farklı KDV, veritabanında zaten olan SKU/barkod (silinmiş varyantlar dahil).
+- **CSV/formül enjeksiyonu:** `=`, `+`, `-`, `@`, sekme veya satır başı ile başlayan her hücre reddedilir (hiçbir kolonun işaretli değere ihtiyacı yok).
+- `dryRun: false` yalnızca hata yoksa yazar; ürünler `ProductsService.create` ile tek tek oluşturulur (aynı kurallar ve Audit Log). Arada bir ürün başarısız olursa 422 `IMPORT_STOPPED` (kaç ürün oluşturulduğu mesajda).
+- 404 firma yok / erişim yok.
+

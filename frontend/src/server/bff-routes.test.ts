@@ -165,6 +165,12 @@ describe('matchBffRoute', () => {
     expect(match('GET', 'stock-levels', 'tenant_id=x')).toEqual({ ok: false, status: 400 });
   });
 
+  it('allows only the product import POST (IMP-01)', () => {
+    expect(match('POST', 'imports/products')).toMatchObject({ ok: true, body: true });
+    expect(match('GET', 'imports/products')).toEqual({ ok: false, status: 404 });
+    expect(match('GET', 'imports/products/template')).toEqual({ ok: false, status: 404 });
+  });
+
   it('allows the sales report read-only (RPT-01)', () => {
     expect(
       match('GET', 'reports/sales', 'from=2026-11-01&to=2026-11-14&group_by=day&company_id=x&channel=manual'),

@@ -95,6 +95,9 @@ export default function ProductsPage() {
             <Button asChild variant="outline">
               <Link href="/attributes">Özellikler</Link>
             </Button>
+            <Button asChild variant="outline">
+              <Link href="/products/import">İçe aktar</Link>
+            </Button>
             <Button asChild variant="brand">
               <Link href="/products/new">
                 <Plus className="size-4" aria-hidden />
