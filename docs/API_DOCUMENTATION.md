@@ -511,3 +511,17 @@ Yetki: `inventory:read` (tüm roller), `inventory:write` (Owner, Admin, Operasyo
 - `GET /api/v1/stock-movements?warehouse_id&variant_id&limit` → en yeni önce.
 - `POST /api/v1/orders/:id/reserve` `{ warehouseId? }` (varsayılan: firmanın varsayılan deposu) → 200 sipariş detayı. Eşleşmiş tüm kalemler ayrılır ya da hiçbiri. 409 `STOCK_INSUFFICIENT`, 409 `STOCK_ALREADY_RESERVED`, 409 `ORDER_NOT_RESERVABLE` (sevk edilmiş/son durum), 409 `WAREHOUSE_REQUIRED`, 404 (depo yok/pasif/başka firma). Aynı istek tekrarlanırsa değişiklik olmaz.
 - Durum geçişi `shipped` rezervasyonu stok düşümüne çevirir; `cancelled`/`unsupplied` serbest bırakır.
+
+### Raporlar (RPT-01)
+
+#### GET /api/v1/reports/sales
+
+Yetki: `orders:read`; yalnızca üyenin rolü olan firmaların siparişleri (firma rolü veritabanından okunur). Sorgu: `from`, `to` (`YYYY-AA-GG`, İstanbul takvim günü, ikisi dahil; en çok 366 gün), `group_by` (`day` | `channel` | `product`, varsayılan `day`), `company_id?`, `channel?`.
+
+Yanıt `{ data: [{ key, label, currency, orders, quantity, revenue, returned }], meta: { from, to, groupBy, totals: [{ currency, orders, revenue, returned }], excludedStatuses } }`.
+
+- `cancelled` ve `unsupplied` siparişler satış sayılmaz. `returned` siparişler ciroya girmez, `returned` sütununda sayılır.
+- Ciro: `day`/`channel` için sipariş toplamı, `product` için satır toplamı. Para birimleri asla toplanmaz (satır ve toplamlar para birimi başına). Tutarlar decimal metin; yuvarlama yok.
+- Gün, siparişin İstanbul saatine göre tarihidir.
+- Dönemde 20 000'den fazla sipariş varsa 422 `REPORT_TOO_LARGE`; geçersiz aralık 422 `VALIDATION_ERROR`.
+

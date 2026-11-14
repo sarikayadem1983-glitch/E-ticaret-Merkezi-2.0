@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  BarChart3,
   Boxes,
   Building2,
   FileText,
@@ -22,6 +23,7 @@ const NAV = [
   { href: '/companies', label: 'Firmalar', icon: Building2 },
   { href: '/products', label: 'Ürünler', icon: Package },
   { href: '/orders', label: 'Siparişler', icon: ShoppingCart },
+  { href: '/reports', label: 'Raporlar', icon: BarChart3 },
   { href: '/profile', label: 'Profil', icon: UserRound },
 ];
 
