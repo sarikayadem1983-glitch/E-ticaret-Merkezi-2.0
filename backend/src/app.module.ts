@@ -5,6 +5,7 @@ import { AuthModule } from './auth/auth.module.js';
 import { CatalogModule } from './catalog/catalog.module.js';
 import { InventoryModule } from './inventory/inventory.module.js';
 import { OrdersModule } from './orders/orders.module.js';
+import { ReportsModule } from './reports/reports.module.js';
 import { ChannelsModule } from './channels/channels.module.js';
 import { RecoveryModule } from './recovery/recovery.module.js';
 import { CompaniesModule } from './companies/companies.module.js';
@@ -28,6 +29,7 @@ import { TenantContextMiddleware } from './tenancy/tenant-context.middleware.js'
     CatalogModule,
     OrdersModule,
     InventoryModule,
+    ReportsModule,
     ChannelsModule,
     RecoveryModule,
     HealthModule,

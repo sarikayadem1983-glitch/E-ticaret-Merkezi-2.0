@@ -91,6 +91,12 @@ const ROUTES: readonly BffRoute[] = [
   { method: 'GET', path: new RegExp(`^orders/${UUID}$`) },
   { method: 'POST', path: /^orders$/, body: true },
   { method: 'POST', path: new RegExp(`^orders/${UUID}/status$`), body: true },
+  // Reports (RPT-01): read-only.
+  {
+    method: 'GET',
+    path: /^reports\/sales$/,
+    query: ['from', 'to', 'group_by', 'company_id', 'channel'],
+  },
 ];
 
 const SEGMENT = /^[a-z0-9-]{1,64}$/;

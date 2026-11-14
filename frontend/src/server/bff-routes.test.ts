@@ -151,6 +151,15 @@ describe('matchBffRoute', () => {
     expect(match('POST', `${acc}/${ID}/sync-jobs`)).toEqual({ ok: false, status: 404 });
   });
 
+  it('allows the sales report read-only (RPT-01)', () => {
+    expect(
+      match('GET', 'reports/sales', 'from=2026-11-01&to=2026-11-14&group_by=day&company_id=x&channel=manual'),
+    ).toMatchObject({ ok: true, body: false });
+    expect(match('POST', 'reports/sales')).toEqual({ ok: false, status: 404 });
+    expect(match('GET', 'reports/sales', 'tenant=x')).toEqual({ ok: false, status: 400 });
+    expect(match('GET', 'reports')).toEqual({ ok: false, status: 404 });
+  });
+
   it('allows the order routes and nothing around them (ORD-03)', () => {
     expect(
       match('GET', 'orders', 'page=1&per_page=20&search=TY&status=created&company_id=x&channel=manual'),
