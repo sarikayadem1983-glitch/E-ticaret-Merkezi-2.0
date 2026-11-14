@@ -29,22 +29,30 @@ export const ROLE_CATALOG: Record<RoleKey, CatalogRole> = {
       'products:read',
       'products:write',
       'channels:manage',
+      'orders:read',
+      'orders:write',
     ],
   },
   operations: {
     scope: 'company',
     name: 'Operasyon',
-    permissions: ['companies:read', 'products:read', 'products:write'],
+    permissions: [
+      'companies:read',
+      'products:read',
+      'products:write',
+      'orders:read',
+      'orders:write',
+    ],
   },
   accounting: {
     scope: 'company',
     name: 'Muhasebe',
-    permissions: ['companies:read', 'products:read'],
+    permissions: ['companies:read', 'products:read', 'orders:read'],
   },
   viewer: {
     scope: 'company',
     name: 'Görüntüleyici',
-    permissions: ['companies:read', 'products:read'],
+    permissions: ['companies:read', 'products:read', 'orders:read'],
   },
 };
 

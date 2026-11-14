@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AuditModule } from './audit/audit.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { CatalogModule } from './catalog/catalog.module.js';
+import { OrdersModule } from './orders/orders.module.js';
 import { ChannelsModule } from './channels/channels.module.js';
 import { RecoveryModule } from './recovery/recovery.module.js';
 import { CompaniesModule } from './companies/companies.module.js';
@@ -24,6 +25,7 @@ import { TenantContextMiddleware } from './tenancy/tenant-context.middleware.js'
     AuthModule,
     CompaniesModule,
     CatalogModule,
+    OrdersModule,
     ChannelsModule,
     RecoveryModule,
     HealthModule,

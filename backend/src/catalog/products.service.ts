@@ -183,6 +183,33 @@ export class ProductsService {
     }
   }
 
+  /**
+   * For orders (ORD-02): active variants of one company with the snapshot fields an
+   * order line keeps (sku, product name, VAT rate). Unknown, deleted or other-company
+   * variants are simply absent. The caller checks the member's order permission.
+   */
+  async variantsForOrder(companyId: string, ids: string[], tx: PrismaTx) {
+    const rows = await tx.productVariant.findMany({
+      where: {
+        id: { in: ids },
+        companyId,
+        deletedAt: null,
+        product: { deletedAt: null },
+      },
+      select: {
+        id: true,
+        sku: true,
+        product: { select: { name: true, vatRate: true } },
+      },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      sku: r.sku,
+      name: r.product.name,
+      vatRate: r.product.vatRate,
+    }));
+  }
+
   async get(user: AuthUser, id: string) {
     return { data: toProduct(await this.load(user, id, 'products:read')) };
   }
