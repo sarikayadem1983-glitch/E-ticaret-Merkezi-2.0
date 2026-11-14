@@ -42,6 +42,9 @@ model Tenant {
   productChannelValues      ProductChannelAttributeValue[]
   syncJobs                  SyncJob[]
   channelExternalRefs       ChannelExternalRef[]
+  orders                    Order[]
+  orderItems                OrderItem[]
+  orderStatusHistory        OrderStatusHistory[]
 
   @@map("tenants")
 }
@@ -165,6 +168,7 @@ model Company {
   products        Product[]
   channelAccounts ChannelAccount[]
   syncJobs        SyncJob[]
+  orders          Order[]
 
   @@unique([tenantId, taxNumber])
   @@unique([tenantId, id])
@@ -430,8 +434,10 @@ model ProductVariant {
   product         Product                 @relation(fields: [tenantId, companyId, productId], references: [tenantId, companyId, id], onDelete: Restrict)
   attributeValues VariantAttributeValue[]
   prices          VariantPrice[]
+  orderItems      OrderItem[]
 
   @@unique([tenantId, id])
+  @@unique([tenantId, companyId, id])
   @@unique([tenantId, sku])
   @@unique([tenantId, barcode])
   @@index([tenantId, companyId, productId])
@@ -544,6 +550,7 @@ model ChannelAccount {
   company             Company              @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict)
   syncJobs            SyncJob[]
   channelExternalRefs ChannelExternalRef[]
+  orders              Order[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, companyId, id])
@@ -732,4 +739,104 @@ model ChannelExternalRef {
   @@unique([tenantId, id])
   @@unique([tenantId, channelAccountId, entityType, externalId])
   @@map("channel_external_refs")
+}
+
+// ORD-01: orders. Money NUMERIC(12,2); orders are never deleted (no deleted_at, no DELETE for tm_app).
+// Customer personal data (name, address, phone) is not stored here: CRM-01 adds it with KVKK masking.
+model Order {
+  id                   String   @id @default(uuid()) @db.Uuid
+  tenantId             String   @map("tenant_id") @db.Uuid
+  companyId            String   @map("company_id") @db.Uuid
+  /// Channel code (trendyol, hepsiburada, manual); same format as variant_prices.channel (SQL CHECK).
+  channel              String   @db.VarChar(50)
+  /// Null for manual orders. SQL-only FK (tenant_id, company_id, channel_account_id) -> channel_accounts.
+  channelAccountId     String?  @map("channel_account_id") @db.Uuid
+  /// Marketplace order number; unique per tenant and channel (SQL partial unique). Required when channelAccountId is set.
+  externalOrderNo      String?  @map("external_order_no") @db.VarChar(100)
+  /// awaiting | created | picking | invoiced | unpacked | repack | shipped | at_collection_point | delivered | undelivered | cancelled | unsupplied | returned (SQL CHECK; transitions: ORD-02)
+  status               String   @default("created") @db.VarChar(30)
+  currency             String   @db.Char(3)
+  /// Amounts as reported by the channel (VAT included), stored verbatim: the channel rounds per
+  /// line, so there is no equality CHECK between them (ORD-02/INT-TY-03 reconcile and flag).
+  subtotal             Decimal  @db.Decimal(12, 2)
+  /// Seller-funded discount.
+  discountTotal        Decimal  @default(0) @map("discount_total") @db.Decimal(12, 2)
+  /// Marketplace-funded discount (Trendyol totalTyDiscount); does not reduce seller revenue.
+  channelDiscountTotal Decimal  @default(0) @map("channel_discount_total") @db.Decimal(12, 2)
+  shippingTotal        Decimal  @default(0) @map("shipping_total") @db.Decimal(12, 2)
+  /// Amount paid by the customer.
+  total                Decimal  @db.Decimal(12, 2)
+  orderedAt            DateTime @map("ordered_at") @db.Timestamptz
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  tenant         Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  company        Company              @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict)
+  channelAccount ChannelAccount?      @relation(fields: [tenantId, channelAccountId], references: [tenantId, id], onDelete: Restrict)
+  items          OrderItem[]
+  statusHistory  OrderStatusHistory[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, companyId, id])
+  // SQL-only: unique (tenant_id, channel, external_order_no) WHERE external_order_no IS NOT NULL.
+  @@index([tenantId, companyId, orderedAt(sort: Desc)])
+  @@index([tenantId, status, orderedAt(sort: Desc)])
+  @@index([tenantId, channelAccountId])
+  @@map("orders")
+}
+
+model OrderItem {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  /// The order's company; the variant must belong to it too (composite FKs).
+  companyId      String   @map("company_id") @db.Uuid
+  orderId        String   @map("order_id") @db.Uuid
+  /// Null when the marketplace line could not be matched to a local variant.
+  variantId      String?  @map("variant_id") @db.Uuid
+  /// Marketplace line id; unique per order when set (SQL partial unique).
+  externalLineId String?  @map("external_line_id") @db.VarChar(100)
+  /// Snapshot at order time: later catalog edits do not change past orders.
+  sku            String   @db.VarChar(100)
+  name           String   @db.VarChar(300)
+  quantity       Int
+  unitPrice      Decimal  @map("unit_price") @db.Decimal(12, 2)
+  discount       Decimal  @default(0) @db.Decimal(12, 2)
+  vatRate        Decimal? @map("vat_rate") @db.Decimal(5, 2)
+  /// As reported by the channel; not forced to equal quantity * unit_price - discount (rounding).
+  lineTotal      Decimal  @map("line_total") @db.Decimal(12, 2)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  order   Order           @relation(fields: [tenantId, companyId, orderId], references: [tenantId, companyId, id], onDelete: Restrict)
+  variant ProductVariant? @relation(fields: [tenantId, companyId, variantId], references: [tenantId, companyId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  // SQL-only: unique (tenant_id, order_id, external_line_id) WHERE external_line_id IS NOT NULL.
+  @@index([tenantId, orderId])
+  @@index([tenantId, variantId])
+  @@map("order_items")
+}
+
+/// Append-only: tm_app may only SELECT and INSERT.
+model OrderStatusHistory {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  orderId    String   @map("order_id") @db.Uuid
+  /// Null for the first row (order created).
+  fromStatus String?  @map("from_status") @db.VarChar(30)
+  toStatus   String   @map("to_status") @db.VarChar(30)
+  /// channel | user | system (SQL CHECK)
+  source     String   @db.VarChar(20)
+  /// Set when source = user (SQL CHECK). No FK, like audit_logs: the trail outlives the user.
+  changedBy  String?  @map("changed_by") @db.Uuid
+  syncJobId  String?  @map("sync_job_id") @db.Uuid
+  changedAt  DateTime @default(now()) @map("changed_at") @db.Timestamptz
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  order  Order  @relation(fields: [tenantId, orderId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, orderId, changedAt])
+  @@map("order_status_history")
 }

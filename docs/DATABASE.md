@@ -129,10 +129,24 @@
 - `customers` — id, name, email, phone
 - `addresses` — id, customer_id, type, address fields
 
-### orders
-- `orders` — id, channel_id, customer_id, external_order_no, status, total, currency, ordered_at
-- `order_items` — id, order_id, variant_id, quantity, unit_price
-- `order_status_history` — id, order_id, from_status, to_status, changed_at
+### orders (ORD-01; migration `20261114120000_orders_schema`, izole veritabanında denendi)
+- `orders` — id, tenant_id, company_id, channel (50), channel_account_id (NULL = elle girilen sipariş), external_order_no (100, NULL), status (30), currency `CHAR(3)`, subtotal, discount_total (satıcı indirimi), channel_discount_total (pazaryeri indirimi, ör. Trendyol `totalTyDiscount`), shipping_total, total (`NUMERIC(12,2)`), ordered_at, created_at, updated_at
+  - Silme yok: `deleted_at` yok, `tm_app` için DELETE yok. İptal/iade bir durumdur.
+  - Pazaryeri sipariş no tenant + kanal içinde tekil: kısmi tekil `(tenant_id, channel, external_order_no) WHERE external_order_no IS NOT NULL`. Aynı sipariş iki kez içeri alınamaz (ek koruma: `channel_external_refs`).
+  - FK `(tenant_id, company_id, channel, channel_account_id)` → `channel_accounts(tenant_id, company_id, channel, id)`: hesap siparişin firmasına ve kanalına ait olmak zorunda (bunun için `channel_accounts` üzerinde 4 kolonlu tekil indeks eklendi). Hesap varsa `external_order_no` zorunlu.
+  - `status` ∈ `awaiting | created | picking | invoiced | unpacked | repack | shipped | at_collection_point | delivered | undelivered | cancelled | unsupplied | returned` (Trendyol paket durumlarının snake_case karşılığı). Geçiş kuralları ORD-02'de (uygulama katmanı).
+  - Tekillik kararı: `(tenant_id, channel, external_order_no)`; aynı tenant'ta aynı kanalın iki hesabı olsa da Trendyol sipariş numaraları global tekil olduğundan çakışma beklenmez.
+  - Para: tutarlar pazaryerinin bildirdiği gibi **olduğu gibi** saklanır, hepsi ≥ 0 (CHECK). Pazaryeri indirimi satırlara kuruş kuruş dağıtıp her alanı ayrı yuvarladığından toplamlar arasında eşitlik CHECK'i yoktur; tutarsızlık ORD-02/INT-TY-03'te uzlaştırılıp işaretlenir. `channel` biçimi `variant_prices.channel` ile aynı.
+  - **Müşteri kişisel verisi (ad, adres, telefon) burada tutulmaz**; CRM-01 KVKK maskelemesiyle ekler.
+- `order_items` — id, tenant_id, company_id, order_id, variant_id (NULL = yerel varyantla eşleşmeyen pazaryeri satırı), external_line_id (100, NULL), sku (100), name (300), quantity, unit_price, discount, vat_rate `NUMERIC(5,2)` NULL, line_total, created_at, updated_at
+  - sku/name sipariş anının kopyasıdır; katalog değişikliği geçmiş siparişi değiştirmez.
+  - CHECK `quantity > 0`, tutarlar ≥ 0, KDV 0–100. `line_total` pazaryerinin bildirdiği tutardır (yuvarlama nedeniyle `quantity × unit_price − discount`'a eşit olmak zorunda değil).
+  - Kısmi tekil `(tenant_id, order_id, external_line_id) WHERE external_line_id IS NOT NULL`.
+  - FK `(tenant_id, company_id, order_id)` → `orders(tenant_id, company_id, id)` ve `(tenant_id, company_id, variant_id)` → `product_variants(tenant_id, company_id, id)`: satır, siparişin firmasına ait olmayan varyanta bağlanamaz (iki tarafa `(tenant_id, company_id, id)` tekil indeksi eklendi).
+- `order_status_history` — id, tenant_id, order_id, from_status (NULL = ilk kayıt), to_status, source (`channel | user | system`), changed_by (source = `user` ise zorunlu; FK yok, `audit_logs` gibi kullanıcı silinse de iz kalır), sync_job_id (FK `(tenant_id, sync_job_id)` → `sync_jobs`), changed_at
+  - **Append-only:** `tm_app` yalnızca SELECT/INSERT; Prisma tenant eklentisi de güncelleme/silmeyi reddeder (`APPEND_ONLY_MODELS`).
+- `tm_app`: `orders`, `order_items` için SELECT/INSERT/UPDATE.
+- Geri dönüş: `down.sql` (üç tablodan birinde satır varsa hiçbir şey değiştirmeden durur).
 
 ## Notlar
 
