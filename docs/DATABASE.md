@@ -136,7 +136,7 @@
 - `channels` — id, company_id, type, name, credentials_ref, is_active
 - `channel_listings` — id, channel_id, variant_id, external_id, price, sync_status
 
-### inventory — rezervasyon (INV-02; migration `20261114170000_stock_reservations`, izole veritabanında denendi)
+### inventory — rezervasyon (INV-02; migration `20261114170000_stock_reservations`, dev'e uygulandı 2026-11-14)
 - `stock_reservations` — id, tenant_id, company_id, warehouse_id, variant_id, order_item_id, quantity (> 0), status (`active | released | consumed`), created_at, updated_at
   - FK'lar firma dahil bileşik: depo, varyant ve sipariş kalemi (`order_items` üzerine `(tenant_id, company_id, id)` tekil indeksi eklendi) aynı firmanın olmak zorunda.
   - Kısmi tekil `(tenant_id, order_item_id, warehouse_id) WHERE status = 'active'`.
