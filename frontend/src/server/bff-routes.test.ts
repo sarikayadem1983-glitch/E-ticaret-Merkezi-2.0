@@ -150,4 +150,18 @@ describe('matchBffRoute', () => {
     });
     expect(match('POST', `${acc}/${ID}/sync-jobs`)).toEqual({ ok: false, status: 404 });
   });
+
+  it('allows the order routes and nothing around them (ORD-03)', () => {
+    expect(
+      match('GET', 'orders', 'page=1&per_page=20&search=TY&status=created&company_id=x&channel=manual'),
+    ).toMatchObject({ ok: true, body: false });
+    expect(match('GET', `orders/${ID}`).ok).toBe(true);
+    expect(match('POST', 'orders')).toMatchObject({ ok: true, body: true });
+    expect(match('POST', `orders/${ID}/status`)).toMatchObject({ ok: true, body: true });
+    expect(match('GET', 'orders', 'tenant_id=x')).toEqual({ ok: false, status: 400 });
+    expect(match('PATCH', `orders/${ID}`)).toEqual({ ok: false, status: 404 });
+    expect(match('DELETE', `orders/${ID}`)).toEqual({ ok: false, status: 404 });
+    expect(match('GET', `orders/${ID}/status`)).toEqual({ ok: false, status: 404 });
+    expect(match('POST', 'orders/not-a-uuid/status')).toEqual({ ok: false, status: 404 });
+  });
 });

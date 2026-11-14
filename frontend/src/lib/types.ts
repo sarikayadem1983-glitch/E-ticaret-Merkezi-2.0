@@ -148,3 +148,52 @@ export interface InvitationLookup {
   accountExists: boolean;
   replacesInactiveMembership: boolean;
 }
+
+// ---- orders (ORD-02/03) ----
+
+export type { OrderStatus } from './orders';
+
+export interface Order {
+  id: string;
+  companyId: string;
+  channel: string;
+  channelAccountId: string | null;
+  externalOrderNo: string | null;
+  status: import('./orders').OrderStatus;
+  currency: string;
+  subtotal: string;
+  discountTotal: string;
+  channelDiscountTotal: string;
+  shippingTotal: string;
+  total: string;
+  orderedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OrderItem {
+  id: string;
+  variantId: string | null;
+  externalLineId: string | null;
+  sku: string;
+  name: string;
+  quantity: number;
+  unitPrice: string;
+  discount: string;
+  vatRate: string | null;
+  lineTotal: string;
+}
+
+export interface OrderHistoryEntry {
+  id: string;
+  fromStatus: string | null;
+  toStatus: string;
+  source: 'user' | 'channel' | 'system';
+  changedBy: string | null;
+  changedAt: string;
+}
+
+export interface OrderDetail extends Order {
+  items: OrderItem[];
+  statusHistory: OrderHistoryEntry[];
+}

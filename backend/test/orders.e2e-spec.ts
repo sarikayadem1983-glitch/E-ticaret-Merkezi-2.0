@@ -131,7 +131,9 @@ describe('Orders API (e2e, ORD-02)', () => {
       total: '319.78',
     });
     expect(o.items).toHaveLength(2);
-    expect(o.items[0]).toMatchObject({
+    expect(
+      o.items.find((i: { variantId: string }) => i.variantId === variantA1),
+    ).toMatchObject({
       variantId: variantA1,
       sku: `A1-${run}`,
       name: `Tişört ${run}`,
