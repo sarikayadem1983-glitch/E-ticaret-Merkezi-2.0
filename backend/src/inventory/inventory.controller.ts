@@ -20,7 +20,9 @@ import {
   ListByCompanyQuery,
   ListLevelsQuery,
   ListMovementsQuery,
+  CountDto,
   SetThresholdDto,
+  TransferDto,
 } from './inventory.dto.js';
 import { InventoryService, READ, WRITE } from './inventory.service.js';
 
@@ -85,5 +87,17 @@ export class InventoryController {
     @Body() dto: SetThresholdDto,
   ) {
     return this.inventory.setThreshold(user, variantId, dto);
+  }
+
+  @Post('stock-transfers')
+  @RequirePermissions(WRITE)
+  transfer(@CurrentUser() user: AuthUser, @Body() dto: TransferDto) {
+    return this.inventory.transfer(user, dto);
+  }
+
+  @Post('stock-counts')
+  @RequirePermissions(WRITE)
+  count(@CurrentUser() user: AuthUser, @Body() dto: CountDto) {
+    return this.inventory.count(user, dto);
   }
 }

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   ConflictException,
   Injectable,
@@ -22,7 +23,9 @@ import type {
   ListByCompanyQuery,
   ListLevelsQuery,
   ListMovementsQuery,
+  CountDto,
   SetThresholdDto,
+  TransferDto,
 } from './inventory.dto.js';
 import { mapStockError } from './inventory.repository.js';
 
@@ -384,5 +387,145 @@ export class InventoryService {
       select: { variantId: true, threshold: true },
     });
     return new Map(rows.map((r) => [r.variantId, r.threshold]));
+  }
+
+  /** Active warehouse of the tenant, or 404/409; checks the write permission on its company. */
+  private async writableWarehouse(user: AuthUser, id: string) {
+    const warehouse = await this.prisma.warehouse.findFirst({
+      where: { id },
+      select: { id: true, companyId: true, isActive: true },
+    });
+    if (!warehouse) throw notFound('Depo');
+    await this.assertPermission(user, warehouse.companyId, WRITE, 'Depo');
+    if (!warehouse.isActive) {
+      throw new ConflictException({
+        code: 'WAREHOUSE_INACTIVE',
+        message: 'Depo pasif; stok hareketi yazılamaz',
+      });
+    }
+    return warehouse;
+  }
+
+  /**
+   * INV-04 transfer: transfer_out from the source and transfer_in to the target in one
+   * transaction, both referencing the same transfer id. Not enough stock (reserved units
+   * included) → 409, nothing written.
+   */
+  async transfer(user: AuthUser, dto: TransferDto) {
+    if (dto.fromWarehouseId === dto.toWarehouseId) {
+      throw new UnprocessableEntityException({
+        code: 'VALIDATION_ERROR',
+        message: 'Kaynak ve hedef depo aynı olamaz',
+      });
+    }
+    const from = await this.writableWarehouse(user, dto.fromWarehouseId);
+    const to = await this.writableWarehouse(user, dto.toWarehouseId);
+    if (from.companyId !== to.companyId) {
+      throw new UnprocessableEntityException({
+        code: 'VALIDATION_ERROR',
+        message:
+          'Transfer yalnızca aynı firmanın depoları arasında yapılabilir',
+      });
+    }
+    const transferId = randomUUID();
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const [variant] = await this.products.variantsForOrder(
+          from.companyId,
+          [dto.variantId],
+          tx,
+        );
+        if (!variant) throw notFound('Varyant');
+        const base = {
+          tenantId: TenantContext.requireTenantId(),
+          companyId: from.companyId,
+          variantId: dto.variantId,
+          referenceType: 'transfer',
+          referenceId: transferId,
+          createdBy: user.sub,
+        };
+        await tx.stockMovement.create({
+          data: {
+            ...base,
+            warehouseId: from.id,
+            quantity: -dto.quantity,
+            reason: 'transfer_out',
+          },
+        });
+        await tx.stockMovement.create({
+          data: {
+            ...base,
+            warehouseId: to.id,
+            quantity: dto.quantity,
+            reason: 'transfer_in',
+          },
+        });
+        await this.audit.record(
+          {
+            action: 'CREATE',
+            module: MODULE,
+            entityType: 'StockTransfer',
+            entityId: transferId,
+            after: {
+              from: from.id,
+              to: to.id,
+              variantId: dto.variantId,
+              quantity: dto.quantity,
+            },
+          },
+          tx,
+        );
+      });
+    } catch (error) {
+      if (error instanceof NotFoundException) throw error;
+      mapStockError(error);
+    }
+    return { data: { transferId, quantity: dto.quantity } };
+  }
+
+  /**
+   * INV-04 count: writes the difference between the counted and the current on_hand as one
+   * 'count' movement (none when equal). SERIALIZABLE: a sale between reading on_hand and
+   * writing the difference aborts one transaction (409, retry). Counting below reserved → 409.
+   */
+  async count(user: AuthUser, dto: CountDto) {
+    const warehouse = await this.writableWarehouse(user, dto.warehouseId);
+    try {
+      const diff = await this.prisma.$transaction(
+        async (tx) => {
+          const [variant] = await this.products.variantsForOrder(
+            warehouse.companyId,
+            [dto.variantId],
+            tx,
+          );
+          if (!variant) throw notFound('Varyant');
+          const level = await tx.stockLevel.findFirst({
+            where: { warehouseId: warehouse.id, variantId: dto.variantId },
+            select: { onHand: true },
+          });
+          const delta = dto.counted - (level?.onHand ?? 0);
+          if (delta !== 0) {
+            await tx.stockMovement.create({
+              data: {
+                tenantId: TenantContext.requireTenantId(),
+                companyId: warehouse.companyId,
+                warehouseId: warehouse.id,
+                variantId: dto.variantId,
+                quantity: delta,
+                reason: 'count',
+                referenceType: 'manual',
+                createdBy: user.sub,
+              },
+            });
+          }
+          return delta;
+        },
+        { isolationLevel: 'Serializable' },
+      );
+      return { data: { counted: dto.counted, difference: diff } };
+    } catch (error) {
+      if (error instanceof NotFoundException) throw error;
+      mapStockError(error);
+    }
   }
 }
