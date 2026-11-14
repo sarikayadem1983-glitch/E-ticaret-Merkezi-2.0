@@ -1,6 +1,8 @@
 import { type NextRequest, NextResponse } from 'next/server';
 
-const PUBLIC_PAGES = new Set(['/login', '/register']);
+const PUBLIC_PAGES = new Set(['/login', '/register', '/forgot-password']);
+/** Token links from e-mails (USR-19) and invitations: open without a session. */
+const PUBLIC_PREFIXES = ['/invite/', '/reset-password/', '/verify-email/'];
 
 /**
  * Page-level redirect only: no session cookie means the sign-in page. The
@@ -12,8 +14,10 @@ export function proxy(req: NextRequest) {
     process.env.NODE_ENV === 'production' ? '__Host-tm_sid' : 'tm_sid';
   const hasSession = req.cookies.has(name);
   const { pathname } = req.nextUrl;
-  // /invite/<token> works without a session; the token never goes into ?next=.
-  const isPublic = PUBLIC_PAGES.has(pathname) || pathname.startsWith('/invite/');
+  // Token links work without a session; a token never goes into ?next=.
+  const isPublic =
+    PUBLIC_PAGES.has(pathname) ||
+    PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));
 
   if (!hasSession && !isPublic) {
     const url = new URL('/login', req.url);
