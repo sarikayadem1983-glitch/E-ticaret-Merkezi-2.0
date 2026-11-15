@@ -24,6 +24,6 @@ Başlangıç: `f2cd4a4`; dal: `feature/usr-t9b-invitation-template`.
 - Tek görev, mevcut `invitationMail` tüketicisi korunur; yeni servis arayüzü veya modül bağımlılığı yoktur.
 
 - RED: üç yeni şablon testi boş uygulamada assertion hatasıyla başarısız oldu.
-- GREEN: ilgili mail/davet testleri 30/30; tam backend unit 572/572 (41 dosya). Typecheck (	sc --noEmit --incremental false) ve type-aware lint çıkış kodu 0.
+- GREEN: ilgili mail/davet testleri 30/30; tam backend unit 572/572 (41 dosya). Typecheck (tsc --noEmit --incremental false) ve type-aware lint çıkış kodu 0.
 - STANDARD öz-inceleme: tüm dinamik HTML değerleri ve link attribute kaçışlı; URL mevcut güvenilir APP_ORIGIN üzerinden üretilir; konu CR/LF içermez. Servis arayüzü korunur; veri erişimi, SMTP, loglama ve bağımlılıklar değişmez.
-- Yerel e2e çalıştırılmadı; dev DB kullanılmadı. Tam e2e CI'da doğrulanacak.
+- Yerel e2e çalıştırılmadı; dev DB kullanılmadı. PR #74 kod commit'i df54a82 için CI 43745748422: backend unit 572/572, e2e 467 geçti + 1 Mailpit skip, frontend 198/198; backend/frontend build ve lint yeşil.
