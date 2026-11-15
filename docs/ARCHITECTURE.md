@@ -121,7 +121,7 @@ Tenant filtresi geliştiriciye bırakılmaz; Prisma seviyesinde zorunludur ve **
 | `audit` | Değiştirilemez işlem geçmişi |
 | `auth` | Kullanıcı, rol, yetki, oturum |
 | `invitations` | E-posta davetleri: oluşturma, yeniden gönderme, iptal, lookup, kabul. Rol/firma atamalarını `AccessService`, üyeliği `MembershipsRepository`, global hesabı `AccountsService` (auth), firmaları `CompaniesService` üzerinden yazar/okur |
-| `mail` | E-posta gönderimi: `MailService.send({ to, subject, html, text })`, SMTP veya log taşıyıcısı. Diğer modüller içeriği kendisi üretir, taşıyıcıya dokunmaz |
+| `mail` | E-posta gönderimi: `MailService.send({ to, subject, html, text })`, SMTP veya log taşıyıcısı. Davet içeriği saf `mail/templates/invitation.ts` içindeki `renderInvitation` ile üretilir; HTML ve düz metin birlikte döner, dinamik HTML değerleri kaçışlanır. Diğer modüller taşıyıcıya dokunmaz |
 | `users` | Üye listesi, erişim düzenleme, pasife alma/aktifleştirme (USR-T11a). Tablo sahibi değildir: üyelikleri `MembershipsRepository`, rolleri `AccessService`, refresh token'ları `AccountsService` (auth), firmaları `CompaniesService` üzerinden okur/yazar |
 | `catalog` | Ürün, kategori, marka, varyant (CAT-02: `/categories`, `/brands`, `/products` REST API; firmalar `CompaniesService`, izinler `AccessService.companyScope` / `assertCompanyPermission` üzerinden) |
 | `inventory` | Stok, depo, stok hareketleri |

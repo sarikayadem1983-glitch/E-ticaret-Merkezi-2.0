@@ -24,6 +24,7 @@ describe('invitationMail', () => {
     const mail = invitationMail({ ...base, tenantName: 'A\r\nBcc: x@y.z' });
     expect(mail.text).toContain(base.url);
     expect(mail.html).toContain(base.url);
+    expect(mail.html).toContain('<html lang="tr">');
     expect(mail.subject).not.toMatch(/[\r\n]/);
   });
 });
