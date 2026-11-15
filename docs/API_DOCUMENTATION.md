@@ -568,3 +568,8 @@ Hepsi üyenin firma rollerine göre süzülür.
 - `=`, `+`, `-`, `@`, sekme veya CR ile başlayan her hücrenin başına `'` eklenir (CSV/formül enjeksiyonu); `;`, `"` veya satır sonu içeren hücreler tırnaklanır.
 - En çok 20 000 satır (fazlası 422 `EXPORT_TOO_LARGE`; firma seçerek daraltın).
 
+
+### USR-T10b — davet API genişletmesi
+
+Plan: `superpowers/plans/2026-11-15-usr-t10b-invitations.md` (geliştiriliyor).
+`GET /invitations` durum filtresi, oturumla `POST /invitations/accept-as-current` ve pasif üyelik erişimlerinin davettekilerle değiştirilmesi eklenir. BFF/UI ayrı USR-T12/T13 işleridir; dev'e deploy edilmedi.

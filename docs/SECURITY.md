@@ -304,3 +304,7 @@ Pazaryeri API anahtarları `channel_accounts` tablosunda **zarf şifrelemesiyle*
 - Hata gövdesi değişmedi (`{ error: { code, message, details } }`); istek kimliği yalnızca yanıt başlığında — hesap varlığını sızdırmama testleri (birebir aynı gövde) korunur.
 - Harici hata izleme (Sentry vb.) kurulmadı: dış servis ve hesap gerektirir (kullanıcı kararı).
 
+
+### USR-T10b güvenlik kapsamı (geliştiriliyor)
+
+Pasif üyeliğin erişimleri yalnızca atomik kabulde değiştirilir; Owner değişmezliği ve pasif Admin için Owner yetkisi korunur. JWT ile kabul, token sahibinin e-postasını güncel global hesap kimliğiyle eşleştirir; tenant geçişi yapmaz. Yeniden gönderim davet/tenant Redis sınırlarına tabidir. Ayrı CRITICAL inceleme tamamlanmadan iş DONE-PR olmaz.

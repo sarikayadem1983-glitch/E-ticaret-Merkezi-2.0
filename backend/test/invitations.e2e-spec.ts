@@ -335,17 +335,17 @@ describe('Invitations (e2e)', () => {
       ).toBe('ALREADY_MEMBER');
     });
 
-    it('refuses an inactive member in the MVP', async () => {
+    it('invites an inactive member and warns that old access will be replaced', async () => {
       await seedMember({
         email: email('gone'),
         name: 'Eski',
         passwordHash: await hash(PASSWORD),
         memberships: [{ tenantId: tenantA, status: 'inactive' }],
       });
-      expect(
-        (await inviteCompany(ownerA, email('gone')).expect(409)).body.error
-          .code,
-      ).toBe('MEMBERSHIP_INACTIVE');
+      const created = await inviteCompany(ownerA, email('gone')).expect(201);
+      expect(created.body.data.replacesInactiveMembership).toBe(true);
+      const view = await lookup(mail.tokenFor(email('gone'))).expect(200);
+      expect(view.body.data.replacesInactiveMembership).toBe(true);
     });
 
     it('never reveals whether an email exists in another tenant', async () => {
@@ -803,6 +803,242 @@ describe('Invitations (e2e)', () => {
       );
       expect(row.status).toBe('pending');
       await accept(token).expect(200);
+    });
+  });
+
+  describe('USR-T10b', () => {
+    it('filters accepted, revoked, expired and pending without leaking tokens or other tenants', async () => {
+      const accepted = await inviteCompany(
+        ownerA,
+        email('filter-accepted'),
+      ).expect(201);
+      await accept(mail.tokenFor(email('filter-accepted'))).expect(200);
+      const revoked = await inviteCompany(
+        ownerA,
+        email('filter-revoked'),
+      ).expect(201);
+      await http()
+        .post(`/api/v1/invitations/${revoked.body.data.id}/revoke`)
+        .set(bearer(ownerA))
+        .expect(200);
+      const expired = await inviteCompany(
+        ownerA,
+        email('filter-expired'),
+      ).expect(201);
+      await sql(
+        "UPDATE invitations SET expires_at = now() - interval '1 second' WHERE id = $1",
+        [expired.body.data.id],
+      );
+      const foreign = await inviteCompany(
+        ownerB,
+        email('filter-foreign'),
+        companyB,
+      ).expect(201);
+      for (const [status, id] of [
+        ['accepted', accepted.body.data.id],
+        ['revoked', revoked.body.data.id],
+        ['expired', expired.body.data.id],
+      ]) {
+        const result = await http()
+          .get(`/api/v1/invitations?status=${status}`)
+          .set(bearer(ownerA))
+          .expect(200);
+        expect(result.body.data).toContainEqual(
+          expect.objectContaining({ id, status }),
+        );
+        expect(
+          result.body.data.every(
+            (row: { status: string; id: string }) =>
+              row.status === status && row.id !== foreign.body.data.id,
+          ),
+        ).toBe(true);
+        expect(JSON.stringify(result.body)).not.toMatch(
+          /tokenHash|token_hash|passwordHash/,
+        );
+      }
+      const pending = await http()
+        .get('/api/v1/invitations?status=pending')
+        .set(bearer(ownerA))
+        .expect(200);
+      expect(
+        pending.body.data.every(
+          (row: { status: string }) => row.status === 'pending',
+        ),
+      ).toBe(true);
+      await http()
+        .get('/api/v1/invitations?status=unknown')
+        .set(bearer(ownerA))
+        .expect(422);
+    });
+
+    it('accepts as the matching signed-in account, without switching tenant or issuing tokens', async () => {
+      const address = email('signed-in');
+      await seedMember({
+        email: address,
+        name: 'Mevcut',
+        passwordHash: await hash(PASSWORD),
+        memberships: [{ tenantId: tenantB }],
+      });
+      const session = await login(address);
+      await inviteCompany(ownerA, address).expect(201);
+      const token = mail.tokenFor(address);
+      const call = (sessionToken?: string) => {
+        const req = http()
+          .post('/api/v1/invitations/accept-as-current')
+          .send({ token });
+        return sessionToken ? req.set(bearer(sessionToken)) : req;
+      };
+      await call().expect(401);
+      expect((await call(ownerB).expect(403)).body.error.code).toBe(
+        'INVITATION_EMAIL_MISMATCH',
+      );
+      const result = await call(session).expect(200);
+      expect(result.body.data).toEqual({
+        tenantId: tenantA,
+        tenantName: `Mağaza ${slugs[0]}`,
+      });
+      expect(await tenantOf(session)).toBe(tenantB);
+      await call(session).expect(404);
+    });
+
+    it('reactivates atomically, replaces old roles and keeps another tenant session usable', async () => {
+      const address = email('reactivate');
+      const userId = await seedMember({
+        email: address,
+        name: 'Eski yönetici',
+        passwordHash: await hash(PASSWORD),
+        lastTenantId: tenantA,
+        memberships: [
+          { tenantId: tenantA, roleId: await roleId(tenantA, 'admin') },
+          { tenantId: tenantB },
+        ],
+      });
+      await sql(
+        'INSERT INTO user_company_roles (tenant_id,user_id,company_id,role_id) VALUES ($1,$2,$3,$4)',
+        [tenantA, userId, companyA2, await roleId(tenantA, 'viewer')],
+      );
+      const old = (
+        await http()
+          .post('/api/v1/auth/login')
+          .send({ email: address, password: PASSWORD })
+          .expect(200)
+      ).body.data;
+      await http()
+        .post(`/api/v1/users/${userId}/deactivate`)
+        .set(bearer(ownerA))
+        .expect(200);
+      const other = await login(address);
+      expect(await tenantOf(other)).toBe(tenantB);
+      expect(
+        (await inviteCompany(ownerA, address).expect(201)).body.data
+          .replacesInactiveMembership,
+      ).toBe(true);
+      const token = mail.tokenFor(address);
+      const access = app.get(AccessService);
+      const fail = vi
+        .spyOn(access, 'replaceAccess')
+        .mockRejectedValueOnce(new Error('injected replacement failure'));
+      try {
+        await accept(token).expect(500);
+      } finally {
+        fail.mockRestore();
+      }
+      const [before] = await sql<{ status: string }>(
+        'SELECT status FROM tenant_memberships WHERE tenant_id=$1 AND user_id=$2',
+        [tenantA, userId],
+      );
+      expect(before.status).toBe('inactive');
+      await lookup(token).expect(200);
+      await http()
+        .post('/api/v1/invitations/accept-as-current')
+        .set(bearer(other))
+        .send({ token })
+        .expect(200);
+      expect(
+        await sql(
+          'SELECT 1 FROM user_roles WHERE tenant_id=$1 AND user_id=$2',
+          [tenantA, userId],
+        ),
+      ).toHaveLength(0);
+      const roles = await sql<{ company_id: string; key: string }>(
+        'SELECT cr.company_id,r.key FROM user_company_roles cr JOIN roles r ON r.id=cr.role_id WHERE cr.tenant_id=$1 AND cr.user_id=$2',
+        [tenantA, userId],
+      );
+      expect(roles).toEqual([{ company_id: companyA1, key: 'accounting' }]);
+      await http()
+        .get('/api/v1/auth/me')
+        .set(bearer(old.accessToken))
+        .expect(401);
+      await http()
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: old.refreshToken })
+        .expect(401);
+      expect(await tenantOf(other)).toBe(tenantB);
+      const audit = await sql<{ action: string }>(
+        "SELECT action FROM audit_logs WHERE tenant_id=$1 AND entity_id=$2 AND action='MEMBERSHIP_ACTIVATED'",
+        [tenantA, userId],
+      );
+      expect(audit).toHaveLength(1);
+    });
+
+    it('refuses to replace an inactive owner or let an admin replace another inactive admin', async () => {
+      for (const key of ['owner', 'admin']) {
+        const address = email(`inactive-${key}`);
+        await seedMember({
+          email: address,
+          name: key,
+          passwordHash: await hash(PASSWORD),
+          memberships: [
+            {
+              tenantId: tenantA,
+              status: 'inactive',
+              roleId: await roleId(tenantA, key),
+            },
+          ],
+        });
+        const response = await inviteCompany(
+          key === 'owner' ? ownerA : adminA,
+          address,
+        ).expect(403);
+        expect(response.body.error.code).toBe(
+          key === 'owner' ? 'OWNER_IMMUTABLE' : 'ROLE_NOT_GRANTABLE',
+        );
+      }
+    });
+
+    it('re-checks protected access and rolls back when a target changes after the invitation', async () => {
+      const address = email('protected-after-invite');
+      const userId = await seedMember({
+        email: address,
+        name: 'Eski',
+        passwordHash: await hash(PASSWORD),
+        memberships: [{ tenantId: tenantA, status: 'inactive' }],
+      });
+      await inviteCompany(adminA, address).expect(201);
+      const token = mail.tokenFor(address);
+      await sql(
+        'INSERT INTO user_roles (tenant_id,user_id,role_id,updated_at) VALUES ($1,$2,$3,now())',
+        [tenantA, userId, await roleId(tenantA, 'admin')],
+      );
+      await accept(token).expect(404);
+      const [row] = await sql<{ status: string }>(
+        'SELECT status FROM invitations WHERE token_hash=$1',
+        [sha256(token)],
+      );
+      expect(row.status).toBe('pending');
+    });
+
+    it('limits resends before rotating the token or sending another mail', async () => {
+      const address = email('resend-limited');
+      const created = await inviteCompany(ownerA, address).expect(201);
+      const path = `/api/v1/invitations/${created.body.data.id}/resend`;
+      await http().post(path).set(bearer(ownerA)).expect(200);
+      const token = mail.tokenFor(address);
+      const count = mail.sent.length;
+      const response = await http().post(path).set(bearer(ownerA)).expect(429);
+      expect(response.headers['retry-after']).toBeDefined();
+      expect(mail.sent).toHaveLength(count);
+      await lookup(token).expect(200);
     });
   });
 
