@@ -367,10 +367,16 @@ Açıklama: Oturumsuz; `invitations/lookup` ve `invitations/accept`'i backend'e 
 Hatalar: `400` (gövde JSON nesnesi değil), `403` `CSRF_REJECTED`, `413`, `415`; diğerleri backend'den aynen (`404 INVITATION_INVALID`, `429` + `Retry-After` vb.)
 
 ### GET /api/v1/users
-Açıklama: Mevcut tenant'ın üyeleri (aktif ve pasif). Başka tenant'ın üyeleri hiç görünmez. Parola, hash veya token dönmez. Detay (`GET /users/:userId`) ve `lastLoginAt` USR-T11b'de.
+Açıklama: Mevcut tenant'ın üyeleri (aktif ve pasif). Başka tenant'ın üyeleri hiç görünmez. Parola, hash veya token dönmez. `lastLoginAt` mevcut global hesabın son başarılı giriş zamanıdır (ISO 8601); hiç giriş yoksa `null`. Kaynak mağaza, IP ve oturum bilgisi içermez.
 Yetki: Bearer token + `users:read`
-Yanıt: `200` `{ "data": [ { "userId", "name", "email", "status": "active" | "inactive", "access": { "tenantRole": "owner" | "admin" } | { "companyRoles": [ { "companyId", "companyName", "roleKey" } ] } } ] }`
+Yanıt: `200` `{ "data": [ { "userId", "name", "email", "status": "active" | "inactive", "lastLoginAt": "<ISO 8601>" | null, "access": { "tenantRole": "owner" | "admin" } | { "companyRoles": [ { "companyId", "companyName", "roleKey" } ] } } ] }`
 Hatalar: `401`, `403`
+
+### GET /api/v1/users/:userId
+Açıklama: Mevcut tenant'ın aktif veya pasif bir üyesinin detayı. Listeyle aynı sınırlı profil alanlarını ve yalnız mevcut tenant'taki erişimlerini döndürür. Global kullanıcı ID'sini bilmek başka tenant'ın profilini okumaya yetmez. BFF/UI bu backend diliminin kapsamında değildir.
+Yetki: Bearer token + `users:read`; yetki hedef aranmadan önce kontrol edilir.
+Yanıt: `200` `{ "data": { "userId", "name", "email", "status", "lastLoginAt", "access" } }` (alan biçimleri listeyle aynı).
+Hatalar: `401`; `403 FORBIDDEN`; `404 NOT_FOUND` (olmayan veya başka tenant'ın kullanıcısı: aynı hata gövdesi); `422 VALIDATION_ERROR` (geçersiz UUID).
 
 ### PUT /api/v1/users/:userId/access
 Açıklama: Üyenin erişiminin **tamamını** değiştirir. Tam olarak biri: `tenantRole: "admin"` (yalnızca Owner verir) veya `companyRoles` (Owner/Admin; en az bir firma, her firma bir kez, bu tenant'ın aktif firmaları). Owner'ın rolü ve erişimi değiştirilemez (sahiplik devri USR-21). Admin, Owner'a veya başka bir Admin'e dokunamaz; kimse kendi erişimini değiştiremez. İşlemi yapanın rolü veritabanından okunur. Değişiklik tek transaction'dadır; üyenin açık access token'ları bir sonraki istekte `TOKEN_STALE` alır. Audit: `ROLE_CHANGED` (tenant rolü önce/sonra), `COMPANY_ACCESS_CHANGED` (firma rolleri önce/sonra, eklenen/çıkarılan).
@@ -567,8 +573,3 @@ Hepsi üyenin firma rollerine göre süzülür.
 - CSV: UTF-8 BOM, `;` ayraç, tutarlar `249,90` biçiminde. Ürün dosyası içe aktarma şablonuyla **aynı kolonlardadır** (düzenlenip yeniden içe aktarılabilir); stok dosyası: `urun_adi;sku;depo;eldeki;ayrilmis;kullanilabilir;esik`.
 - `=`, `+`, `-`, `@`, sekme veya CR ile başlayan her hücrenin başına `'` eklenir (CSV/formül enjeksiyonu); `;`, `"` veya satır sonu içeren hücreler tırnaklanır.
 - En çok 20 000 satır (fazlası 422 `EXPORT_TOO_LARGE`; firma seçerek daraltın).
-
-
-### USR-T11b (geliştiriliyor)
-
-Onaylı Task 11 kapsamında GET /users/:userId detayı ve GET /users listesine lastLoginAt eklenir. JWT + users:read; profil mevcut tenant üyeliği üzerinden okunur. Yabancı/bilinmeyen kullanıcı 404 NOT_FOUND; hiç giriş yoksa lastLoginAt null. Son giriş mevcut global hesap zamanıdır; mağaza/IP/oturum bilgisi içermez. Şifre, hash ve token dönmez. Plan: superpowers/plans/2026-11-16-usr-t11b-user-details.md. Migration ve deploy yok.

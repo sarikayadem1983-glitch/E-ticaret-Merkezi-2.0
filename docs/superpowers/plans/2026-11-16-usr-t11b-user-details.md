@@ -21,3 +21,6 @@ Başlangıç: `origin/main` f9b1fea. Dal: `feature/usr-t11b-user-details`.
 ## Koordinasyon
 
 Claude PR #79 ile T10b/T12b/T13b üzerinde çalışıyor. Biz yalnız T11b (kullanıcı detay/lastLoginAt) üzerinde çalışırız. Birleşim öncesi #76/#79 uzlaştırılmalıdır; hiçbir PR bu işte merge edilmez.
+
+- RED: test commit dd07458, CI 43842927769: 4 beklenen e2e başarısızlığı, 467 geçti + 1 Mailpit skip (eksik detay endpoint'i). Yerelde lastLoginAt/null sözleşme testleri 2/2 başarısız, uygulamadan sonra 2/2 geçti.
+- Bağımsız CRITICAL inceleme: f9b1fea tabanına göre tam çalışma ağacı diff'i; engelleyici/aksiyon gerektiren bulgu yok. İnceleme salt okunur; tam e2e/CI ayrıca gerekli.
