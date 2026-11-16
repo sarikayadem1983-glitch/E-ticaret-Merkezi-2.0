@@ -568,3 +568,7 @@ Hepsi üyenin firma rollerine göre süzülür.
 - `=`, `+`, `-`, `@`, sekme veya CR ile başlayan her hücrenin başına `'` eklenir (CSV/formül enjeksiyonu); `;`, `"` veya satır sonu içeren hücreler tırnaklanır.
 - En çok 20 000 satır (fazlası 422 `EXPORT_TOO_LARGE`; firma seçerek daraltın).
 
+
+### USR-T11b (geliştiriliyor)
+
+Onaylı Task 11 kapsamında GET /users/:userId detayı ve GET /users listesine lastLoginAt eklenir. JWT + users:read; profil mevcut tenant üyeliği üzerinden okunur. Yabancı/bilinmeyen kullanıcı 404 NOT_FOUND; hiç giriş yoksa lastLoginAt null. Son giriş mevcut global hesap zamanıdır; mağaza/IP/oturum bilgisi içermez. Şifre, hash ve token dönmez. Plan: superpowers/plans/2026-11-16-usr-t11b-user-details.md. Migration ve deploy yok.

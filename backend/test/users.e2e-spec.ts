@@ -260,6 +260,116 @@ describe('Users API (e2e)', () => {
       .expect(403);
   });
 
+  describe('USR-T11b member details', () => {
+    it('returns the same limited profile and lastLoginAt in list and detail', async () => {
+      const target = await member(tenantA, 'operations', [companyX], [tenantB]);
+      const stamp = '2026-11-10T08:09:10.000Z';
+      const pool = ownerPool();
+      try {
+        await pool.query('UPDATE users SET last_login_at=$1 WHERE id=$2', [
+          stamp,
+          target.userId,
+        ]);
+        await pool.query(
+          'INSERT INTO user_roles (tenant_id,user_id,role_id,updated_at) VALUES ($1,$2,$3,now())',
+          [tenantB, target.userId, await systemRoleId(tenantB, 'admin')],
+        );
+      } finally {
+        await pool.end();
+      }
+      const result = await http()
+        .get(`/api/v1/users/${target.userId}`)
+        .set(bearer(owner.accessToken))
+        .expect(200);
+      expect(result.body.data).toEqual({
+        userId: target.userId,
+        name: expect.any(String),
+        email: target.email,
+        status: 'active',
+        lastLoginAt: stamp,
+        access: {
+          companyRoles: [
+            {
+              companyId: companyX,
+              companyName: `X ${run}`,
+              roleKey: 'operations',
+            },
+          ],
+        },
+      });
+      const users = await listUsers(owner.accessToken);
+      expect(users.find((row) => row.userId === target.userId)).toEqual(
+        result.body.data,
+      );
+      expect(JSON.stringify(result.body)).not.toMatch(
+        /password|hash|token|authVersion|tenantId/i,
+      );
+    });
+
+    it('keeps null for a member who never logged in and reads inactive members', async () => {
+      const userId = await seedMember({
+        email: `never-${run}@test.local`,
+        name: 'Hiç giriş yapmadı',
+        passwordHash: await hash(PASSWORD),
+        memberships: [{ tenantId: tenantA, status: 'inactive' }],
+      });
+      const result = await http()
+        .get(`/api/v1/users/${userId}`)
+        .set(bearer(owner.accessToken))
+        .expect(200);
+      expect(result.body.data).toMatchObject({
+        userId,
+        status: 'inactive',
+        lastLoginAt: null,
+        access: { companyRoles: [] },
+      });
+      const users = await listUsers(owner.accessToken);
+      expect(users.find((row) => row.userId === userId)).toEqual(
+        result.body.data,
+      );
+    });
+
+    it('returns indistinguishable 404s for unknown users and another tenants members', async () => {
+      const foreign = await http()
+        .get(`/api/v1/users/${ownerB.userId}`)
+        .set(bearer(owner.accessToken))
+        .expect(404);
+      const unknown = await http()
+        .get(`/api/v1/users/${randomUUID()}`)
+        .set(bearer(owner.accessToken))
+        .expect(404);
+      expect(foreign.body.error.code).toBe('NOT_FOUND');
+      expect(foreign.body.error).toEqual(unknown.body.error);
+      expect(JSON.stringify(foreign.body)).not.toContain(
+        `${slugs[1]}@test.local`,
+      );
+    });
+
+    it('checks authentication and read permission before revealing a target', async () => {
+      await http().get(`/api/v1/users/${owner.userId}`).expect(401);
+      const viewer = await member(tenantA, 'viewer', [companyX]);
+      const known = await http()
+        .get(`/api/v1/users/${owner.userId}`)
+        .set(bearer(viewer.accessToken))
+        .expect(403);
+      const unknown = await http()
+        .get(`/api/v1/users/${randomUUID()}`)
+        .set(bearer(viewer.accessToken))
+        .expect(403);
+      expect(known.body.error.code).toBe('FORBIDDEN');
+      expect(known.body.error).toEqual(unknown.body.error);
+      await http()
+        .get('/api/v1/users/not-a-uuid')
+        .set(bearer(owner.accessToken))
+        .expect(422);
+      const admin = await member(tenantA, 'admin');
+      await http()
+        .get(`/api/v1/users/${owner.userId}`)
+        .set(bearer(admin.accessToken))
+        .expect(200);
+    });
+  });
+
   it('a member of another tenant is 404', async () => {
     const outsider = await member(tenantB, 'operations');
     await http()
