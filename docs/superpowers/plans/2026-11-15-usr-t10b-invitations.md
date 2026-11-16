@@ -27,3 +27,5 @@ Onaylı kaynak: `2026-10-28-user-management.md` Task 10 ve ilgili kullanıcı y�
 - Yerel tam backend unit: 572/572 (41 dosya), t10-unit.log. Üretim kodu bu koşudan sonra değiştirilmedi; ek doküman güncellemeleri yapıldı.
 - 2026-11-16 bağımsız CRITICAL inceleme: 712ae14 tabanına göre tam diff (commit edilmemiş uygulama dahil); engelleyici güvenlik/doğruluk bulgusu yok. İnceleme salt okunur; e2e/CI yeşil koşusu ayrıca gerekli.
 - İnceleme önerileri: kabulün auth_version artırması ve eski refresh token iptali açık DB assertion'larıyla doğrulanır; eşzamanlı aktifleştirme testi kilit arkasında beklemeyi kanıtlar.
+- GREEN: kod 5bf933c, CI 43816160375: unit 572/572; e2e 475 geçti + 1 Mailpit skip; frontend 198/198. Backend/frontend build ve lint başarılı. Yerel tsc --noEmit --incremental false ve type-aware lint çıkış kodu 0.
+- PR #76, base #74; merge/deploy yapılmadı. BFF/UI USR-T12/T13 kapsamındadır.
