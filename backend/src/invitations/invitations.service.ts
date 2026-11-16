@@ -1,3 +1,4 @@
+import type { InvitationListStatus } from './invitations.dto.js';
 import {
   BadRequestException,
   ConflictException,
@@ -224,9 +225,9 @@ export class InvitationsService {
     };
   }
 
-  /** Pending invitations of the current tenant; expired ones are flagged. */
-  async listPending() {
-    const rows = await this.repository.listPending();
+  /** Invitations of the current tenant (default: pending, expired ones flagged). */
+  async list(filter?: InvitationListStatus) {
+    const rows = await this.repository.list(filter);
     const keys = await this.access.roleKeysByIds([
       ...new Set(rows.flatMap((r) => this.roleIdsOf(r))),
     ]);

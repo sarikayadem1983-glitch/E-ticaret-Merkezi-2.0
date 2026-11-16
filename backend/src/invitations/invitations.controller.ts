@@ -8,6 +8,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   type AuthUser,
@@ -20,6 +21,7 @@ import {
   AcceptInvitationDto,
   CreateInvitationDto,
   InvitationTokenDto,
+  ListInvitationsQueryDto,
 } from './invitations.dto.js';
 import { InvitationsService } from './invitations.service.js';
 
@@ -41,8 +43,8 @@ export class InvitationsController {
 
   @Get()
   @RequirePermissions('users:read')
-  async list() {
-    return { data: await this.invitations.listPending() };
+  async list(@Query() query: ListInvitationsQueryDto) {
+    return { data: await this.invitations.list(query.status) };
   }
 
   @Post(':id/resend')

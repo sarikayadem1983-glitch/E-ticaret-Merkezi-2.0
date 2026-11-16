@@ -41,9 +41,10 @@ const ROUTES: readonly BffRoute[] = [
   { method: 'GET', path: /^users$/ },
   { method: 'PUT', path: new RegExp(`^users/${UUID}/access$`), body: true },
   { method: 'POST', path: new RegExp(`^users/${UUID}/(de)?activate$`) },
-  { method: 'GET', path: /^invitations$/ },
+  // USR-T12b: status filter and resend (new token, rate limited by the backend).
+  { method: 'GET', path: /^invitations$/, query: ['status'] },
   { method: 'POST', path: /^invitations$/, body: true },
-  { method: 'POST', path: new RegExp(`^invitations/${UUID}/revoke$`) },
+  { method: 'POST', path: new RegExp(`^invitations/${UUID}/(revoke|resend)$`) },
   // Catalog (CAT-04). Category/brand writes are not exposed yet.
   {
     method: 'GET',

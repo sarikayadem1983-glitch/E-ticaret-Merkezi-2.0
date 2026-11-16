@@ -375,6 +375,34 @@ describe('Invitations (e2e)', () => {
   });
 
   describe('list, resend and revoke', () => {
+    it('filters the list by status (USR-T10b)', async () => {
+      const open = email('filter-open');
+      const gone = email('filter-revoked');
+      await inviteCompany(ownerA, open).expect(201);
+      const revoked = await inviteCompany(ownerA, gone).expect(201);
+      await http()
+        .post(`/api/v1/invitations/${revoked.body.data.id}/revoke`)
+        .set(bearer(ownerA))
+        .expect(200);
+      const emails = async (query: string) =>
+        (
+          await http()
+            .get(`/api/v1/invitations${query}`)
+            .set(bearer(ownerA))
+            .expect(200)
+        ).body.data.map((i: { email: string }) => i.email);
+      expect(await emails('')).toContain(open);
+      expect(await emails('')).not.toContain(gone);
+      expect(await emails('?status=pending')).toContain(open);
+      expect(await emails('?status=revoked')).toContain(gone);
+      expect(await emails('?status=revoked')).not.toContain(open);
+      expect(await emails('?status=expired')).not.toContain(open);
+      await http()
+        .get('/api/v1/invitations?status=deleted')
+        .set(bearer(ownerA))
+        .expect(422);
+    });
+
     it('lists pending invitations of the own tenant only', async () => {
       const to = email('listed');
       await inviteCompany(ownerA, to).expect(201);
