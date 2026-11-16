@@ -113,6 +113,99 @@ test.describe('users and invitations', () => {
     await expect(page.getByRole('button', { name: /katıl|kabul/ })).toHaveCount(0);
   });
 
+  test('pending invitations panel resends and revokes (USR-T13b)', async ({ page }) => {
+    await register(page, newAccount('panel'));
+    const companyId = await createCompany(page, `Panel Firması ${Date.now()}`);
+    const email = newAccount('panel-davet').email;
+    const created = await bffPost(page, 'invitations', {
+      email,
+      companyRoles: [{ companyId, roleKey: 'accounting' }],
+    });
+    expect(created.status()).toBe(201);
+
+    await page.goto('/users');
+    const panel = page.getByRole('region', { name: 'Bekleyen davetler' });
+    const row = panel.getByRole('listitem').filter({ hasText: email });
+    await expect(row).toBeVisible();
+    await expect(row.getByText('Muhasebe · 1 firma', { exact: false })).toBeVisible();
+
+    await resetRateLimits();
+    await row.getByRole('button', { name: 'Yeniden gönder' }).click();
+    await expect(page.getByText(`${email} adresine davet yeniden gönderildi`)).toBeVisible();
+
+    await row.getByRole('button', { name: 'İptal et' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Daveti iptal et' }).click();
+    await expect(page.getByText('Davet iptal edildi')).toBeVisible();
+    await expect(panel.getByText(email)).toHaveCount(0);
+  });
+
+  test('a signed-in invitee accepts without a password and switches store (USR-T13b)', async ({
+    page,
+    browser,
+  }) => {
+    await register(page, newAccount('as-current-owner'));
+    const companyId = await createCompany(page, `Oturumlu Firma ${Date.now()}`);
+    // The invitee already has an account (an own store) and is signed in.
+    const invitee = newAccount('as-current');
+    const context = await browser.newContext();
+    const inviteePage = await context.newPage();
+    await register(inviteePage, invitee);
+
+    expect(
+      (
+        await bffPost(page, 'invitations', {
+          email: invitee.email,
+          companyRoles: [{ companyId, roleKey: 'viewer' }],
+        })
+      ).status(),
+    ).toBe(201);
+    const link = await readInviteLinkFromMailpit(invitee.email);
+
+    await resetRateLimits();
+    await inviteePage.goto(link);
+    await expect(inviteePage.getByText(`${invitee.email} hesabıyla oturum açıksınız.`)).toBeVisible();
+    await expect(inviteePage.getByLabel(/şifre/i)).toHaveCount(0);
+    await inviteePage.getByRole('button', { name: 'Bu hesapla kabul et' }).click();
+    await expect(inviteePage.getByText(/mağazasına katıldınız$/)).toBeVisible();
+    await inviteePage.getByRole('button', { name: 'Mağazaya geç' }).click();
+    await expect(inviteePage).toHaveURL(/\/dashboard$/);
+    await context.close();
+  });
+
+  test('another signed-in account is told the invitation is not theirs (USR-T13b)', async ({
+    page,
+    browser,
+  }) => {
+    await register(page, newAccount('other-owner'));
+    const companyId = await createCompany(page, `Başka Hesap ${Date.now()}`);
+    const invited = newAccount('other-invited');
+    const existing = newAccount('other-signed-in');
+    // The invited address must have an account, or the page shows the sign-up form.
+    const invitedContext = await browser.newContext();
+    await register(await invitedContext.newPage(), invited);
+    await invitedContext.close();
+    const context = await browser.newContext();
+    const otherPage = await context.newPage();
+    await register(otherPage, existing);
+
+    expect(
+      (
+        await bffPost(page, 'invitations', {
+          email: invited.email,
+          companyRoles: [{ companyId, roleKey: 'viewer' }],
+        })
+      ).status(),
+    ).toBe(201);
+    const link = await readInviteLinkFromMailpit(invited.email);
+
+    await resetRateLimits();
+    await otherPage.goto(link);
+    await otherPage.getByRole('button', { name: 'Bu hesapla kabul et' }).click();
+    await expect(otherPage.getByRole('heading', { name: 'Davet başka bir hesaba ait' })).toBeVisible();
+    await expect(otherPage.getByRole('button', { name: 'Çıkış yap' })).toBeVisible();
+    await context.close();
+  });
+
   test('deactivated user is signed out on the next action', async ({ page, browser }) => {
     await register(page, newAccount('deact'));
     const company = `Pasif Deneme ${Date.now()}`;

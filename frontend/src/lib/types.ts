@@ -142,6 +142,18 @@ export interface CreatedInvitation {
   replacesInactiveMembership: boolean;
 }
 
+/** A row of GET /invitations (USR-T13b panel). Tokens never reach the browser. */
+export interface PendingInvitation {
+  id: string;
+  email: string;
+  status: 'pending' | 'expired';
+  tenantRole: 'admin' | null;
+  companyRoles: { companyId: string; roleKey: CompanyRoleKey | null }[];
+  expiresAt: string;
+  lastSentAt: string | null;
+  lastSendError: string | null;
+}
+
 export interface InvitationLookup {
   tenantName: string;
   inviterName: string;
