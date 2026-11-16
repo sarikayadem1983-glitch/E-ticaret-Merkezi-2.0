@@ -399,10 +399,10 @@ Yetki: Bearer token + `users:read`
 Yanıt: `200` `{ "data": [ { "id", "email", "status": "pending" | "expired", "tenantRole", "companyRoles": [ { "companyId", "roleKey" } ], "invitedByUserId", "expiresAt", "lastSentAt", "sendAttempts", "lastSendError", "createdAt" } ] }`
 
 ### POST /api/v1/invitations/:id/resend
-Açıklama: Yeni token üretir (eski bağlantı geçersiz olur), süreyi yeniden başlatır, e-postayı yeniden gönderir. Süresi dolmuş bekleyen bir daveti de canlandırır: yeni token ve şimdiden itibaren yeni `expiresAt` (`INVITATION_TTL_HOURS`). Audit `INVITATION_RESENT`. Çağıranın davetteki rolleri verebilmesi gerekir. Hız sınırları (davet başına 1/dk, tenant başına 50/saat) USR-T10b'de.
+Açıklama: Yeni token üretir (eski bağlantı geçersiz olur), süreyi yeniden başlatır, e-postayı yeniden gönderir. Süresi dolmuş bekleyen bir daveti de canlandırır: yeni token ve şimdiden itibaren yeni `expiresAt` (`INVITATION_TTL_HOURS`). Audit `INVITATION_RESENT`. Çağıranın davetteki rolleri verebilmesi gerekir. Hız sınırları: aynı davet dakikada 1 kez; mağaza başına davet e-postası (oluşturma + yeniden gönderme) saatte 50; aşılınca `429`.
 Yetki: Bearer token + `users:invite`
 Yanıt: `200` `{ "data": { "id", "status": "pending", "delivery": "sent" | "failed" } }`
-Hatalar: `403` `ROLE_NOT_GRANTABLE`, `404` `NOT_FOUND` (yok veya başka tenant'ın), `409` `INVITATION_NOT_PENDING`, `422` (geçersiz UUID)
+Hatalar: `403` `ROLE_NOT_GRANTABLE`, `404` `NOT_FOUND` (yok veya başka tenant'ın), `409` `INVITATION_NOT_PENDING`, `422` (geçersiz UUID), `429` (hız sınırı)
 
 ### POST /api/v1/invitations/:id/revoke
 Açıklama: Daveti `revoked` yapar; bağlantı geçersiz olur. Audit `INVITATION_REVOKED`.

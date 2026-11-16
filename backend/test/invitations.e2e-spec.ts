@@ -1055,3 +1055,66 @@ describe('Invitations: existing-account lockout (e2e)', () => {
       .expect(429);
   });
 });
+
+describe('Invitations: resend and per-store send limits (e2e)', () => {
+  let app: INestApplication<App>;
+  const mail = new FakeTransport();
+  const run = randomUUID().slice(0, 8);
+  const slugs = [`invr-a-${run}`, `invr-b-${run}`];
+  const tokens: string[] = [];
+
+  const http = () => request(app.getHttpServer());
+  const invite = (owner: string, to: string) =>
+    http()
+      .post('/api/v1/invitations')
+      .set({ Authorization: `Bearer ${owner}` })
+      .send({ email: to, tenantRole: 'admin' });
+  const resend = (owner: string, id: string) =>
+    http()
+      .post(`/api/v1/invitations/${id}/resend`)
+      .set({ Authorization: `Bearer ${owner}` });
+
+  beforeAll(async () => {
+    app = await createTestApp(
+      {},
+      {
+        providers: [{ provide: MAIL_TRANSPORT, useValue: mail }],
+        rateLimits: {
+          ...RELAXED_RATE_LIMITS,
+          invitationResendPerInvitation: { limit: 1, windowMs: 60_000 },
+          invitationSendPerTenant: { limit: 3, windowMs: 60_000 },
+        },
+      },
+    );
+    for (const slug of slugs) {
+      const res = await http()
+        .post('/api/v1/auth/register')
+        .send({
+          tenantName: `Mağaza ${slug}`,
+          tenantSlug: slug,
+          name: 'Sahip',
+          email: `${slug}@test.local`,
+          password: PASSWORD,
+        })
+        .expect(201);
+      tokens.push(res.body.data.accessToken as string);
+    }
+  });
+
+  afterAll(async () => {
+    await app?.close();
+    await purgeTenants(slugs);
+  });
+
+  it('resends one invitation once per window, then the store cap applies', async () => {
+    const [ownerA, ownerB] = tokens;
+    const { id } = (await invite(ownerA, `r1-${run}@test.local`).expect(201)).body.data;
+    await resend(ownerA, id).expect(200);
+    await resend(ownerA, id).expect(429);
+    // Store A has sent 2 of 3: one more invitation passes, the next is refused.
+    await invite(ownerA, `r2-${run}@test.local`).expect(201);
+    await invite(ownerA, `r3-${run}@test.local`).expect(429);
+    // Store B has its own bucket.
+    await invite(ownerB, `r4-${run}@test.local`).expect(201);
+  });
+});

@@ -38,6 +38,7 @@ export class InvitationsController {
     @CurrentUser() user: AuthUser,
     @Body() dto: CreateInvitationDto,
   ) {
+    await this.limits.beforeSend(user.tid);
     return { data: await this.invitations.create(user, dto) };
   }
 
@@ -54,6 +55,7 @@ export class InvitationsController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
+    await this.limits.beforeResend(user.tid, id);
     return { data: await this.invitations.resend(user, id) };
   }
 
