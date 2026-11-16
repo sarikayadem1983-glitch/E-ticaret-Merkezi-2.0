@@ -71,3 +71,18 @@ export class AcceptInvitationDto extends InvitationTokenDto {
   @MaxLength(128)
   password: string;
 }
+
+/** Filter for `GET /invitations?status=` (USR-T10b). Absent: open invitations (pending, expired flagged). */
+export const INVITATION_LIST_STATUSES = [
+  'pending',
+  'expired',
+  'accepted',
+  'revoked',
+] as const;
+export type InvitationListStatus = (typeof INVITATION_LIST_STATUSES)[number];
+
+export class ListInvitationsQueryDto {
+  @IsOptional()
+  @IsIn(INVITATION_LIST_STATUSES)
+  status?: InvitationListStatus;
+}

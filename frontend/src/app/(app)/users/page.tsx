@@ -4,6 +4,7 @@ import { Users } from 'lucide-react';
 import { PageHeader } from '@/components/page-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
+import { InvitationsPanel } from '@/components/users/invitations-panel';
 import { InviteDialog } from '@/components/users/invite-dialog';
 import { MembersTable } from '@/components/users/members-table';
 import { useSession, useUsers } from '@/hooks/queries';
@@ -60,6 +61,7 @@ export default function UsersPage() {
           />
         )}
       </div>
+      {canManage && <InvitationsPanel />}
     </>
   );
 }

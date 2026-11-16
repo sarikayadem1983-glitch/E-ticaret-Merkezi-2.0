@@ -193,6 +193,8 @@ export const RELAXED_RATE_LIMITS: AuthRateLimits = {
   refreshPerIp: { limit: 1_000_000, windowMs: 60_000 },
   invitationLookupPerIp: { limit: 1_000_000, windowMs: 60_000 },
   invitationAcceptPerIp: { limit: 1_000_000, windowMs: 60_000 },
+  invitationResendPerInvitation: { limit: 1_000_000, windowMs: 60_000 },
+  invitationSendPerTenant: { limit: 1_000_000, windowMs: 60_000 },
   passwordForgotPerIp: { limit: 1_000_000, windowMs: 60_000 },
   tokenUsePerIp: { limit: 1_000_000, windowMs: 60_000 },
 };

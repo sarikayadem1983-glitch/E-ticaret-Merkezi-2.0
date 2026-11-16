@@ -23,6 +23,7 @@ import type {
   Member,
   Membership,
   Page,
+  PendingInvitation,
   SessionInfo,
 } from '@/lib/types';
 
@@ -35,6 +36,7 @@ export const keys = {
   company: (id: string) => ['companies', 'one', id] as const,
   summary: ['companies', 'summary'] as const,
   users: ['users'] as const,
+  invitations: ['invitations'] as const,
 };
 
 export function useSession() {
@@ -186,12 +188,36 @@ export function useSetUserActive() {
 }
 
 export function useCreateInvitation() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: { email: string } & AccessValue) =>
       bff<{ data: CreatedInvitation }>('invitations', {
         method: 'POST',
         body: input,
       }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.invitations }),
+  });
+}
+
+/** USR-T13b: pending invitations (expired ones flagged) of the current store. */
+export function useInvitations(enabled: boolean) {
+  return useQuery({
+    queryKey: keys.invitations,
+    queryFn: () => bff<{ data: PendingInvitation[] }>('invitations'),
+    select: (r) => r.data,
+    enabled,
+  });
+}
+
+export function useInvitationAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, action }: { id: string; action: 'resend' | 'revoke' }) =>
+      bff<{ data: { id: string; delivery?: 'sent' | 'failed' } }>(
+        `invitations/${id}/${action}`,
+        { method: 'POST' },
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.invitations }),
   });
 }
 

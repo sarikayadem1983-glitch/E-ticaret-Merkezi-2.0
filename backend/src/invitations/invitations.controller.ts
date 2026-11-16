@@ -8,6 +8,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   type AuthUser,
@@ -20,6 +21,7 @@ import {
   AcceptInvitationDto,
   CreateInvitationDto,
   InvitationTokenDto,
+  ListInvitationsQueryDto,
 } from './invitations.dto.js';
 import { InvitationsService } from './invitations.service.js';
 
@@ -36,13 +38,14 @@ export class InvitationsController {
     @CurrentUser() user: AuthUser,
     @Body() dto: CreateInvitationDto,
   ) {
+    await this.limits.beforeSend(user.tid);
     return { data: await this.invitations.create(user, dto) };
   }
 
   @Get()
   @RequirePermissions('users:read')
-  async list() {
-    return { data: await this.invitations.listPending() };
+  async list(@Query() query: ListInvitationsQueryDto) {
+    return { data: await this.invitations.list(query.status) };
   }
 
   @Post(':id/resend')
@@ -52,6 +55,7 @@ export class InvitationsController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
+    await this.limits.beforeResend(user.tid, id);
     return { data: await this.invitations.resend(user, id) };
   }
 
@@ -72,6 +76,18 @@ export class InvitationsController {
   async lookup(@Body() dto: InvitationTokenDto, @Ip() ip: string) {
     await this.limits.beforeLookup(ip);
     return { data: await this.invitations.lookup(dto.token) };
+  }
+
+  /** USR-T10b: signed in as the invited account; no password, no new tokens. */
+  @Post('accept-as-current')
+  @HttpCode(HttpStatus.OK)
+  async acceptAsCurrent(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: InvitationTokenDto,
+    @Ip() ip: string,
+  ) {
+    await this.limits.beforeAccept(ip);
+    return { data: await this.invitations.acceptAsCurrent(user.sub, dto.token) };
   }
 
   @Public()
