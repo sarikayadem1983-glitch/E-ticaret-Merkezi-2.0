@@ -7,6 +7,14 @@ export class TenantsRepository {
     return tx.tenant.create({ data, select: { id: true } });
   }
 
+  /** Every tenant row, deleted ones too: the slug stays unique in the table. */
+  findSlugs(tx: PrismaTx, slugs: string[]) {
+    return tx.tenant.findMany({
+      where: { slug: { in: slugs } },
+      select: { slug: true },
+    });
+  }
+
   findActive(tx: PrismaTx, id: string) {
     return tx.tenant.findFirst({
       where: { id, isActive: true, deletedAt: null },

@@ -1,5 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
-import { newAccount, PASSWORD, randomVkn } from './helpers';
+import { newAccount, randomVkn, register } from './helpers';
 
 /** Same-origin BFF call with the CSRF headers the app sends. */
 async function bff(page: Page, method: string, path: string, data?: unknown) {
@@ -18,14 +18,7 @@ const noHorizontalScroll = (page: Page) =>
 
 test('mobile: product form, variant generation and prices (CAT-04)', async ({ page }) => {
   const account = newAccount('catalog');
-  await page.goto('/register');
-  await page.getByLabel('Mağaza adı', { exact: true }).fill(`E2E Mağaza ${account.slug}`);
-  await page.getByLabel('Mağaza kısa adı', { exact: true }).fill(account.slug);
-  await page.getByLabel('Ad soyad', { exact: true }).fill(account.name);
-  await page.getByLabel('Email', { exact: true }).fill(account.email);
-  await page.getByLabel('Şifre', { exact: true }).fill(PASSWORD);
-  await page.getByRole('button', { name: 'Hesap oluştur' }).click();
-  await expect(page).toHaveURL(/\/dashboard$/);
+  await register(page, account);
 
   await bff(page, 'POST', 'companies', {
     legalName: 'Katalog Test Ltd',

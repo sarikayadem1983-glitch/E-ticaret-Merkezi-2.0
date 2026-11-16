@@ -7,6 +7,7 @@ import { AccessModule } from '../access/access.module.js';
 import { AccountsService } from './accounts.service.js';
 import { MembershipsModule } from '../memberships/memberships.module.js';
 import { RateLimitModule } from '../rate-limit/rate-limit.module.js';
+import { RecoveryModule } from '../recovery/recovery.module.js';
 import { TenantsModule } from '../tenants/tenants.module.js';
 import { AuthRateLimitService } from './auth-rate-limit.service.js';
 import { AuthController } from './auth.controller.js';
@@ -21,6 +22,7 @@ import { TokenService } from './token.service.js';
     TenantsModule,
     MembershipsModule,
     RateLimitModule,
+    RecoveryModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {

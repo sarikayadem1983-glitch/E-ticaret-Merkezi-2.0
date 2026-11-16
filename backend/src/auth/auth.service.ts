@@ -5,9 +5,12 @@ import {
   UnprocessableEntityException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { randomBytes } from 'node:crypto';
 import { hash, verify } from '@node-rs/argon2';
+import { Prisma } from '../generated/prisma/client.js';
+import type { PrismaTx } from '../database/prisma.types.js';
+import { RecoveryService } from '../recovery/recovery.service.js';
 import { AccessService } from '../access/access.service.js';
-import { ROLE_CATALOG } from '../access/roles.catalog.js';
 import { type AuditEvent, AuditService } from '../audit/audit.service.js';
 import {
   type ActiveMembership,
@@ -62,6 +65,16 @@ const REGISTER_TX_OPTIONS = { timeout: 10_000 };
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
+/** RegisterDto's tenantSlug length limit. */
+const SLUG_MAX = 50;
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === 'P2002'
+  );
+}
+
 /** How long after switch-tenant the BFF may still undo it (INF-18). */
 const SWITCH_ABORT_WINDOW_MS = 60_000;
 
@@ -98,7 +111,10 @@ function invalidRefreshToken() {
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
+  private readonly pending = new Set<Promise<void>>();
+
   constructor(
+    private readonly recovery: RecoveryService,
     private readonly repository: AuthRepository,
     private readonly tenants: TenantsService,
     private readonly tokens: TokenService,
@@ -107,19 +123,90 @@ export class AuthService {
     private readonly access: AccessService,
   ) {}
 
-  async register(dto: RegisterDto): Promise<TokenPair> {
-    // CPU-heavy and non-database work stays outside the transaction.
+  /**
+   * INF-20: answers the same way, in the same time, for a new or a taken
+   * address. The password is hashed here on every path (the costly step);
+   * the lookup, the account and the e-mail run after the response.
+   */
+  async register(dto: RegisterDto): Promise<void> {
     const passwordHash = await hash(dto.password);
-    const refresh = this.tokens.newRefreshToken();
+    const job = this.completeRegistration(dto, passwordHash).catch(
+      (error: unknown) => {
+        // Error name only: messages may carry the address.
+        this.logger.error(`Kayıt tamamlanamadı: ${(error as Error).name}`);
+      },
+    );
+    this.pending.add(job);
+    void job.finally(() => this.pending.delete(job));
+  }
+
+  /** Waits for the registrations started so far (tests). */
+  async settled(): Promise<void> {
+    await Promise.all(this.pending);
+  }
+
+  private async completeRegistration(
+    dto: RegisterDto,
+    passwordHash: string,
+  ): Promise<void> {
+    // A concurrent registration can take the address or the slug between the
+    // lookup and the insert: the unique index rejects it and we look again.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const existing = await TenantContext.runAsSystem(() =>
+        this.repository.findUserForLogin(dto.email),
+      );
+      if (existing) {
+        // Disabled accounts get no mail: nothing they could do with it.
+        if (!disabledReason(existing)) {
+          await this.recovery.notifyExistingAccount(dto.email);
+        }
+        return;
+      }
+      let userId: string;
+      try {
+        userId = await this.createAccount(dto, passwordHash);
+      } catch (error) {
+        if (isUniqueViolation(error)) continue;
+        throw error;
+      }
+      await this.recovery.requestEmailVerification(userId);
+      return;
+    }
+    throw new Error('REGISTER_RETRIES_EXHAUSTED');
+  }
+
+  /**
+   * First free slug of `wanted`, `wanted-2` … `wanted-20`; past that a random
+   * suffix. A taken slug never fails the request, so it reveals no store.
+   */
+  private async freeSlug(tx: PrismaTx, wanted: string): Promise<string> {
+    const base = wanted.slice(0, SLUG_MAX - 3).replace(/-+$/, '');
+    const candidates = [
+      wanted,
+      ...Array.from({ length: 19 }, (_, i) => `${base}-${i + 2}`),
+    ];
+    const taken = await this.tenants.takenSlugs(tx, candidates);
+    const free = candidates.find((c) => !taken.has(c));
+    if (free) return free;
+    const short = wanted.slice(0, SLUG_MAX - 7).replace(/-+$/, '');
+    return `${short}-${randomBytes(3).toString('hex')}`;
+  }
+
+  /** Creates the store, the owner and the roles; returns the new user's id. */
+  private async createAccount(
+    dto: RegisterDto,
+    passwordHash: string,
+  ): Promise<string> {
     const prisma = this.repository.prisma;
 
     // The tenant and the global user are created in system context; everything
     // the tenant owns is written in the new tenant's context.
-    const session = await TenantContext.runAsSystem(() =>
+    return TenantContext.runAsSystem(() =>
       prisma.$transaction(async (tx) => {
+        const slug = await this.freeSlug(tx, dto.tenantSlug);
         const tenant = await this.tenants.create(tx, {
           name: dto.tenantName,
-          slug: dto.tenantSlug,
+          slug,
         });
         const user = await this.repository.createUser(tx, {
           name: dto.name,
@@ -127,8 +214,8 @@ export class AuthService {
           passwordHash,
           lastTenantId: tenant.id,
         });
-        return TenantContext.run(tenant.id, async (): Promise<Session> => {
-          const membership = await this.memberships.create(tx, user.id);
+        return TenantContext.run(tenant.id, async (): Promise<string> => {
+          await this.memberships.create(tx, user.id);
           const roles = await this.repository.createSystemRoles(tx);
           const owner = roles.find((r) => r.key === 'owner');
           if (!owner) throw new Error('owner rolü oluşturulamadı');
@@ -139,7 +226,7 @@ export class AuthService {
               module: 'tenants',
               entityType: 'Tenant',
               entityId: tenant.id,
-              after: { name: dto.tenantName, slug: dto.tenantSlug },
+              after: { name: dto.tenantName, slug },
               actorUserId: user.id,
             },
             tx,
@@ -155,24 +242,9 @@ export class AuthService {
             },
             tx,
           );
-          await this.repository.createRefreshToken(tx, {
-            userId: user.id,
-            tokenHash: refresh.hash,
-            expiresAt: refresh.expiresAt,
-          });
-          return {
-            tenantId: tenant.id,
-            userId: user.id,
-            ver: membership.authVersion,
-          };
+          return user.id;
         });
       }, REGISTER_TX_OPTIONS),
-    );
-
-    return this.issueAccess(
-      session,
-      [...ROLE_CATALOG.owner.permissions],
-      refresh.token,
     );
   }
 

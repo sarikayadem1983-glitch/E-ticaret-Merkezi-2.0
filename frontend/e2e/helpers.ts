@@ -42,6 +42,17 @@ export async function register(page: Page, account: Account) {
   await page.getByLabel('Email').fill(account.email);
   await page.getByLabel('Şifre').fill(PASSWORD);
   await page.getByRole('button', { name: 'Hesap oluştur' }).click();
+  // INF-20: no session after registering; the account is created in the background.
+  await expect(page.getByRole('heading', { name: 'E-postanızı kontrol edin' })).toBeVisible();
+  for (let attempt = 0; attempt < 10; attempt++) {
+    await login(page, account.email);
+    try {
+      await expect(page).toHaveURL(/\/dashboard$/, { timeout: 2_000 });
+      return;
+    } catch {
+      await resetRateLimits();
+    }
+  }
   await expect(page).toHaveURL(/\/dashboard$/);
 }
 

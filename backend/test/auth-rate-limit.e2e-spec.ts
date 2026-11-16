@@ -6,6 +6,7 @@ import {
   type AuthRateLimits,
   DEFAULT_AUTH_RATE_LIMITS,
 } from './../src/rate-limit/rate-limit.config.js';
+import { AuthService } from './../src/auth/auth.service.js';
 import { REDIS } from './../src/rate-limit/redis.provider.js';
 import { createTestApp, purgeTenants } from './helpers.js';
 
@@ -62,6 +63,8 @@ describe('Auth rate limiting (e2e)', () => {
     const slug = `rl-${run}-${slugs.length}`;
     slugs.push(slug);
     const email = `${slug}@example.com`;
+    // No sign-in here: a successful login would reset counters and mark the
+    // IP as trusted, which these tests measure.
     await request(app.getHttpServer())
       .post('/api/v1/auth/register')
       .set('X-Forwarded-For', nextIp())
@@ -72,7 +75,8 @@ describe('Auth rate limiting (e2e)', () => {
         email,
         password: PASSWORD,
       })
-      .expect(201);
+      .expect(202);
+    await app.get(AuthService).settled();
     return email;
   }
 
@@ -189,9 +193,30 @@ describe('Auth rate limiting (e2e)', () => {
           password: PASSWORD,
         });
     };
-    await send(0).expect(201);
-    await send(1).expect(201);
+    await send(0).expect(202);
+    await send(1).expect(202);
     expectThrottled(await send(2), 60 * 60);
+  });
+
+  it('limits registrations per address without revealing it (INF-20)', async () => {
+    const slug = `rl-${run}-acct`;
+    slugs.push(slug, `${slug}-2`, `${slug}-3`, `${slug}-4`);
+    const send = () =>
+      request(app.getHttpServer())
+        .post('/api/v1/auth/register')
+        .set('X-Forwarded-For', nextIp())
+        .send({
+          tenantName: 'Spam',
+          tenantSlug: slug,
+          name: 'Spam',
+          email: `${slug}@example.com`,
+          password: PASSWORD,
+        });
+    // Past the per-address limit the answer stays 202 and identical.
+    for (let i = 0; i < 4; i++) {
+      const res = await send().expect(202);
+      expect(res.body).toEqual({ data: { status: 'check-email' } });
+    }
   });
 
   it('limits refresh calls per IP', async () => {

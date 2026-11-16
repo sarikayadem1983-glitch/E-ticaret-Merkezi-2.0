@@ -20,5 +20,6 @@ import { RecoveryService } from './recovery.service.js';
       useFactory: () => loadInvitationsConfig(process.env),
     },
   ],
+  exports: [RecoveryService],
 })
 export class RecoveryModule {}

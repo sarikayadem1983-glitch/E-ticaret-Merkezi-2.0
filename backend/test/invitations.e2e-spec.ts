@@ -18,6 +18,7 @@ import {
   purgeTenants,
   RELAXED_RATE_LIMITS,
   seedMember,
+  registerOwner,
 } from './helpers.js';
 
 const PASSWORD = 'Correct-Horse-9';
@@ -92,16 +93,13 @@ describe('Invitations (e2e)', () => {
 
   const register = async (slug: string) =>
     (
-      await http()
-        .post('/api/v1/auth/register')
-        .send({
-          tenantName: `Mağaza ${slug}`,
-          tenantSlug: slug,
-          name: 'Sahip',
-          email: `${slug}@test.local`,
-          password: PASSWORD,
-        })
-        .expect(201)
+      await registerOwner(app, {
+        tenantName: `Mağaza ${slug}`,
+        tenantSlug: slug,
+        name: 'Sahip',
+        email: `${slug}@test.local`,
+        password: PASSWORD,
+      })
     ).body.data.accessToken as string;
 
   const login = async (address: string, password = PASSWORD) =>
@@ -384,7 +382,9 @@ describe('Invitations (e2e)', () => {
          WHERE ucr.tenant_id = $1 AND ucr.user_id = $2`,
         [tenantA, goneId],
       );
-      expect(companyRoles).toEqual([{ key: 'accounting', company_id: companyA1 }]);
+      expect(companyRoles).toEqual([
+        { key: 'accounting', company_id: companyA1 },
+      ]);
       const audit = await sql<{ action: string }>(
         `SELECT action FROM audit_logs WHERE tenant_id = $1 AND entity_id = $2
          AND action IN ('MEMBERSHIP_ACTIVATED', 'MEMBERSHIP_CREATED')`,
@@ -1006,16 +1006,13 @@ describe('Invitations: existing-account lockout (e2e)', () => {
       },
     );
     for (const slug of slugs) {
-      await http()
-        .post('/api/v1/auth/register')
-        .send({
-          tenantName: `Mağaza ${slug}`,
-          tenantSlug: slug,
-          name: 'Sahip',
-          email: `${slug}@test.local`,
-          password: PASSWORD,
-        })
-        .expect(201);
+      await registerOwner(app, {
+        tenantName: `Mağaza ${slug}`,
+        tenantSlug: slug,
+        name: 'Sahip',
+        email: `${slug}@test.local`,
+        password: PASSWORD,
+      });
     }
   });
 
@@ -1087,16 +1084,13 @@ describe('Invitations: resend and per-store send limits (e2e)', () => {
       },
     );
     for (const slug of slugs) {
-      const res = await http()
-        .post('/api/v1/auth/register')
-        .send({
-          tenantName: `Mağaza ${slug}`,
-          tenantSlug: slug,
-          name: 'Sahip',
-          email: `${slug}@test.local`,
-          password: PASSWORD,
-        })
-        .expect(201);
+      const res = await registerOwner(app, {
+        tenantName: `Mağaza ${slug}`,
+        tenantSlug: slug,
+        name: 'Sahip',
+        email: `${slug}@test.local`,
+        password: PASSWORD,
+      });
       tokens.push(res.body.data.accessToken as string);
     }
   });
@@ -1108,7 +1102,8 @@ describe('Invitations: resend and per-store send limits (e2e)', () => {
 
   it('resends one invitation once per window, then the store cap applies', async () => {
     const [ownerA, ownerB] = tokens;
-    const { id } = (await invite(ownerA, `r1-${run}@test.local`).expect(201)).body.data;
+    const { id } = (await invite(ownerA, `r1-${run}@test.local`).expect(201))
+      .body.data;
     await resend(ownerA, id).expect(200);
     await resend(ownerA, id).expect(429);
     // Store A has sent 2 of 3: one more invitation passes, the next is refused.

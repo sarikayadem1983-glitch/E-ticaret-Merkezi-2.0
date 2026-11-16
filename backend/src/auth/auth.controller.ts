@@ -25,11 +25,20 @@ export class AuthController {
     private readonly limits: AuthRateLimitService,
   ) {}
 
+  /**
+   * INF-20: the same 202 answer for every address, new or taken, and no
+   * session: the account is created (or its owner notified) after the
+   * response, and the user signs in after reading the e-mail.
+   */
   @Public()
   @Post('register')
+  @HttpCode(HttpStatus.ACCEPTED)
   async register(@Body() dto: RegisterDto, @Ip() ip: string) {
     await this.limits.beforeRegister(ip);
-    return { data: await this.auth.register(dto) };
+    if (await this.limits.registerAccountAllowed(dto.email)) {
+      await this.auth.register(dto);
+    }
+    return { data: { status: 'check-email' } };
   }
 
   @Public()

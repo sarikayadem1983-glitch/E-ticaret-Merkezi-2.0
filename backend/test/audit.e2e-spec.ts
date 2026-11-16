@@ -14,6 +14,7 @@ import {
   ownerPool,
   purgeTenants,
   seedMember,
+  registerOwner,
 } from './helpers.js';
 
 const PASSWORD = 'Sifre-12345';
@@ -56,17 +57,17 @@ describe('Audit log (e2e)', () => {
 
   const register = async (t: typeof a) =>
     (
-      await http()
-        .post('/api/v1/auth/register')
-        .set('User-Agent', UA)
-        .send({
+      await registerOwner(
+        app,
+        {
           tenantName: `Mağaza ${t.slug}`,
           tenantSlug: t.slug,
           name: 'Sahip Kişi',
           email: t.email,
           password: PASSWORD,
-        })
-        .expect(201)
+        },
+        { 'User-Agent': UA },
+      )
     ).body.data as Session;
 
   const login = async (email: string) =>

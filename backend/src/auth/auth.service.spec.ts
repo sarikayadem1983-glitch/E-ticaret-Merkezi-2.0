@@ -33,6 +33,9 @@ function setup() {
     lockUser: vi.fn(),
     createRefreshToken: vi.fn().mockResolvedValue({ id: 'new-rt' }),
     touchLastLogin: vi.fn(),
+    createUser: vi.fn().mockResolvedValue({ id: USER }),
+    createSystemRoles: vi.fn().mockResolvedValue([{ key: 'owner', id: 'r1' }]),
+    assignRole: vi.fn(),
   };
   const memberships = {
     findAllForUser: vi.fn().mockResolvedValue([
@@ -47,8 +50,17 @@ function setup() {
     ]),
     get: vi.fn().mockResolvedValue({ status: 'active', authVersion: 3 }),
     bumpAuthVersionForUser: vi.fn(),
+    create: vi.fn().mockResolvedValue({ authVersion: 1 }),
   };
-  const tenants = { isActive: vi.fn().mockResolvedValue(true) };
+  const tenants = {
+    isActive: vi.fn().mockResolvedValue(true),
+    create: vi.fn().mockResolvedValue({ id: TENANT }),
+    takenSlugs: vi.fn().mockResolvedValue(new Set<string>()),
+  };
+  const recovery = {
+    notifyExistingAccount: vi.fn().mockResolvedValue(undefined),
+    requestEmailVerification: vi.fn().mockResolvedValue(undefined),
+  };
   const tokens = {
     newRefreshToken: vi.fn(() => ({
       token: 'refresh-new',
@@ -64,6 +76,7 @@ function setup() {
     tenantPermissions: vi.fn().mockResolvedValue(['companies:read']),
   };
   const service = new AuthService(
+    recovery as never,
     repository as never,
     tenants as never,
     tokens as never,
@@ -71,7 +84,16 @@ function setup() {
     memberships as never,
     access as never,
   );
-  return { service, repository, memberships, tokens, audit, tx };
+  return {
+    service,
+    repository,
+    memberships,
+    tokens,
+    audit,
+    tx,
+    tenants,
+    recovery,
+  };
 }
 
 const loginUser = (state: State) => ({
@@ -440,5 +462,95 @@ describe('AuthService.refresh', () => {
       'new-rt',
     );
     expect(repository.revokeAllForUserEverywhere).not.toHaveBeenCalled();
+  });
+});
+
+describe('AuthService.register (INF-20)', () => {
+  const dto = {
+    tenantName: 'Mağaza',
+    tenantSlug: 'magaza',
+    name: 'Sahip',
+    email: 'sahip@test.local',
+    password: PASSWORD,
+  };
+
+  it('creates the account and sends a verification link for a new address', async () => {
+    const { service, repository, tenants, recovery } = setup();
+    repository.findUserForLogin.mockResolvedValue(null);
+    await expect(service.register(dto)).resolves.toBeUndefined();
+    await service.settled();
+    expect(tenants.create).toHaveBeenCalledWith(expect.anything(), {
+      name: 'Mağaza',
+      slug: 'magaza',
+    });
+    expect(recovery.requestEmailVerification).toHaveBeenCalledWith(USER);
+    expect(recovery.notifyExistingAccount).not.toHaveBeenCalled();
+    expect(repository.createRefreshToken).not.toHaveBeenCalled();
+  });
+
+  it('only notifies the owner when the address already has an account', async () => {
+    const { service, repository, tenants, recovery } = setup();
+    repository.findUserForLogin.mockResolvedValue({ id: OTHER, ...ACTIVE });
+    await service.register(dto);
+    await service.settled();
+    expect(recovery.notifyExistingAccount).toHaveBeenCalledWith(dto.email);
+    expect(tenants.create).not.toHaveBeenCalled();
+    expect(recovery.requestEmailVerification).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['inactive', INACTIVE],
+    ['deleted', DELETED],
+  ])('sends nothing to a %s account', async (_name, state) => {
+    const { service, repository, tenants, recovery } = setup();
+    repository.findUserForLogin.mockResolvedValue({ id: OTHER, ...state });
+    await service.register(dto);
+    await service.settled();
+    expect(recovery.notifyExistingAccount).not.toHaveBeenCalled();
+    expect(tenants.create).not.toHaveBeenCalled();
+  });
+
+  it('takes the next free slug instead of failing on a taken one', async () => {
+    const { service, repository, tenants } = setup();
+    repository.findUserForLogin.mockResolvedValue(null);
+    tenants.takenSlugs.mockResolvedValue(new Set(['magaza', 'magaza-2']));
+    await service.register(dto);
+    await service.settled();
+    expect(tenants.create).toHaveBeenCalledWith(expect.anything(), {
+      name: 'Mağaza',
+      slug: 'magaza-3',
+    });
+  });
+
+  it('falls back to a random suffix within the 50 character limit', async () => {
+    const { service, repository, tenants } = setup();
+    repository.findUserForLogin.mockResolvedValue(null);
+    const long = 'a'.repeat(50);
+    tenants.takenSlugs.mockImplementation(
+      async (_tx: unknown, c: string[]) => new Set(c),
+    );
+    await service.register({ ...dto, tenantSlug: long });
+    await service.settled();
+    const slug = (tenants.create.mock.calls[0][1] as { slug: string }).slug;
+    expect(slug).toMatch(/^a{43}-[0-9a-f]{6}$/);
+    expect(slug.length).toBeLessThanOrEqual(50);
+  });
+
+  it('looks again after a concurrent registration took the address', async () => {
+    const { service, repository, recovery } = setup();
+    const { Prisma } = await import('../generated/prisma/client.js');
+    repository.findUserForLogin
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: OTHER, ...ACTIVE });
+    repository.createUser.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('unique', {
+        code: 'P2002',
+        clientVersion: 'test',
+      }),
+    );
+    await service.register(dto);
+    await service.settled();
+    expect(recovery.notifyExistingAccount).toHaveBeenCalledWith(dto.email);
+    expect(recovery.requestEmailVerification).not.toHaveBeenCalled();
   });
 });

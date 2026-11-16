@@ -4,6 +4,7 @@ import {
   AUTH_RATE_LIMITS,
   type AuthRateLimits,
 } from '../rate-limit/rate-limit.config.js';
+import { RateLimitedException } from '../rate-limit/rate-limit.errors.js';
 import { RateLimiterService } from '../rate-limit/rate-limiter.service.js';
 
 /**
@@ -62,6 +63,23 @@ export class AuthRateLimitService {
       `register:ip:${ipBucket(ip)}`,
       this.limits.registerPerIp,
     );
+  }
+
+  /**
+   * INF-20: false once the address reached its limit. The caller then answers
+   * exactly as usual but does nothing, so the limit reveals no account.
+   */
+  async registerAccountAllowed(email: string): Promise<boolean> {
+    try {
+      await this.limiter.hit(
+        `register:acct:${accountKey(email)}`,
+        this.limits.registerPerAccount,
+      );
+      return true;
+    } catch (error) {
+      if (error instanceof RateLimitedException) return false;
+      throw error;
+    }
   }
 
   async beforeRefresh(ip: string | undefined): Promise<void> {

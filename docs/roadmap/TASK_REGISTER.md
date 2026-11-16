@@ -70,7 +70,7 @@ Son güncelleme: 2026-10-30 (`main` @ `8fc7ae3` dev'e deploy edildi; USR-T11a de
 | INF-17 | Prod ağ/TLS yapılandırması: `TRUST_PROXY`, `BFF_TRUST_PROXY`, backend yalnız iç ağ, HTTPS | P0 | INF-11 | 2 | CRITICAL | B | PLANNED | `req.ip` gerçek istemci IP'si; backend internetten erişilemez | Smoke, S | Yüksek | Öneri (onay bekliyor) |
 | INF-18 | Mağaza değiştirmede Redis hatası: sahte "token hırsızlığı" audit'i ve tüm cihazlardan çıkışın önlenmesi | P0 | PR #6 merge | 2 | CRITICAL | A | DONE-MERGED (PR #10, merge `113b522`; dev `f010233`, 2026-10-30) | Switch sırasında Redis hatası → istek 503, refresh zinciri bozulmaz, `REFRESH_REUSE` audit'i yazılmaz | U, E (Redis hata enjeksiyonu) | Yüksek | Öneri (onay bekliyor) |
 | INF-19 | BFF `forceRefresh` yarışı (`stillNeeded`) nedeniyle oturum kapanması | P1 | PR #6 merge | 2 | CRITICAL | B | REVIEW (2026-11-16, merge onayı bekliyor) | Eşzamanlı iki istek tek refresh yapar, oturum açık kalır | F, P | Orta | Öneri (onay bekliyor) |
-| INF-20 | Kayıtta `409` ile hesap varlığının sızması (kullanıcı numaralandırma) | P1 | USR-T9 | 1 | CRITICAL | B | PLANNED | Var olan e-postayla kayıt aynı yanıtı döner, sahibine e-posta gider | E, S | Orta | Öneri (onay bekliyor) |
+| INF-20 | Kayıtta `409` ile hesap varlığının sızması (kullanıcı numaralandırma) | P1 | USR-T9 | 1 | CRITICAL | B | DONE-PR (kullanıcı onayı 2026-11-16: kayıt oturum açmaz, dolu slug sessizce `-2…` eki alır) | Var olan e-postayla kayıt aynı yanıtı döner, sahibine e-posta gider | E, S | Orta | Öneri (onay bekliyor) |
 
 ## M02 — Kullanıcılar, firmalar, roller (`USR`)
 
@@ -471,7 +471,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | INF-16 | Nonce tabanlı CSP (`unsafe-inline` kaldırılır) | PLANNED | 2 | STANDARD | Öneri (onay bekliyor) |
 | INF-17 | Prod ağ/TLS yapılandırması: `TRUST_PROXY`, `BFF_TRUST_PROXY`, backend yalnız iç ağ, HTTPS | PLANNED | 2 | CRITICAL | Öneri (onay bekliyor) |
 | INF-19 | BFF `forceRefresh` yarışı (`stillNeeded`) nedeniyle oturum kapanması | PLANNED | 2 | CRITICAL | Öneri (onay bekliyor) |
-| INF-20 | Kayıtta `409` ile hesap varlığının sızması (kullanıcı numaralandırma) | PLANNED | 1 | CRITICAL | Öneri (onay bekliyor) |
+| INF-20 | Kayıtta `409` ile hesap varlığının sızması (kullanıcı numaralandırma) | DONE-PR | 1 | CRITICAL | Öneri (onay bekliyor) |
 | USR-T9 | Mail modülü ve Mailpit | PLANNED | 0,5 | STANDARD | Onaylı plan |
 | USR-T10 | Davet servisi (oluştur, yeniden gönder, iptal, lookup, kabul) | PLANNED | 1 | CRITICAL | Onaylı plan |
 | USR-T11 | Users modülü (liste, erişim düzenleme, pasife alma) | PLANNED | 0,5 | CRITICAL | Onaylı plan |
@@ -563,11 +563,11 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | EPIC | 33 |
 | Görev | 141 (133 + 6 MVP dilimi: USR-T9a, T10a, T11a, T12a, T13a, T15a + 2 kullanıcı kararı 2026-10-30: OPS-08, USR-21) |
 | DONE-MERGED | 38 |
-| DONE-PR | 0 |
+| DONE-PR | 1 (INF-20) |
 | DONE-NOT-DEPLOYED | 0 |
 | IN-PROGRESS | 0 |
 | BLOCKED | 1 (USR-18) |
-| PLANNED | 103 |
+| PLANNED | 102 |
 | Sürüm A | 58 görev (38 tamamlandı + 20 kalan), 18 EPIC, kalan 77 iş günü |
 | Sürüm B | 62 görev (0 tamamlandı + 62 kalan), 23 EPIC, kalan 190 iş günü |
 | Sürüm C | 21 görev (0 tamamlandı + 21 kalan), 9 EPIC, kalan 87 iş günü |
