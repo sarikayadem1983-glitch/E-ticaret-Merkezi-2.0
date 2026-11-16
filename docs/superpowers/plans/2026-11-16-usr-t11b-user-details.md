@@ -24,3 +24,5 @@ Claude PR #79 ile T10b/T12b/T13b üzerinde çalışıyor. Biz yalnız T11b (kull
 
 - RED: test commit dd07458, CI 43842927769: 4 beklenen e2e başarısızlığı, 467 geçti + 1 Mailpit skip (eksik detay endpoint'i). Yerelde lastLoginAt/null sözleşme testleri 2/2 başarısız, uygulamadan sonra 2/2 geçti.
 - Bağımsız CRITICAL inceleme: f9b1fea tabanına göre tam çalışma ağacı diff'i; engelleyici/aksiyon gerektiren bulgu yok. İnceleme salt okunur; tam e2e/CI ayrıca gerekli.
+- GREEN: kod 3f42e76, CI 43843739033: unit 571/571; e2e 471 geçti + 1 Mailpit skip; frontend 206/206; build ve lint yeşil. Yerel tam unit 571/571, tsc --noEmit --incremental false ve type-aware lint çıkış 0.
+- USR-T11 DONE-PR (PR #80); ana dal, dev DB ve çalışan servisler değiştirilmedi.

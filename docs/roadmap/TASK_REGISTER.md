@@ -1,7 +1,7 @@
 # Görev Kaydı (Task Register)
 
 Tüm görevlerin tek kaynağı. Durum güncelleme kuralları: `AGENTS.md` → "Yol haritası ve durum takibi".
-Son güncelleme: 2026-10-30 (`main` @ `8fc7ae3` dev'e deploy edildi; USR-T11a dev'de; migration yok; smoke çıktısı kaydedilmedi, doğrulanamadı). Önceki: `9653158` — `f010233` dev'e deploy edildi, CAT-01 dev DB'ye uygulandı; OPS-08 ve USR-21 eklendi.
+Son güncelleme: 2026-11-16 (USR-T11 kalan dilimi DONE-PR, PR #80; USR-T9/#74 ve USR-T10/#76 açık PR kayıtları eşitlendi; merge/deploy yok).
 
 > **Onay durumu:** Yalnızca kullanıcı yönetimi planındaki görevler (`USR-T1`…`USR-T16`, plan: `docs/superpowers/plans/2026-10-28-user-management.md`) ve merge edilmiş işler (INF-01…08, USR-01, USR-02, DSH-01) **onaylı plandır**. Diğer tüm modüller, görevler, tahminler ve tarihler **öneridir, kullanıcı onayı beklemektedir**. Her görevin kaynağı `TASK_REGISTER.md`'deki "Kaynak" sütunundadır.
 
@@ -98,11 +98,11 @@ Kaynak: `docs/superpowers/plans/2026-10-28-user-management.md` (T1–T16 numaral
 | USR-17 | Güvenlik düzeltmesi: pasif / soft-delete kullanıcıya login ve refresh'te token verilmemesi, yanlış şifre audit'i arka planda | P0 | USR-T6 | — | CRITICAL | A | DONE-MERGED (PR #6, `140d348`, `946dec0`; merge `f1be19a`; dev `f010233`, 2026-10-30) | Pasif/silinmiş kullanıcı login/refresh → 401, oturumları iptal | U, E | Yüksek | PR #6 güvenlik düzeltmesi (uygulandı) |
 | USR-T7 | Rol kataloğu, erişim servisi ve kurallar (`ROLE_CATALOG`, `AccessService`, `canGrant`, son owner koruması) | P0 | PR #6 merge, kullanıcı onayı | 2 | CRITICAL | A | DONE-MERGED (PR #8, merge `cc8b72a`; dev `f010233`, 2026-10-30) | Plan T7 testleri | U | Yüksek (yetki yükseltme) | Onaylı plan |
 | USR-T8 | Companies modülünü firma başına role bağla; `auth/me` yetenek bayrakları | P0 | USR-T7 | 2 | CRITICAL | A | DONE-MERGED (PR #9, merge `95b5bdb`; dev `f010233`, 2026-10-30) | Plan T8 testleri (A rolü B'ye erişemez, okuma/yazma ayrımı, eski token `TOKEN_STALE`) | E, S | Yüksek | Onaylı plan |
-| USR-T9 | Mail modülü ve Mailpit | P0 | PR #6 merge | 0,5 | STANDARD | B | PLANNED | Plan T9 testlerinin kalan kısmı. Kalan (USR-T9b): davet e-posta şablonu `renderInvitation` ve testleri. MVP dilimi: USR-T9a | U | Orta | Onaylı plan |
+| USR-T9 | Mail modülü ve Mailpit | P0 | PR #6 merge | 0,5 | STANDARD | B | DONE-PR (PR #74) | Plan T9 testlerinin kalan kısmı. Kalan (USR-T9b): davet e-posta şablonu `renderInvitation` ve testleri. MVP dilimi: USR-T9a | U | Orta | Onaylı plan |
 | USR-T9a | Mail modülü çekirdeği: `MailService.send`, SMTP/log transport, `mail.config` (prod'da `log` yasak, TLS zorunlu), Mailpit (docker), URL/token loglanmaz | P0 | PR #6 merge | 1,5 | STANDARD | A | DONE-MERGED (PR #12, merge `f9b5889`; dev `f010233`, 2026-10-30) | Plan T9 testleri (şablon testi hariç); USR-19 ve USR-T10a bunu kullanır | U | Orta | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
-| USR-T10 | Davet servisi (oluştur, yeniden gönder, iptal, lookup, kabul) | P0 | USR-T7, USR-T9 | 1 | CRITICAL | B | PLANNED | Plan T10 testlerinin kalan kısmı. Kalan (USR-T10b): `GET /invitations?status=` filtresi, `accept-as-current`, pasif üyeliği davetle yeniden açma (`replacesInactiveMembership`), resend hız sınırları. MVP dilimi: USR-T10a | E, S | Yüksek | Onaylı plan |
+| USR-T10 | Davet servisi (oluştur, yeniden gönder, iptal, lookup, kabul) | P0 | USR-T7, USR-T9 | 1 | CRITICAL | B | DONE-PR (PR #76) | Plan T10 testlerinin kalan kısmı. Kalan (USR-T10b): `GET /invitations?status=` filtresi, `accept-as-current`, pasif üyeliği davetle yeniden açma (`replacesInactiveMembership`), resend hız sınırları. MVP dilimi: USR-T10a | E, S | Yüksek | Onaylı plan |
 | USR-T10a | Davet servisi çekirdeği: oluştur (Admin / firma rolleri), iptal, yeniden gönder (yeni token), lookup, kabul (yeni hesap; mevcut hesap şifreyle) | P0 | USR-T7, USR-T9a | 3 | CRITICAL | A | DONE-MERGED (PR #15, merge `bc37227`; dev `f010233`, 2026-10-30) | Plan T10 testleri; `accept-as-current` ve pasif üyelik değiştirme testleri hariç (T10b). Pasif üyeliği olan e-postaya davet MVP'de `409` (yeniden aktifleştirme T11a ile) | E, S | Yüksek | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
-| USR-T11 | Users modülü (liste, erişim düzenleme, pasife alma) | P0 | USR-T8, USR-T10 | 0,5 | CRITICAL | B | IN-PROGRESS | Plan T11 testlerinin kalan kısmı. Kalan (USR-T11b): `GET /users/:userId` detay, `lastLoginAt`. MVP dilimi: USR-T11a | E, S | Yüksek | Onaylı plan |
+| USR-T11 | Users modülü (liste, erişim düzenleme, pasife alma) | P0 | USR-T8, USR-T10 | 0,5 | CRITICAL | B | DONE-PR (PR #80) | Plan T11 testlerinin kalan kısmı. Kalan (USR-T11b): `GET /users/:userId` detay, `lastLoginAt`. MVP dilimi: USR-T11a | E, S | Yüksek | Onaylı plan |
 | USR-T11a | Users modülü çekirdeği: `GET /users`, `PUT /users/:userId/access`, `POST /users/:userId/deactivate` / `activate` (T6 `bumpAuthVersion` + refresh iptali), audit | P0 | USR-T8, USR-T10a | 2,5 | CRITICAL | A | DONE-MERGED (PR #19, merge `8fc7ae3`; dev `8fc7ae3`, 2026-10-30) | Plan T11 testleri (detay/`lastLoginAt` hariç); pasife alınan personelin sonraki isteği `SESSION_REVOKED`. Owner politikası (kullanıcı kararı 2026-10-30): owner'ın rolü/erişimi değiştirilemez; son aktif owner değilse pasife alınabilir; son owner koruması eşzamanlı isteklerde de geçerli. Sahiplik devri USR-21 | E, S | Yüksek | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
 | USR-T12 | BFF route'ları (kullanıcı/davet allowlist, oturumsuz davet route'ları) | P0 | USR-T11 | 0,5 | CRITICAL | B | PLANNED | Plan T12 testlerinin kalan kısmı. Kalan (USR-T12b): resend ve durum filtreli davet listesi route'ları, oturum açıkken `accept-as-current` dalı. MVP dilimi: USR-T12a | F | Orta | Onaylı plan |
 | USR-T12a | BFF route'ları çekirdeği: users + invitations (oluştur, iptal) allowlist, `PUT`, oturumsuz `invitations/lookup` ve `accept`, `/invite/*` için `Referrer-Policy: no-referrer` | P0 | USR-T11a | 0,5 | CRITICAL | A | DONE-MERGED (PR #22, merge `f41c88e`; dev `0437c16`, 2026-10-30) | Plan T12 testleri | F | Orta | Onaylı plan — MVP dilimi (bölme: öneri, onay bekliyor) |
@@ -472,9 +472,9 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | INF-17 | Prod ağ/TLS yapılandırması: `TRUST_PROXY`, `BFF_TRUST_PROXY`, backend yalnız iç ağ, HTTPS | PLANNED | 2 | CRITICAL | Öneri (onay bekliyor) |
 | INF-19 | BFF `forceRefresh` yarışı (`stillNeeded`) nedeniyle oturum kapanması | PLANNED | 2 | CRITICAL | Öneri (onay bekliyor) |
 | INF-20 | Kayıtta `409` ile hesap varlığının sızması (kullanıcı numaralandırma) | PLANNED | 1 | CRITICAL | Öneri (onay bekliyor) |
-| USR-T9 | Mail modülü ve Mailpit | PLANNED | 0,5 | STANDARD | Onaylı plan |
-| USR-T10 | Davet servisi (oluştur, yeniden gönder, iptal, lookup, kabul) | PLANNED | 1 | CRITICAL | Onaylı plan |
-| USR-T11 | Users modülü (liste, erişim düzenleme, pasife alma) | IN-PROGRESS | 0,5 | CRITICAL | Onaylı plan |
+| USR-T9 | Mail modülü ve Mailpit | DONE-PR (PR #74) | 0,5 | STANDARD | Onaylı plan |
+| USR-T10 | Davet servisi (oluştur, yeniden gönder, iptal, lookup, kabul) | DONE-PR (PR #76) | 1 | CRITICAL | Onaylı plan |
+| USR-T11 | Users modülü (liste, erişim düzenleme, pasife alma) | DONE-PR (PR #80) | 0,5 | CRITICAL | Onaylı plan |
 | USR-T12 | BFF route'ları (kullanıcı/davet allowlist, oturumsuz davet route'ları) | PLANNED | 0,5 | CRITICAL | Onaylı plan |
 | USR-T13 | Kullanıcılar sayfası, davet diyaloğu, davet kabul sayfası | PLANNED | 1 | STANDARD | Onaylı plan |
 | USR-T15 | Playwright akışları (davet, erişim, mağaza değiştirme, mobil) | PLANNED | 1 | STANDARD | Onaylı plan |
@@ -561,15 +561,17 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 |---|---|
 | Modül | 20 |
 | EPIC | 33 |
-| Görev | 141 (133 + 6 MVP dilimi: USR-T9a, T10a, T11a, T12a, T13a, T15a + 2 kullanıcı kararı 2026-10-30: OPS-08, USR-21) |
-| DONE-MERGED | 38 |
-| DONE-PR | 0 |
+| Görev | 142 (141 + USR-19b; kanonik görev satırları tek kez sayıldı) |
+| DONE-MERGED | 55 |
+| DONE-PR | 3 (USR-T9 #74, USR-T10 #76, USR-T11 #80) |
 | DONE-NOT-DEPLOYED | 0 |
 | IN-PROGRESS | 0 |
 | BLOCKED | 1 (USR-18) |
-| PLANNED | 103 |
-| Sürüm A | 58 görev (38 tamamlandı + 20 kalan), 18 EPIC, kalan 77 iş günü |
-| Sürüm B | 62 görev (0 tamamlandı + 62 kalan), 23 EPIC, kalan 190 iş günü |
+| PLANNED | 83 |
+| Sürüm A | 59 görev (52 tamamlandı + 7 kalan) |
+| Sürüm B | 62 görev (3 tamamlandı + 59 kalan; 3 açık PR dahil) |
 | Sürüm C | 21 görev (0 tamamlandı + 21 kalan), 9 EPIC, kalan 87 iş günü |
-| Mod: CRITICAL / STANDARD / FAST | 55 / 79 / 7 |
-| Kaynak: Onaylı plan / Onaylı plan MVP dilimi / PR #6 düzeltmesi / Kullanıcı kararı / Öneri | 27 / 6 / 1 / 2 / 105 |
+| Mod: CRITICAL / STANDARD / FAST | 55 / 80 / 7 |
+| Kaynak: Onaylı plan / Onaylı plan MVP dilimi / PR #6 düzeltmesi / Kullanıcı kararı / Öneri / Sonradan eklenen USR-19b | 27 / 6 / 1 / 2 / 105 / 1 |
+
+2026-11-16 sayımı bu dalın kanonik görev kayıtlarına dayanır; sürüm özetleri tekrar sayılmaz. Diğer ajanların #77/#78/#79 PR ilerlemesi bu dalda yeniden sertifikalanmadı. #79 ve #76 aynı USR-T10 işini kapsar; uzlaştırılmadan ikisi de uygulanmamalıdır. Takvim tahmini yeniden hesaplanmadı.

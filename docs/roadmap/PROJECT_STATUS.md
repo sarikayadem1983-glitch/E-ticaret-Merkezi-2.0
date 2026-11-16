@@ -1,6 +1,6 @@
 # Proje Durumu
 
-Son güncelleme: 2026-11-14 (`main` @ `cb07e60` dev'e deploy edildi) · Kaynak: `origin/main` @ `cb07e60` · Güncelleme kuralları: `AGENTS.md` → "Yol haritası ve durum takibi".
+Son güncelleme: 2026-11-16 (USR-T11, PR #80) · Dal başlangıcı origin/main f9b1fea · Dev kaydı değiştirilmedi · Kaynak görev durumları TASK_REGISTER.md.
 
 ## 1. Özet
 
@@ -10,9 +10,10 @@ Son güncelleme: 2026-11-14 (`main` @ `cb07e60` dev'e deploy edildi) · Kaynak: 
 | Tamamlanan | 55 (%38,7) — 55 `DONE-MERGED` (hepsi dev'de) |
 | BLOCKED | 1 — USR-18 (T16 + Aşama 2 migration onayı) |
 | Sürüm A (Trendyol-only MVP) ilerleme | 52 / 59 görev merge edildi ve dev'de. Kalan 7: INF-12 → IMG-01 (yerel MinIO kararı bekliyor), INT-TY-01…03 ve SHP-02 (Trendyol stage/IP erişimi, BLK-01), OPS-03 (prod yedekleme/PITR altyapısı). Hepsi dış karar/erişime bağlı |
-| Sürüm B / C | 62 / 21 görev |
-| Açık PR | Yok |
+| Sürüm B / C | 62 / 21 görev. Bu dalın kaydı: B 3 DONE-MERGED, 3 DONE-PR, 1 BLOCKED, 55 PLANNED; C 21 PLANNED |
+| Açık PR | Codex: #74 USR-T9, #76 USR-T10, [#80 USR-T11](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/80). Diğer akış: #77 depolama, #78 refresh yarışı, #79 davet/BFF/UI; durumları kendi PR kayıtlarındadır |
 | `origin/main` | `cb07e60` (PR #71 merge, INV-04). PR CI ✓ (backend, frontend) |
+| USR-T11 doğrulama | Kod 3f42e76, CI [43843739033](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/actions/runs/43843739033): unit 571/571, e2e 471 geçti + 1 Mailpit skip, frontend 206/206; build/lint yeşil. Yerel typecheck/lint çıkış 0. CRITICAL bağımsız inceleme temiz |
 | Dev ortamı | `cb07e60` (2026-11-14, kullanıcı onayıyla, bkz. §3t). Önceki `dc64348` (bkz. §3s). Önceki `70bae17` (2026-11-13, bkz. §3d). Backend `node dist/main` (WMI ile ayrık). Smoke: `tm-backups/smoke-70bae17.log`. Önceki: `736cb40` (bkz. §3c) |
 | Dev DB şeması | Tüm migration'lar uygulandı; son `20261113120000_sync_engine` (INT-02, 2026-11-13, kullanıcı onayıyla; yedek `ticaret_merkezi-20261113-210949.dump`, izole prova ok). Önceki `20261112210000_user_tokens` (USR-19, kullanıcı onayıyla; yedek `ticaret_merkezi-20261112-210146.dump`; `migrate status` 2026-11-13: güncel). Önceki `20261112190000_channel_mapping` (CAT-06, 2026-11-12, kullanıcı onayıyla; yedek `ticaret_merkezi-20261112-184613.dump` + izole prova 10/10). Aşama 2 (`migrations-pending/`) uygulanmadı |
 | Son testler (`main` @ `0437c16`, CI run 41096842266) | backend unit 283/283, e2e 331/332 (1 skip: `mail.e2e-spec.ts`, Mailpit); frontend unit 124/124. Önceki tam tur (`8fc7ae3`, CI run 41053467144): build, lint, typecheck ok. Playwright CI'da koşmuyor. Önceki yerel tam tur (`95b5bdb`): build ok; frontend 81/81, lint ok, typecheck ok, `next build` ok; Playwright 13/13 yalnızca `next dev` ile — `next start` (prod modu, http) 11/13: `APP_ORIGIN` https koruması, bkz. R-24 |
@@ -23,7 +24,7 @@ Son güncelleme: 2026-11-14 (`main` @ `cb07e60` dev'e deploy edildi) · Kaynak: 
 |---|---|---|---|
 | M01 INF | 11 / 20 | 55 | Hepsi dev'de |
 | OPS | 2 / 8 | 25 | OPS-08 (`63bbb94`), OPS-01 (`ce85f36`) |
-| M02 USR | 21 / 29 | 72 | Hepsi dev'de (USR-19, USR-19b dahil) |
+| M02 USR | 21 / 29 | 72 | Bu 21 görev dev'de; USR-T9/T10/T11 ayrıca #74/#76/#80 açık PR'larında, tamamlanan sayısına dahil değil |
 | M03 DSH | 2 / 3 | 67 | DSH-01 iskelet, DSH-02 KPI kartları (Sürüm B, öne alındı) dev'de |
 | M04 CAT | 6 / 6 | 100 | Hepsi dev'de; CAT-06 backend dilimi (UI: CAT-06b) |
 | M08 INT | 3 / 25 | 12 | INT-01 (`7b3c0b9`), INT-02 (`70bae17`), INT-03 (`65fcf85`) dev'de |
@@ -271,7 +272,9 @@ Kullanıcı onayıyla, yalnızca dev ortamında (`localhost:5432/ticaret_merkezi
 
 **Geri dönüş:** kod için önceki sürümü yeniden başlatmak yeterli (eski kod yeni tabloları kullanmaz). Smoke testi katalogda satır oluşturduğundan `down.sql` artık kendini durdurur; şemayı geri almak için 1. adımdaki yedekten geri yükleme gerekir (yedekten sonraki dev verisi kaybolur).
 
-## 4. Sıradaki görevler (2026-11-14 itibarıyla)
+## 4. Sıradaki görevler (A listesi 2026-11-14; B koordinasyonu 2026-11-16)
+
+USR-T11 kullanıcı detayı/lastLoginAt #80'de bağımsız main tabanlı PR olarak tamamlandı. #74 ve #76 hâlâ açık. Claude #79'da T10/T12/T13 üzerinde çalışıyor; #76 ile #79 aynı davet backend'ini kapsıyor, birleştirme öncesi uzlaştırılmalıdır. Bu dal yalnız T11'i uygular; diğer ajanların çalışma alanına dokunulmadı.
 
 | # | ID | Başlık | Engel / not |
 |---|---|---|---|
@@ -355,6 +358,7 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 
 | Tarih | Değişiklik | PR | Test | Deploy |
 |---|---|---|---|---|
+| 2026-11-16 | USR-T11 kalan dilim → DONE-PR: tenant kapsamlı kullanıcı detayı, liste/detayda global lastLoginAt; CRITICAL bağımsız incelemede bulgu yok | [#80](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/80) | kod 3f42e76, CI 43843739033: unit 571/571, e2e 471 geçti + 1 skip, frontend 206/206; build/lint yeşil. RED dd07458: 4 e2e başarısızlığı; yerel sözleşme 2 RED → 2 GREEN | yok; migration yok |
 | 2026-10-28 | INF-01…08, USR-01, USR-02, DSH-01 → DONE-MERGED | #1–#5 | — | dev |
 | 2026-10-29 | USR-T1…T6, USR-17 → DONE-PR | #6 | unit 184/184, e2e 165/165, fe 81/81 | yok (dev `eda38da`) |
 | 2026-10-29 | Yol haritası oluşturuldu | — | — | — |
