@@ -621,6 +621,65 @@ describe('Invitations (e2e)', () => {
       expect(user.email_verified_at).not.toBeNull();
     });
 
+    it('accept-as-current: the signed-in invitee accepts without a password (USR-T10b)', async () => {
+      const to = email('as-current');
+      await seedMember({
+        email: to,
+        name: 'B Oturumlu',
+        passwordHash: await hash(PASSWORD),
+        memberships: [{ tenantId: tenantB }],
+      });
+      await invite(ownerA, {
+        email: to,
+        companyRoles: [{ companyId: companyA2, roleKey: 'viewer' }],
+      }).expect(201);
+      const token = mail.tokenFor(to);
+      const session = await login(to);
+      const res = await http()
+        .post('/api/v1/invitations/accept-as-current')
+        .set(bearer(session))
+        .send({ token })
+        .expect(200);
+      expect(res.body.data).toMatchObject({ tenantId: tenantA });
+      expect(JSON.stringify(res.body)).not.toMatch(/accessToken|refreshToken/);
+      const [membership] = await sql<{ status: string }>(
+        `SELECT m.status FROM tenant_memberships m JOIN users u ON u.id = m.user_id
+         WHERE u.email = $1 AND m.tenant_id = $2`,
+        [to, tenantA],
+      );
+      expect(membership.status).toBe('active');
+      // The token is used up.
+      await http()
+        .post('/api/v1/invitations/accept-as-current')
+        .set(bearer(session))
+        .send({ token })
+        .expect(404);
+    });
+
+    it('accept-as-current refuses a session of another account and keeps the invitation', async () => {
+      const to = email('as-current-other');
+      await inviteCompany(ownerA, to).expect(201);
+      const token = mail.tokenFor(to);
+      const res = await http()
+        .post('/api/v1/invitations/accept-as-current')
+        .set(bearer(ownerB))
+        .send({ token })
+        .expect(403);
+      expect(res.body.error.code).toBe('INVITATION_OTHER_ACCOUNT');
+      const [row] = await sql<{ status: string }>(
+        'SELECT status FROM invitations WHERE token_hash = $1',
+        [sha256(token)],
+      );
+      expect(row.status).toBe('pending');
+    });
+
+    it('accept-as-current needs a session', async () => {
+      await http()
+        .post('/api/v1/invitations/accept-as-current')
+        .send({ token: 'x'.repeat(43) })
+        .expect(401);
+    });
+
     it('revoked, expired and used tokens all return INVITATION_INVALID', async () => {
       const revokedTo = email('t-revoked');
       const r = (await inviteCompany(ownerA, revokedTo).expect(201)).body.data;

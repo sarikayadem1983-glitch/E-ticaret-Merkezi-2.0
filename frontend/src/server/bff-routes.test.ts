@@ -25,6 +25,7 @@ describe('matchBffRoute', () => {
     ['POST', 'invitations', ''],
     ['POST', `invitations/${ID}/revoke`, ''],
     ['POST', `invitations/${ID}/resend`, ''],
+    ['POST', 'invitations/accept-as-current', ''],
     ['GET', 'products', 'page=1&per_page=20&search=x&status=active&company_id=a&category_id=b&brand_id=c'],
     ['POST', 'products', ''],
     ['GET', `products/${ID}`, ''],
@@ -59,7 +60,6 @@ describe('matchBffRoute', () => {
     // Session-less invitation endpoints have their own routes (/api/invitations/*).
     ['lookup through the session proxy', 'POST', 'invitations/lookup'],
     ['accept through the session proxy', 'POST', 'invitations/accept'],
-    ['accept-as-current (USR-T10b)', 'POST', 'invitations/accept-as-current'],
     ['user detail (USR-T11b)', 'GET', `users/${ID}`],
     ['PUT without a body route', 'PUT', `users/${ID}`],
     ['PUT on companies', 'PUT', `companies/${ID}`],

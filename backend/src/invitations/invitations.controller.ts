@@ -76,6 +76,18 @@ export class InvitationsController {
     return { data: await this.invitations.lookup(dto.token) };
   }
 
+  /** USR-T10b: signed in as the invited account; no password, no new tokens. */
+  @Post('accept-as-current')
+  @HttpCode(HttpStatus.OK)
+  async acceptAsCurrent(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: InvitationTokenDto,
+    @Ip() ip: string,
+  ) {
+    await this.limits.beforeAccept(ip);
+    return { data: await this.invitations.acceptAsCurrent(user.sub, dto.token) };
+  }
+
   @Public()
   @Post('accept')
   @HttpCode(HttpStatus.OK)

@@ -386,6 +386,26 @@ export class InvitationsService {
     }
   }
 
+  /**
+   * USR-T10b: the signed-in user accepts an invitation addressed to their own
+   * e-mail. The session proves the account, so no password is asked; any other
+   * account is refused and the invitation stays pending. No tokens are returned
+   * and the caller's current store does not change.
+   */
+  async acceptAsCurrent(userId: string, token: string) {
+    const tokenHash = hashInvitationToken(token);
+    const invitation = await this.repository.findUsableByTokenHash(tokenHash);
+    if (!invitation) throw invalid();
+    const account = await this.accounts.findByEmail(invitation.email);
+    if (!account || account.id !== userId || !account.usable) {
+      throw new ForbiddenException({
+        code: 'INVITATION_OTHER_ACCOUNT',
+        message: 'Bu davet başka bir e-posta adresine gönderilmiş',
+      });
+    }
+    return this.acceptInTransaction(invitation, tokenHash, account, null);
+  }
+
   private acceptInTransaction(
     invitation: InvitationRow,
     tokenHash: string,

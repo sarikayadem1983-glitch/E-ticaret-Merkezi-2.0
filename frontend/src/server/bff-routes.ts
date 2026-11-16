@@ -45,6 +45,8 @@ const ROUTES: readonly BffRoute[] = [
   { method: 'GET', path: /^invitations$/, query: ['status'] },
   { method: 'POST', path: /^invitations$/, body: true },
   { method: 'POST', path: new RegExp(`^invitations/${UUID}/(revoke|resend)$`) },
+  // USR-T12b: accept while signed in as the invited account (session required).
+  { method: 'POST', path: /^invitations\/accept-as-current$/, body: true },
   // Catalog (CAT-04). Category/brand writes are not exposed yet.
   {
     method: 'GET',
