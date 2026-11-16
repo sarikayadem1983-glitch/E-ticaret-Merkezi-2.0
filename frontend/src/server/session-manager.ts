@@ -156,8 +156,16 @@ export class SessionManager {
     stillNeeded: (current: SessionData) => boolean,
   ): Promise<SessionData | null> {
     const owner = await this.store.lock(sid, this.lockTtlMs);
-    if (!owner) return this.waitForRefresh(sid, stale.version);
+    if (!owner) return this.waitForRefresh(sid, stale, stillNeeded);
+    return this.refreshLocked(sid, owner, stillNeeded);
+  }
 
+  /** Runs with the refresh lock held by `owner` and always releases it. */
+  private async refreshLocked(
+    sid: string,
+    owner: string,
+    stillNeeded: (current: SessionData) => boolean,
+  ): Promise<SessionData | null> {
     try {
       // Another request may have finished a refresh just before we got the lock.
       const current = await this.store.get(sid);
@@ -186,16 +194,27 @@ export class SessionManager {
     }
   }
 
+  /**
+   * Waits while another request holds the refresh lock. The holder may free the lock
+   * without a new version (it found no refresh was needed, or the backend was down);
+   * then this request takes the lock and refreshes itself instead of waiting for a
+   * version that never comes (INF-19).
+   */
   private async waitForRefresh(
     sid: string,
-    version: number,
+    stale: SessionData,
+    stillNeeded: (current: SessionData) => boolean,
   ): Promise<SessionData | null> {
     const deadline = this.now() + this.waitMs;
     while (this.now() < deadline) {
       await this.sleep(100);
       const session = await this.store.get(sid);
       if (!session) return null;
-      if (session.version !== version) return session;
+      if (session.version !== stale.version || !stillNeeded(session)) {
+        return session;
+      }
+      const owner = await this.store.lock(sid, this.lockTtlMs);
+      if (owner) return this.refreshLocked(sid, owner, stillNeeded);
     }
     throw new SessionUnavailableError();
   }

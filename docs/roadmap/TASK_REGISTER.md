@@ -69,7 +69,7 @@ Son güncelleme: 2026-10-30 (`main` @ `8fc7ae3` dev'e deploy edildi; USR-T11a de
 | INF-16 | Nonce tabanlı CSP (`unsafe-inline` kaldırılır) | P1 | — | 2 | STANDARD | B | PLANNED | `script-src` nonce'lu; sayfalar çalışır | F, P | Orta (XSS) | Öneri (onay bekliyor) |
 | INF-17 | Prod ağ/TLS yapılandırması: `TRUST_PROXY`, `BFF_TRUST_PROXY`, backend yalnız iç ağ, HTTPS | P0 | INF-11 | 2 | CRITICAL | B | PLANNED | `req.ip` gerçek istemci IP'si; backend internetten erişilemez | Smoke, S | Yüksek | Öneri (onay bekliyor) |
 | INF-18 | Mağaza değiştirmede Redis hatası: sahte "token hırsızlığı" audit'i ve tüm cihazlardan çıkışın önlenmesi | P0 | PR #6 merge | 2 | CRITICAL | A | DONE-MERGED (PR #10, merge `113b522`; dev `f010233`, 2026-10-30) | Switch sırasında Redis hatası → istek 503, refresh zinciri bozulmaz, `REFRESH_REUSE` audit'i yazılmaz | U, E (Redis hata enjeksiyonu) | Yüksek | Öneri (onay bekliyor) |
-| INF-19 | BFF `forceRefresh` yarışı (`stillNeeded`) nedeniyle oturum kapanması | P1 | PR #6 merge | 2 | CRITICAL | B | PLANNED | Eşzamanlı iki istek tek refresh yapar, oturum açık kalır | F, P | Orta | Öneri (onay bekliyor) |
+| INF-19 | BFF `forceRefresh` yarışı (`stillNeeded`) nedeniyle oturum kapanması | P1 | PR #6 merge | 2 | CRITICAL | B | REVIEW (2026-11-16, merge onayı bekliyor) | Eşzamanlı iki istek tek refresh yapar, oturum açık kalır | F, P | Orta | Öneri (onay bekliyor) |
 | INF-20 | Kayıtta `409` ile hesap varlığının sızması (kullanıcı numaralandırma) | P1 | USR-T9 | 1 | CRITICAL | B | PLANNED | Var olan e-postayla kayıt aynı yanıtı döner, sahibine e-posta gider | E, S | Orta | Öneri (onay bekliyor) |
 
 ## M02 — Kullanıcılar, firmalar, roller (`USR`)
