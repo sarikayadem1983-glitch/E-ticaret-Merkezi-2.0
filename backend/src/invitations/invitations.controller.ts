@@ -8,6 +8,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   type AuthUser,
@@ -20,6 +21,7 @@ import {
   AcceptInvitationDto,
   CreateInvitationDto,
   InvitationTokenDto,
+  InvitationListQuery,
 } from './invitations.dto.js';
 import { InvitationsService } from './invitations.service.js';
 
@@ -41,8 +43,8 @@ export class InvitationsController {
 
   @Get()
   @RequirePermissions('users:read')
-  async list() {
-    return { data: await this.invitations.listPending() };
+  async list(@Query() query: InvitationListQuery) {
+    return { data: await this.invitations.listPending(query.status) };
   }
 
   @Post(':id/resend')
@@ -80,5 +82,17 @@ export class InvitationsController {
   async accept(@Body() dto: AcceptInvitationDto, @Ip() ip: string) {
     await this.limits.beforeAccept(ip);
     return { data: await this.invitations.accept(dto, ip) };
+  }
+
+  /** Authenticated account, possibly in a different tenant; no invite permission required. */
+  @Post('accept-as-current')
+  @HttpCode(HttpStatus.OK)
+  async acceptAsCurrent(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: InvitationTokenDto,
+    @Ip() ip: string,
+  ) {
+    await this.limits.beforeAccept(ip);
+    return { data: await this.invitations.acceptAsCurrent(user, dto.token) };
   }
 }

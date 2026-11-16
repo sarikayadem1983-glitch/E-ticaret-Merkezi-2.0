@@ -22,3 +22,8 @@ Onaylı kaynak: `2026-10-28-user-management.md` Task 10 ve ilgili kullanıcı y�
 
 - Başlangıç: 712ae14; PR #74'ün kodu/testleri yeşil, henüz merge edilmedi. USR-T10 bağımlılığı stacked PR ile korunur.
 - Scope mevcut onaylı plandır; owner değişmezliği daha sonraki kullanıcı kararına uyar. Sahiplik devri bu işin kapsamında değildir.
+
+- RED kanıtı: CI 43750966675, test commit 1066d89 — 7 beklenen e2e başarısızlığı, 466 geçti, 1 Mailpit skip. Derleme/başlatma değil, eksik özellik assertion/HTTP sonuçları kırmızıydı.
+- Yerel tam backend unit: 572/572 (41 dosya), t10-unit.log. Üretim kodu bu koşudan sonra değiştirilmedi; ek doküman güncellemeleri yapıldı.
+- 2026-11-16 bağımsız CRITICAL inceleme: 712ae14 tabanına göre tam diff (commit edilmemiş uygulama dahil); engelleyici güvenlik/doğruluk bulgusu yok. İnceleme salt okunur; e2e/CI yeşil koşusu ayrıca gerekli.
+- İnceleme önerileri: kabulün auth_version artırması ve eski refresh token iptali açık DB assertion'larıyla doğrulanır; eşzamanlı aktifleştirme testi kilit arkasında beklemeyi kanıtlar.

@@ -934,6 +934,17 @@ describe('Invitations (e2e)', () => {
           .replacesInactiveMembership,
       ).toBe(true);
       const token = mail.tokenFor(address);
+      const [inactiveState] = await sql<{ auth_version: number }>(
+        'SELECT auth_version FROM tenant_memberships WHERE tenant_id=$1 AND user_id=$2',
+        [tenantA, userId],
+      );
+      // A legacy/unrevoked token proves acceptance itself revokes old sessions;
+      // tokens revoked by the deactivate endpoint alone cannot prove this.
+      const legacyToken = randomUUID();
+      await sql(
+        "INSERT INTO refresh_tokens (id,tenant_id,user_id,token_hash,expires_at,updated_at) VALUES ($1,$2,$3,$4,now()+interval '1 day',now())",
+        [legacyToken, tenantA, userId, sha256(randomUUID())],
+      );
       const access = app.get(AccessService);
       const fail = vi
         .spyOn(access, 'replaceAccess')
@@ -948,6 +959,11 @@ describe('Invitations (e2e)', () => {
         [tenantA, userId],
       );
       expect(before.status).toBe('inactive');
+      const [stillLive] = await sql<{ revoked_at: Date | null }>(
+        'SELECT revoked_at FROM refresh_tokens WHERE id=$1',
+        [legacyToken],
+      );
+      expect(stillLive.revoked_at).toBeNull();
       await lookup(token).expect(200);
       await http()
         .post('/api/v1/invitations/accept-as-current')
@@ -965,6 +981,19 @@ describe('Invitations (e2e)', () => {
         [tenantA, userId],
       );
       expect(roles).toEqual([{ company_id: companyA1, key: 'accounting' }]);
+      const [reactivated] = await sql<{ auth_version: number; status: string }>(
+        'SELECT auth_version,status FROM tenant_memberships WHERE tenant_id=$1 AND user_id=$2',
+        [tenantA, userId],
+      );
+      expect(reactivated).toEqual({
+        status: 'active',
+        auth_version: inactiveState.auth_version + 1,
+      });
+      const [revokedLegacy] = await sql<{ revoked_at: Date | null }>(
+        'SELECT revoked_at FROM refresh_tokens WHERE id=$1',
+        [legacyToken],
+      );
+      expect(revokedLegacy.revoked_at).not.toBeNull();
       await http()
         .get('/api/v1/auth/me')
         .set(bearer(old.accessToken))
@@ -1028,6 +1057,72 @@ describe('Invitations (e2e)', () => {
       expect(row.status).toBe('pending');
     });
 
+    it('serializes acceptance with a concurrent activation and keeps the managers access', async () => {
+      const address = email('activation-race');
+      const userId = await seedMember({
+        email: address,
+        name: 'Eş zamanlı',
+        passwordHash: await hash(PASSWORD),
+        memberships: [
+          { tenantId: tenantA, status: 'inactive' },
+          { tenantId: tenantB },
+        ],
+      });
+      const session = await login(address);
+      await inviteCompany(ownerA, address).expect(201);
+      const token = mail.tokenFor(address);
+      const pool = ownerPool();
+      const holder = await pool.connect();
+      let pending: Promise<request.Response> | undefined;
+      try {
+        await holder.query('BEGIN');
+        const {
+          rows: [pid],
+        } = await holder.query<{ pid: number }>('SELECT pg_backend_pid() pid');
+        await holder.query(
+          'SELECT 1 FROM tenant_memberships WHERE tenant_id=$1 AND user_id=$2 FOR UPDATE',
+          [tenantA, userId],
+        );
+        pending = http()
+          .post('/api/v1/invitations/accept-as-current')
+          .set(bearer(session))
+          .send({ token })
+          .then((response) => response);
+        let waiting = false;
+        const until = Date.now() + 3000;
+        while (!waiting && Date.now() < until) {
+          const { rows } = await pool.query<{ waiting: boolean }>(
+            'SELECT EXISTS (SELECT 1 FROM pg_stat_activity a WHERE $1 = ANY(pg_blocking_pids(a.pid))) AS waiting',
+            [pid.pid],
+          );
+          waiting = rows[0].waiting;
+          if (!waiting) await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+        expect(waiting).toBe(true);
+        await holder.query(
+          "UPDATE tenant_memberships SET status='active',deactivated_at=NULL WHERE tenant_id=$1 AND user_id=$2",
+          [tenantA, userId],
+        );
+        await holder.query(
+          'INSERT INTO user_company_roles (tenant_id,user_id,company_id,role_id) VALUES ($1,$2,$3,$4)',
+          [tenantA, userId, companyA2, await roleId(tenantA, 'viewer')],
+        );
+        await holder.query('COMMIT');
+        expect((await pending).status).toBe(409);
+        const roles = await sql<{ company_id: string }>(
+          'SELECT company_id FROM user_company_roles WHERE tenant_id=$1 AND user_id=$2',
+          [tenantA, userId],
+        );
+        expect(roles).toEqual([{ company_id: companyA2 }]);
+        await lookup(token).expect(200);
+      } finally {
+        await holder.query('ROLLBACK');
+        holder.release();
+        await pending;
+        await pool.end();
+      }
+    }, 20_000);
+
     it('limits resends before rotating the token or sending another mail', async () => {
       const address = email('resend-limited');
       const created = await inviteCompany(ownerA, address).expect(201);
@@ -1049,6 +1144,9 @@ describe('Invitations (e2e)', () => {
 
 describe('Invitations rate limits (e2e)', () => {
   let app: INestApplication<App>;
+  const mail = new FakeTransport();
+  const run = randomUUID().slice(0, 8);
+  const slugs = [`invr-a-${run}`, `invr-b-${run}`];
 
   beforeAll(async () => {
     app = await createTestApp(
@@ -1058,13 +1156,17 @@ describe('Invitations rate limits (e2e)', () => {
           ...RELAXED_RATE_LIMITS,
           invitationLookupPerIp: { limit: 2, windowMs: 60_000 },
           invitationAcceptPerIp: { limit: 2, windowMs: 60_000 },
+          invitationResendPerInvitation: { limit: 1, windowMs: 60_000 },
+          invitationResendPerTenant: { limit: 2, windowMs: 3_600_000 },
         },
+        providers: [{ provide: MAIL_TRANSPORT, useValue: mail }],
       },
     );
   });
 
   afterAll(async () => {
     await app?.close();
+    await purgeTenants(slugs);
   });
 
   it.each(['lookup', 'accept'])('limits %s per IP', async (path) => {
@@ -1081,6 +1183,43 @@ describe('Invitations rate limits (e2e)', () => {
     await call().expect(404);
     await call().expect(404);
     await call().expect(429);
+  });
+
+  it('enforces a shared tenant resend budget across invitations and isolates another tenant', async () => {
+    const http = () => request(app.getHttpServer());
+    const owners: string[] = [];
+    for (const slug of slugs) {
+      const res = await http()
+        .post('/api/v1/auth/register')
+        .send({
+          tenantName: slug,
+          tenantSlug: slug,
+          name: 'Sahip',
+          email: `${slug}@test.local`,
+          password: PASSWORD,
+        })
+        .expect(201);
+      owners.push(res.body.data.accessToken);
+    }
+    for (const [index, owner] of owners.entries()) {
+      for (let n = 0; n < (index === 0 ? 3 : 1); n++) {
+        const address = `resend-${index}-${n}-${run}@test.local`;
+        const created = await http()
+          .post('/api/v1/invitations')
+          .auth(owner, { type: 'bearer' })
+          .send({ email: address, tenantRole: 'admin' })
+          .expect(201);
+        const token = mail.tokenFor(address);
+        const response = await http()
+          .post(`/api/v1/invitations/${created.body.data.id}/resend`)
+          .auth(owner, { type: 'bearer' })
+          .expect(index === 0 && n === 2 ? 429 : 200);
+        if (response.status === 429) {
+          expect(response.headers['retry-after']).toBeDefined();
+          expect(mail.tokenFor(address)).toBe(token);
+        }
+      }
+    }
   });
 });
 

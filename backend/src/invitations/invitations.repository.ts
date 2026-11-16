@@ -5,6 +5,7 @@ import {
 } from '../database/prisma.service.js';
 import type { PrismaTx } from '../database/prisma.types.js';
 import { TenantContext } from '../tenancy/tenant-context.js';
+import type { InvitationListQuery } from './invitations.dto.js';
 
 /** Stored shape of invitations.company_roles. */
 export interface StoredCompanyRole {
@@ -90,9 +91,15 @@ export class InvitationsRepository {
     return row && asRow(row);
   }
 
-  async listPending(): Promise<InvitationRow[]> {
+  async listPending(
+    status?: InvitationListQuery['status'],
+  ): Promise<InvitationRow[]> {
     const rows = await this.prisma.invitation.findMany({
-      where: { status: 'pending' },
+      where: {
+        status: status === 'expired' || !status ? 'pending' : status,
+        ...(status === 'expired' ? { expiresAt: { lte: new Date() } } : {}),
+        ...(status === 'pending' ? { expiresAt: { gt: new Date() } } : {}),
+      },
       select: FIELDS,
       orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
       take: 500,

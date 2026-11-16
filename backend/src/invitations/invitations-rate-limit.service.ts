@@ -30,4 +30,15 @@ export class InvitationsRateLimitService {
       this.limits.invitationAcceptPerIp,
     );
   }
+
+  async beforeResend(tenantId: string, invitationId: string): Promise<void> {
+    await this.limiter.hit(
+      `invitation:resend:tenant:${tenantId}:id:${invitationId}`,
+      this.limits.invitationResendPerInvitation,
+    );
+    await this.limiter.hit(
+      `invitation:resend:tenant:${tenantId}`,
+      this.limits.invitationResendPerTenant,
+    );
+  }
 }

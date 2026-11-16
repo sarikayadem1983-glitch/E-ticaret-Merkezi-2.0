@@ -15,6 +15,12 @@ import {
 const normalizeEmail = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim().toLowerCase() : value;
 
+export class InvitationListQuery {
+  @IsOptional()
+  @IsIn(['pending', 'expired', 'accepted', 'revoked'])
+  status?: 'pending' | 'expired' | 'accepted' | 'revoked';
+}
+
 /** Roles an invitation can carry. Owner is never invitable. */
 export const INVITABLE_COMPANY_ROLES = [
   'operations',

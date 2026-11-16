@@ -10,7 +10,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { canGrant } from '../access/access.rules.js';
-import { AccessService } from '../access/access.service.js';
+import { AccessService, type MemberAccess } from '../access/access.service.js';
 import { ROLE_CATALOG, type RoleKey } from '../access/roles.catalog.js';
 import { AuditService } from '../audit/audit.service.js';
 import { AccountsService } from '../auth/accounts.service.js';
@@ -34,7 +34,9 @@ import {
 import type {
   AcceptInvitationDto,
   CreateInvitationDto,
+  InvitationListQuery,
 } from './invitations.dto.js';
+import { InvitationsRateLimitService } from './invitations-rate-limit.service.js';
 import {
   type InvitationRow,
   InvitationsRepository,
@@ -111,6 +113,7 @@ export class InvitationsService {
     private readonly tenants: TenantsService,
     private readonly audit: AuditService,
     private readonly mail: MailService,
+    private readonly limits: InvitationsRateLimitService,
     @Inject(INVITATIONS_CONFIG) private readonly config: InvitationsConfig,
   ) {}
 
@@ -149,14 +152,7 @@ export class InvitationsService {
         message: 'Bu kişi zaten mağazanın üyesi',
       });
     }
-    if (membership) {
-      // Re-opening an inactive membership by invitation is USR-T10b.
-      throw new ConflictException({
-        code: 'MEMBERSHIP_INACTIVE',
-        message:
-          'Bu kişinin mağazada pasif bir üyeliği var; önce üyeliği aktifleştirin',
-      });
-    }
+    if (membership) await this.assertReplaceable(actor.sub, membership.userId);
 
     const roleIds = await this.access.systemRoleIds();
     const roleId = (key: RoleKey) => {
@@ -220,13 +216,13 @@ export class InvitationsService {
       id,
       status: 'pending' as const,
       delivery,
-      replacesInactiveMembership: false,
+      replacesInactiveMembership: membership?.status === 'inactive',
     };
   }
 
   /** Pending invitations of the current tenant; expired ones are flagged. */
-  async listPending() {
-    const rows = await this.repository.listPending();
+  async listPending(status?: InvitationListQuery['status']) {
+    const rows = await this.repository.listPending(status);
     const keys = await this.access.roleKeysByIds([
       ...new Set(rows.flatMap((r) => this.roleIdsOf(r))),
     ]);
@@ -234,7 +230,10 @@ export class InvitationsService {
     return rows.map((r) => ({
       id: r.id,
       email: r.email,
-      status: r.expiresAt.getTime() <= now ? ('expired' as const) : r.status,
+      status:
+        r.status === 'pending' && r.expiresAt.getTime() <= now
+          ? ('expired' as const)
+          : r.status,
       tenantRole: r.tenantRoleId ? (keys.get(r.tenantRoleId) ?? null) : null,
       companyRoles: r.companyRoles.map((c) => ({
         companyId: c.companyId,
@@ -252,6 +251,7 @@ export class InvitationsService {
   /** New token (the old link stops working) and a fresh expiry. */
   async resend(actor: AuthUser, id: string) {
     const invitation = await this.pendingForActor(actor, id);
+    await this.limits.beforeResend(actor.tid, id);
     const { token, hash } = newInvitationToken();
     const expiresAt = new Date(Date.now() + this.config.ttlMs);
     await this.repository.prisma.$transaction(async (tx) => {
@@ -308,16 +308,18 @@ export class InvitationsService {
       if (!(await this.tenants.isActive(prisma, invitation.tenantId))) {
         return null;
       }
-      const [tenant, inviter, summary] = await Promise.all([
+      const [tenant, inviter, summary, membership] = await Promise.all([
         this.tenants.profile(prisma, invitation.tenantId),
         this.memberships.get(invitation.tenantId, invitation.invitedByUserId),
         this.summary(invitation),
+        this.memberships.findByEmail(invitation.email),
       ]);
       return tenant && inviter?.status === 'active' && summary !== null
         ? {
             tenantName: tenant.name,
             inviterName: inviter.user.name,
             roleSummary: summary,
+            replacesInactiveMembership: membership?.status === 'inactive',
           }
         : null;
     });
@@ -329,7 +331,6 @@ export class InvitationsService {
       ...view,
       maskedEmail: maskEmail(invitation.email),
       accountExists,
-      replacesInactiveMembership: false,
     };
   }
 
@@ -385,6 +386,20 @@ export class InvitationsService {
     }
   }
 
+  async acceptAsCurrent(actor: AuthUser, token: string) {
+    const tokenHash = hashInvitationToken(token);
+    const invitation = await this.repository.findUsableByTokenHash(tokenHash);
+    if (!invitation) throw invalid();
+    const account = await this.accounts.findByEmail(invitation.email);
+    if (!account || !account.usable || account.id !== actor.sub) {
+      throw new ForbiddenException({
+        code: 'INVITATION_EMAIL_MISMATCH',
+        message: 'Bu davet başka bir e-posta için',
+      });
+    }
+    return this.acceptInTransaction(invitation, tokenHash, account, null);
+  }
+
   private acceptInTransaction(
     invitation: InvitationRow,
     tokenHash: string,
@@ -398,7 +413,13 @@ export class InvitationsService {
           throw invalid();
         }
         if (!(await this.tenants.isActive(tx, tenantId))) throw invalid();
-        const grant = await this.revalidate(tx, invitation);
+
+        if (
+          account &&
+          !(await this.accounts.lockUsable(tx, account.id, invitation.email))
+        ) {
+          throw invalid();
+        }
 
         const userId = account
           ? account.id
@@ -410,28 +431,56 @@ export class InvitationsService {
                 lastTenantId: tenantId,
               })
             ).id;
+        // Same deterministic membership order as users/access changes. In particular,
+        // reactivation must not read status or protected roles before this lock.
+        await this.memberships.lockForUpdate(tx, tenantId, [
+          invitation.invitedByUserId,
+          userId,
+        ]);
+        const grant = await this.revalidate(tx, invitation);
         if (account) await this.accounts.markEmailVerified(tx, userId);
-
         const existing = await this.memberships.findByEmail(
           invitation.email,
           tx,
         );
-        if (existing) {
+        if (existing?.status === 'active') {
           throw new ConflictException({
-            code:
-              existing.status === 'active'
-                ? 'ALREADY_MEMBER'
-                : 'MEMBERSHIP_INACTIVE',
+            code: 'ALREADY_MEMBER',
             message: 'Bu mağazada zaten bir üyeliğiniz var',
           });
         }
-        await this.memberships.create(tx, userId);
-        if (grant.tenantRole) {
+        let previous: MemberAccess | undefined;
+        if (existing) {
+          await this.assertReplaceable(
+            invitation.invitedByUserId,
+            userId,
+            tx,
+            true,
+          );
+          previous = (await this.access.accessOf([userId], tx)).get(userId)!;
+          await this.access.replaceAccess(
+            tx,
+            userId,
+            grant.tenantRole
+              ? { tenantRoleId: invitation.tenantRoleId! }
+              : {
+                  companyRoles: grant.companyRoles.map(
+                    ({ companyId, roleId }) => ({ companyId, roleId }),
+                  ),
+                },
+          );
+          await this.memberships.setStatus(tx, userId, 'active');
+          await this.memberships.bumpAuthVersion(tx, tenantId, userId);
+          await this.accounts.revokeRefreshTokensInTenant(tx, userId);
+        } else {
+          await this.memberships.create(tx, userId);
+        }
+        if (!existing && grant.tenantRole) {
           const roleId = invitation.tenantRoleId;
           if (!roleId) throw invalid();
           await this.access.assignTenantRole(tx, userId, roleId);
         }
-        if (grant.companyRoles.length > 0) {
+        if (!existing && grant.companyRoles.length > 0) {
           await this.access.assignCompanyRoles(
             tx,
             userId,
@@ -442,7 +491,7 @@ export class InvitationsService {
           );
         }
         await this.repository.setAcceptedBy(tx, invitation.id, userId);
-        await this.recordAccepted(tx, invitation, userId, grant);
+        await this.recordAccepted(tx, invitation, userId, grant, previous);
 
         const tenant = await this.tenants.profile(tx, tenantId);
         return { tenantId, tenantName: tenant?.name ?? '' };
@@ -451,6 +500,27 @@ export class InvitationsService {
   }
 
   // ---- Internals --------------------------------------------------------
+
+  private async assertReplaceable(
+    actorId: string,
+    userId: string,
+    tx?: PrismaTx,
+    accepting = false,
+  ) {
+    const target = await this.access.tenantRoleKey(userId, tx);
+    const actor = await this.access.tenantRoleKey(actorId, tx);
+    if (target === 'owner') {
+      if (accepting) throw invalid();
+      throw new ForbiddenException({
+        code: 'OWNER_IMMUTABLE',
+        message: 'Sahibin rolü değiştirilemez',
+      });
+    }
+    if (target === 'admin' && actor !== 'owner') {
+      if (accepting) throw invalid();
+      throw notGrantable();
+    }
+  }
 
   /** Exactly one of tenantRole and companyRoles (at least one company). */
   private requestedKeys(dto: CreateInvitationDto): { roleKey: RoleKey }[] {
@@ -562,6 +632,7 @@ export class InvitationsService {
     invitation: InvitationRow,
     userId: string,
     grant: Grant,
+    previous?: MemberAccess,
   ) {
     const base = { module: MODULE, actorUserId: userId };
     await this.audit.record(
@@ -578,10 +649,27 @@ export class InvitationsService {
     await this.audit.record(
       {
         ...base,
-        action: 'MEMBERSHIP_CREATED',
+        action: previous ? 'MEMBERSHIP_ACTIVATED' : 'MEMBERSHIP_CREATED',
         entityType: 'TenantMembership',
         entityId: userId,
-        after: { userId, status: 'active', invitationId: invitation.id },
+        ...(previous
+          ? { before: { status: 'inactive', access: previous } }
+          : {}),
+        after: {
+          userId,
+          status: 'active',
+          invitationId: invitation.id,
+          ...(previous
+            ? {
+                access: {
+                  tenantRole: grant.tenantRole,
+                  companyRoles: grant.companyRoles.map(
+                    ({ companyId, roleKey }) => ({ companyId, roleKey }),
+                  ),
+                },
+              }
+            : {}),
+        },
       },
       tx,
     );
@@ -592,7 +680,7 @@ export class InvitationsService {
           action: 'ROLE_CHANGED',
           entityType: 'TenantMembership',
           entityId: userId,
-          before: { tenantRole: null },
+          before: { tenantRole: previous?.tenantRole ?? null },
           after: { tenantRole: grant.tenantRole },
         },
         tx,

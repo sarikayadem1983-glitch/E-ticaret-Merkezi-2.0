@@ -30,6 +30,8 @@ export interface AuthRateLimits {
   /** Public invitation endpoints: token guessing and account probing. */
   invitationLookupPerIp: FixedWindowPolicy;
   invitationAcceptPerIp: FixedWindowPolicy;
+  invitationResendPerInvitation: FixedWindowPolicy;
+  invitationResendPerTenant: FixedWindowPolicy;
   /** USR-19: "forgot password" requests per IP and per address (mail bombing, probing). */
   passwordForgotPerIp: FixedWindowPolicy;
   passwordForgotPerAccount: FixedWindowPolicy;
@@ -62,6 +64,8 @@ export const DEFAULT_AUTH_RATE_LIMITS: AuthRateLimits = {
   refreshPerIp: { limit: 30, windowMs: MINUTE },
   invitationLookupPerIp: { limit: 10, windowMs: MINUTE },
   invitationAcceptPerIp: { limit: 10, windowMs: MINUTE },
+  invitationResendPerInvitation: { limit: 1, windowMs: MINUTE },
+  invitationResendPerTenant: { limit: 50, windowMs: HOUR },
   passwordForgotPerIp: { limit: 5, windowMs: 15 * MINUTE },
   passwordForgotPerAccount: { limit: 3, windowMs: HOUR },
   tokenUsePerIp: { limit: 10, windowMs: MINUTE },

@@ -83,6 +83,25 @@ export class AccountsService {
   }
 
   /**
+   * Inside acceptance: locks the global account before membership/refresh writes,
+   * in the same user-first order as refresh and password reset. Re-checks the
+   * invited address and account state rather than relying on an earlier lookup.
+   */
+  async lockUsable(
+    tx: PrismaTx,
+    userId: string,
+    email: string,
+  ): Promise<boolean> {
+    const { count } = await TenantContext.runAsSystem(() =>
+      tx.user.updateMany({
+        where: { id: userId, email, isActive: true, deletedAt: null },
+        data: { updatedAt: new Date() },
+      }),
+    );
+    return count === 1;
+  }
+
+  /**
    * Inside the caller's transaction: a new account whose e-mail is already
    * verified (it was proven by an invitation token).
    */
