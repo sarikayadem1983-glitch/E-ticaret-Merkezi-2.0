@@ -335,17 +335,62 @@ describe('Invitations (e2e)', () => {
       ).toBe('ALREADY_MEMBER');
     });
 
-    it('refuses an inactive member in the MVP', async () => {
-      await seedMember({
-        email: email('gone'),
+    it('an inactive member is re-invited; accept replaces the old access (USR-T10b)', async () => {
+      const to = email('gone');
+      const goneId = await seedMember({
+        email: to,
         name: 'Eski',
         passwordHash: await hash(PASSWORD),
-        memberships: [{ tenantId: tenantA, status: 'inactive' }],
+        memberships: [
+          {
+            tenantId: tenantA,
+            status: 'inactive',
+            roleId: await roleId(tenantA, 'admin'),
+          },
+        ],
       });
+      const created = await inviteCompany(ownerA, to).expect(201);
+      expect(created.body.data.replacesInactiveMembership).toBe(true);
+      const token = mail.tokenFor(to);
       expect(
-        (await inviteCompany(ownerA, email('gone')).expect(409)).body.error
-          .code,
-      ).toBe('MEMBERSHIP_INACTIVE');
+        (await lookup(token).expect(200)).body.data.replacesInactiveMembership,
+      ).toBe(true);
+
+      const [before] = await sql<{ auth_version: number }>(
+        'SELECT auth_version FROM tenant_memberships WHERE tenant_id = $1 AND user_id = $2',
+        [tenantA, goneId],
+      );
+      await accept(token, { name: undefined }).expect(200);
+
+      const [membership] = await sql<{
+        status: string;
+        auth_version: number;
+        deactivated_at: Date | null;
+      }>(
+        'SELECT status, auth_version, deactivated_at FROM tenant_memberships WHERE tenant_id = $1 AND user_id = $2',
+        [tenantA, goneId],
+      );
+      expect(membership.status).toBe('active');
+      expect(membership.deactivated_at).toBeNull();
+      expect(membership.auth_version).toBeGreaterThan(before.auth_version);
+      // The old admin role is gone; only the invited company role is left.
+      const tenantRoles = await sql(
+        'SELECT 1 FROM user_roles WHERE tenant_id = $1 AND user_id = $2',
+        [tenantA, goneId],
+      );
+      expect(tenantRoles).toHaveLength(0);
+      const companyRoles = await sql<{ key: string; company_id: string }>(
+        `SELECT r.key, ucr.company_id FROM user_company_roles ucr JOIN roles r ON r.id = ucr.role_id
+         WHERE ucr.tenant_id = $1 AND ucr.user_id = $2`,
+        [tenantA, goneId],
+      );
+      expect(companyRoles).toEqual([{ key: 'accounting', company_id: companyA1 }]);
+      const audit = await sql<{ action: string }>(
+        `SELECT action FROM audit_logs WHERE tenant_id = $1 AND entity_id = $2
+         AND action IN ('MEMBERSHIP_ACTIVATED', 'MEMBERSHIP_CREATED')`,
+        [tenantA, goneId],
+      );
+      expect(audit.map((a) => a.action)).toEqual(['MEMBERSHIP_ACTIVATED']);
     });
 
     it('never reveals whether an email exists in another tenant', async () => {

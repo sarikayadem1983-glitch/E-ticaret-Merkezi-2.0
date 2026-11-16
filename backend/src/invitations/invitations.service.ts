@@ -150,14 +150,9 @@ export class InvitationsService {
         message: 'Bu kişi zaten mağazanın üyesi',
       });
     }
-    if (membership) {
-      // Re-opening an inactive membership by invitation is USR-T10b.
-      throw new ConflictException({
-        code: 'MEMBERSHIP_INACTIVE',
-        message:
-          'Bu kişinin mağazada pasif bir üyeliği var; önce üyeliği aktifleştirin',
-      });
-    }
+    // USR-T10b: an inactive membership is re-opened on accept; its old roles and
+    // company access are replaced by the invitation's (the form warns the admin).
+    const replacesInactiveMembership = membership?.status === 'inactive';
 
     const roleIds = await this.access.systemRoleIds();
     const roleId = (key: RoleKey) => {
@@ -221,7 +216,7 @@ export class InvitationsService {
       id,
       status: 'pending' as const,
       delivery,
-      replacesInactiveMembership: false,
+      replacesInactiveMembership,
     };
   }
 
@@ -326,11 +321,14 @@ export class InvitationsService {
     // Shown only to whoever holds the token, i.e. the invited mailbox.
     const accountExists =
       (await this.accounts.findByEmail(invitation.email)) !== null;
+    const membership = await TenantContext.run(invitation.tenantId, () =>
+      this.memberships.findByEmail(invitation.email),
+    );
     return {
       ...view,
       maskedEmail: maskEmail(invitation.email),
       accountExists,
-      replacesInactiveMembership: false,
+      replacesInactiveMembership: membership?.status === 'inactive',
     };
   }
 
@@ -437,16 +435,27 @@ export class InvitationsService {
           invitation.email,
           tx,
         );
-        if (existing) {
+        if (existing?.status === 'active') {
           throw new ConflictException({
-            code:
-              existing.status === 'active'
-                ? 'ALREADY_MEMBER'
-                : 'MEMBERSHIP_INACTIVE',
+            code: 'ALREADY_MEMBER',
             message: 'Bu mağazada zaten bir üyeliğiniz var',
           });
         }
-        await this.memberships.create(tx, userId);
+        const reactivated = existing?.status === 'inactive';
+        if (reactivated) {
+          // Lock the row so a concurrent activate/deactivate waits for us.
+          const locked = await this.memberships.lockForUpdate(tx, tenantId, [
+            userId,
+          ]);
+          if (locked.get(userId) !== 'inactive') throw invalid();
+          await this.memberships.setStatus(tx, userId, 'active');
+          // Old roles and company access go; only the invitation's are granted.
+          await this.access.removeAllRoles(tx, userId);
+          // Tokens issued under the old access are refused.
+          await this.memberships.bumpAuthVersion(tx, tenantId, userId);
+        } else {
+          await this.memberships.create(tx, userId);
+        }
         if (grant.tenantRole) {
           const roleId = invitation.tenantRoleId;
           if (!roleId) throw invalid();
@@ -463,7 +472,7 @@ export class InvitationsService {
           );
         }
         await this.repository.setAcceptedBy(tx, invitation.id, userId);
-        await this.recordAccepted(tx, invitation, userId, grant);
+        await this.recordAccepted(tx, invitation, userId, grant, reactivated);
 
         const tenant = await this.tenants.profile(tx, tenantId);
         return { tenantId, tenantName: tenant?.name ?? '' };
@@ -583,6 +592,7 @@ export class InvitationsService {
     invitation: InvitationRow,
     userId: string,
     grant: Grant,
+    reactivated: boolean,
   ) {
     const base = { module: MODULE, actorUserId: userId };
     await this.audit.record(
@@ -599,10 +609,16 @@ export class InvitationsService {
     await this.audit.record(
       {
         ...base,
-        action: 'MEMBERSHIP_CREATED',
+        action: reactivated ? 'MEMBERSHIP_ACTIVATED' : 'MEMBERSHIP_CREATED',
         entityType: 'TenantMembership',
         entityId: userId,
-        after: { userId, status: 'active', invitationId: invitation.id },
+        ...(reactivated && { before: { status: 'inactive' } }),
+        after: {
+          userId,
+          status: 'active',
+          invitationId: invitation.id,
+          ...(reactivated && { accessReplaced: true }),
+        },
       },
       tx,
     );
