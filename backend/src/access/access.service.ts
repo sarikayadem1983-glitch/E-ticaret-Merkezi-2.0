@@ -173,6 +173,11 @@ export class AccessService {
     }
   }
 
+  /** Tenant context, inside the caller's transaction: removes every role of the member. */
+  async removeAllRoles(tx: PrismaTx, userId: string): Promise<void> {
+    await this.repository.deleteRolesOf(tx, userId);
+  }
+
   /** Tenant context. True when the tenant role covers every company. */
   async seesAllCompanies(userId: string): Promise<boolean> {
     const role = await this.repository.findTenantRole(userId);

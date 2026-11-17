@@ -335,17 +335,62 @@ describe('Invitations (e2e)', () => {
       ).toBe('ALREADY_MEMBER');
     });
 
-    it('refuses an inactive member in the MVP', async () => {
-      await seedMember({
-        email: email('gone'),
+    it('an inactive member is re-invited; accept replaces the old access (USR-T10b)', async () => {
+      const to = email('gone');
+      const goneId = await seedMember({
+        email: to,
         name: 'Eski',
         passwordHash: await hash(PASSWORD),
-        memberships: [{ tenantId: tenantA, status: 'inactive' }],
+        memberships: [
+          {
+            tenantId: tenantA,
+            status: 'inactive',
+            roleId: await roleId(tenantA, 'admin'),
+          },
+        ],
       });
+      const created = await inviteCompany(ownerA, to).expect(201);
+      expect(created.body.data.replacesInactiveMembership).toBe(true);
+      const token = mail.tokenFor(to);
       expect(
-        (await inviteCompany(ownerA, email('gone')).expect(409)).body.error
-          .code,
-      ).toBe('MEMBERSHIP_INACTIVE');
+        (await lookup(token).expect(200)).body.data.replacesInactiveMembership,
+      ).toBe(true);
+
+      const [before] = await sql<{ auth_version: number }>(
+        'SELECT auth_version FROM tenant_memberships WHERE tenant_id = $1 AND user_id = $2',
+        [tenantA, goneId],
+      );
+      await accept(token, { name: undefined }).expect(200);
+
+      const [membership] = await sql<{
+        status: string;
+        auth_version: number;
+        deactivated_at: Date | null;
+      }>(
+        'SELECT status, auth_version, deactivated_at FROM tenant_memberships WHERE tenant_id = $1 AND user_id = $2',
+        [tenantA, goneId],
+      );
+      expect(membership.status).toBe('active');
+      expect(membership.deactivated_at).toBeNull();
+      expect(membership.auth_version).toBeGreaterThan(before.auth_version);
+      // The old admin role is gone; only the invited company role is left.
+      const tenantRoles = await sql(
+        'SELECT 1 FROM user_roles WHERE tenant_id = $1 AND user_id = $2',
+        [tenantA, goneId],
+      );
+      expect(tenantRoles).toHaveLength(0);
+      const companyRoles = await sql<{ key: string; company_id: string }>(
+        `SELECT r.key, ucr.company_id FROM user_company_roles ucr JOIN roles r ON r.id = ucr.role_id
+         WHERE ucr.tenant_id = $1 AND ucr.user_id = $2`,
+        [tenantA, goneId],
+      );
+      expect(companyRoles).toEqual([{ key: 'accounting', company_id: companyA1 }]);
+      const audit = await sql<{ action: string }>(
+        `SELECT action FROM audit_logs WHERE tenant_id = $1 AND entity_id = $2
+         AND action IN ('MEMBERSHIP_ACTIVATED', 'MEMBERSHIP_CREATED')`,
+        [tenantA, goneId],
+      );
+      expect(audit.map((a) => a.action)).toEqual(['MEMBERSHIP_ACTIVATED']);
     });
 
     it('never reveals whether an email exists in another tenant', async () => {
@@ -375,6 +420,34 @@ describe('Invitations (e2e)', () => {
   });
 
   describe('list, resend and revoke', () => {
+    it('filters the list by status (USR-T10b)', async () => {
+      const open = email('filter-open');
+      const gone = email('filter-revoked');
+      await inviteCompany(ownerA, open).expect(201);
+      const revoked = await inviteCompany(ownerA, gone).expect(201);
+      await http()
+        .post(`/api/v1/invitations/${revoked.body.data.id}/revoke`)
+        .set(bearer(ownerA))
+        .expect(200);
+      const emails = async (query: string) =>
+        (
+          await http()
+            .get(`/api/v1/invitations${query}`)
+            .set(bearer(ownerA))
+            .expect(200)
+        ).body.data.map((i: { email: string }) => i.email);
+      expect(await emails('')).toContain(open);
+      expect(await emails('')).not.toContain(gone);
+      expect(await emails('?status=pending')).toContain(open);
+      expect(await emails('?status=revoked')).toContain(gone);
+      expect(await emails('?status=revoked')).not.toContain(open);
+      expect(await emails('?status=expired')).not.toContain(open);
+      await http()
+        .get('/api/v1/invitations?status=deleted')
+        .set(bearer(ownerA))
+        .expect(422);
+    });
+
     it('lists pending invitations of the own tenant only', async () => {
       const to = email('listed');
       await inviteCompany(ownerA, to).expect(201);
@@ -591,6 +664,65 @@ describe('Invitations (e2e)', () => {
       }>('SELECT name, email_verified_at FROM users WHERE email = $1', [to]);
       expect(user).toMatchObject({ name: 'B Personeli' });
       expect(user.email_verified_at).not.toBeNull();
+    });
+
+    it('accept-as-current: the signed-in invitee accepts without a password (USR-T10b)', async () => {
+      const to = email('as-current');
+      await seedMember({
+        email: to,
+        name: 'B Oturumlu',
+        passwordHash: await hash(PASSWORD),
+        memberships: [{ tenantId: tenantB }],
+      });
+      await invite(ownerA, {
+        email: to,
+        companyRoles: [{ companyId: companyA2, roleKey: 'viewer' }],
+      }).expect(201);
+      const token = mail.tokenFor(to);
+      const session = await login(to);
+      const res = await http()
+        .post('/api/v1/invitations/accept-as-current')
+        .set(bearer(session))
+        .send({ token })
+        .expect(200);
+      expect(res.body.data).toMatchObject({ tenantId: tenantA });
+      expect(JSON.stringify(res.body)).not.toMatch(/accessToken|refreshToken/);
+      const [membership] = await sql<{ status: string }>(
+        `SELECT m.status FROM tenant_memberships m JOIN users u ON u.id = m.user_id
+         WHERE u.email = $1 AND m.tenant_id = $2`,
+        [to, tenantA],
+      );
+      expect(membership.status).toBe('active');
+      // The token is used up.
+      await http()
+        .post('/api/v1/invitations/accept-as-current')
+        .set(bearer(session))
+        .send({ token })
+        .expect(404);
+    });
+
+    it('accept-as-current refuses a session of another account and keeps the invitation', async () => {
+      const to = email('as-current-other');
+      await inviteCompany(ownerA, to).expect(201);
+      const token = mail.tokenFor(to);
+      const res = await http()
+        .post('/api/v1/invitations/accept-as-current')
+        .set(bearer(ownerB))
+        .send({ token })
+        .expect(403);
+      expect(res.body.error.code).toBe('INVITATION_OTHER_ACCOUNT');
+      const [row] = await sql<{ status: string }>(
+        'SELECT status FROM invitations WHERE token_hash = $1',
+        [sha256(token)],
+      );
+      expect(row.status).toBe('pending');
+    });
+
+    it('accept-as-current needs a session', async () => {
+      await http()
+        .post('/api/v1/invitations/accept-as-current')
+        .send({ token: 'x'.repeat(43) })
+        .expect(401);
     });
 
     it('revoked, expired and used tokens all return INVITATION_INVALID', async () => {
@@ -921,5 +1053,68 @@ describe('Invitations: existing-account lockout (e2e)', () => {
       .set('X-Forwarded-For', ip)
       .send({ email: to, password: PASSWORD })
       .expect(429);
+  });
+});
+
+describe('Invitations: resend and per-store send limits (e2e)', () => {
+  let app: INestApplication<App>;
+  const mail = new FakeTransport();
+  const run = randomUUID().slice(0, 8);
+  const slugs = [`invr-a-${run}`, `invr-b-${run}`];
+  const tokens: string[] = [];
+
+  const http = () => request(app.getHttpServer());
+  const invite = (owner: string, to: string) =>
+    http()
+      .post('/api/v1/invitations')
+      .set({ Authorization: `Bearer ${owner}` })
+      .send({ email: to, tenantRole: 'admin' });
+  const resend = (owner: string, id: string) =>
+    http()
+      .post(`/api/v1/invitations/${id}/resend`)
+      .set({ Authorization: `Bearer ${owner}` });
+
+  beforeAll(async () => {
+    app = await createTestApp(
+      {},
+      {
+        providers: [{ provide: MAIL_TRANSPORT, useValue: mail }],
+        rateLimits: {
+          ...RELAXED_RATE_LIMITS,
+          invitationResendPerInvitation: { limit: 1, windowMs: 60_000 },
+          invitationSendPerTenant: { limit: 3, windowMs: 60_000 },
+        },
+      },
+    );
+    for (const slug of slugs) {
+      const res = await http()
+        .post('/api/v1/auth/register')
+        .send({
+          tenantName: `Mağaza ${slug}`,
+          tenantSlug: slug,
+          name: 'Sahip',
+          email: `${slug}@test.local`,
+          password: PASSWORD,
+        })
+        .expect(201);
+      tokens.push(res.body.data.accessToken as string);
+    }
+  });
+
+  afterAll(async () => {
+    await app?.close();
+    await purgeTenants(slugs);
+  });
+
+  it('resends one invitation once per window, then the store cap applies', async () => {
+    const [ownerA, ownerB] = tokens;
+    const { id } = (await invite(ownerA, `r1-${run}@test.local`).expect(201)).body.data;
+    await resend(ownerA, id).expect(200);
+    await resend(ownerA, id).expect(429);
+    // Store A has sent 2 of 3: one more invitation passes, the next is refused.
+    await invite(ownerA, `r2-${run}@test.local`).expect(201);
+    await invite(ownerA, `r3-${run}@test.local`).expect(429);
+    // Store B has its own bucket.
+    await invite(ownerB, `r4-${run}@test.local`).expect(201);
   });
 });

@@ -49,6 +49,29 @@ services:
       - "127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025"
       - "127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"
 
+  # Yalnızca geliştirme ve test: S3 uyumlu nesne depolama (INF-12).
+  # İmaj kaynaktan derlenir (docker/minio/Dockerfile). Production'da kullanılmaz.
+  minio:
+    build: ./minio
+    image: tm-minio:dev
+    container_name: tm-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${STORAGE_ACCESS_KEY:-tm-dev-erisim}
+      MINIO_ROOT_PASSWORD: ${STORAGE_SECRET_KEY:-tm-dev-gizli-anahtar}
+      MINIO_BUCKET: ${STORAGE_BUCKET:-tm-dev}
+    ports:
+      - "127.0.0.1:${MINIO_API_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_data:
   redis_data:
+  minio_data:

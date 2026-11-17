@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ApiError, errorMessage, request } from '@/lib/api';
+import { hardNavigate } from '@/lib/navigation';
 import type { InvitationLookup } from '@/lib/types';
 
 const INVALID = 'Bu davet bağlantısı geçersiz veya süresi dolmuş.';
@@ -17,7 +18,25 @@ type State =
   | { kind: 'loading' }
   | { kind: 'invalid'; message: string }
   | { kind: 'newAccount' | 'existingAccount'; invitation: InvitationLookup }
-  | { kind: 'done'; tenantName: string };
+  | { kind: 'signedIn'; invitation: InvitationLookup; email: string }
+  | { kind: 'signedInOtherEmail'; email: string }
+  | { kind: 'done'; tenantName: string; tenantId?: string };
+
+/**
+ * The signed-in user's e-mail, or null without a session. A plain fetch: the
+ * shared request() would send a visitor without a session to the login page.
+ */
+async function sessionEmail(): Promise<string | null> {
+  try {
+    const res = await fetch('/api/session', { credentials: 'same-origin', cache: 'no-store' });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { data?: { user?: { email?: unknown } } };
+    const email = body.data?.user?.email;
+    return typeof email === 'string' ? email : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Session-less acceptance. The token stays in the URL path only; it goes to
@@ -29,12 +48,21 @@ export default function InvitePage() {
 
   useEffect(() => {
     let cancelled = false;
-    request<{ data: InvitationLookup }>('/api/invitations/lookup', {
-      method: 'POST',
-      body: { token },
-    })
-      .then(({ data }) => {
+    Promise.all([
+      request<{ data: InvitationLookup }>('/api/invitations/lookup', {
+        method: 'POST',
+        body: { token },
+      }),
+      sessionEmail(),
+    ])
+      .then(([{ data }, email]) => {
         if (cancelled) return;
+        // USR-T13b: signed in, the session account can accept without a password
+        // (the backend refuses any account but the invited one).
+        if (email && data.accountExists) {
+          setState({ kind: 'signedIn', invitation: data, email });
+          return;
+        }
         setState({
           kind: data.accountExists ? 'existingAccount' : 'newAccount',
           invitation: data,
@@ -74,19 +102,34 @@ export default function InvitePage() {
   }
 
   if (state.kind === 'done') {
+    return <Done tenantName={state.tenantName} tenantId={state.tenantId} />;
+  }
+
+  if (state.kind === 'signedInOtherEmail') {
     return (
       <div className="text-center">
-        <CheckCircle2 className="mx-auto size-10 text-emerald-600" aria-hidden />
-        <h1 className="mt-4 text-xl font-semibold text-brand-navy">
-          {state.tenantName} mağazasına katıldınız
-        </h1>
+        <XCircle className="mx-auto size-10 text-destructive" aria-hidden />
+        <h1 className="mt-4 text-xl font-semibold text-brand-navy">Davet başka bir hesaba ait</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Devam etmek için giriş yapın.
+          {state.email} hesabıyla oturum açıksınız. Bu davet başka bir e-posta adresine
+          gönderilmiş. Çıkış yapıp davet edilen hesapla devam edin.
         </p>
-        <Button asChild variant="brand" className="mt-8 h-10 w-full">
-          <Link href="/login">Giriş yap</Link>
-        </Button>
+        <SignOutButton />
       </div>
+    );
+  }
+
+  if (state.kind === 'signedIn') {
+    const { invitation, email } = state;
+    return (
+      <AcceptAsCurrent
+        token={token}
+        invitation={invitation}
+        email={email}
+        onDone={(tenantName, tenantId) => setState({ kind: 'done', tenantName, tenantId })}
+        onOtherAccount={() => setState({ kind: 'signedInOtherEmail', email })}
+        onInvalid={() => setState({ kind: 'invalid', message: INVALID })}
+      />
     );
   }
 
@@ -98,6 +141,162 @@ export default function InvitePage() {
       onDone={(tenantName) => setState({ kind: 'done', tenantName })}
       onInvalid={() => setState({ kind: 'invalid', message: INVALID })}
     />
+  );
+}
+
+function Done({ tenantName, tenantId }: { tenantName: string; tenantId?: string }) {
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  // Accepted while signed in: the session still points at the old store.
+  const switchStore = async () => {
+    if (!tenantId) return;
+    setPending(true);
+    setError(null);
+    try {
+      await request('/api/session/tenant', { method: 'POST', body: { tenantId } });
+      hardNavigate('/');
+    } catch (err) {
+      setError(errorMessage(err));
+      setPending(false);
+    }
+  };
+  return (
+    <div className="text-center">
+      <CheckCircle2 className="mx-auto size-10 text-emerald-600" aria-hidden />
+      <h1 className="mt-4 text-xl font-semibold text-brand-navy">
+        {tenantName} mağazasına katıldınız
+      </h1>
+      {tenantId ? (
+        <>
+          {error && (
+            <Alert variant="destructive" className="mt-4 text-left">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          <Button
+            variant="brand"
+            className="mt-8 h-10 w-full"
+            disabled={pending}
+            onClick={switchStore}
+          >
+            {pending && <Loader2 className="size-4 animate-spin" />}
+            Mağazaya geç
+          </Button>
+          <Button asChild variant="outline" className="mt-2 h-10 w-full">
+            <Link href="/">Şimdilik mevcut mağazada kal</Link>
+          </Button>
+        </>
+      ) : (
+        <>
+          <p className="mt-2 text-sm text-muted-foreground">Devam etmek için giriş yapın.</p>
+          <Button asChild variant="brand" className="mt-8 h-10 w-full">
+            <Link href="/login">Giriş yap</Link>
+          </Button>
+        </>
+      )}
+    </div>
+  );
+}
+
+function SignOutButton() {
+  const [pending, setPending] = useState(false);
+  const signOut = async () => {
+    setPending(true);
+    try {
+      await request('/api/auth/logout', { method: 'POST' });
+    } finally {
+      // Reload: without a session the page shows the password form.
+      window.location.reload();
+    }
+  };
+  return (
+    <Button variant="outline" className="mt-8" disabled={pending} onClick={signOut}>
+      {pending && <Loader2 className="size-4 animate-spin" />}
+      Çıkış yap
+    </Button>
+  );
+}
+
+function InvitationHeader({ invitation }: { invitation: InvitationLookup }) {
+  return (
+    <>
+      <h1 className="text-2xl font-semibold text-brand-navy">
+        {invitation.tenantName} mağazasına davet
+      </h1>
+      <p className="mt-1.5 text-sm text-muted-foreground">
+        {invitation.inviterName} sizi davet etti: {invitation.roleSummary}
+      </p>
+      <p className="mt-1 mb-8 text-sm text-muted-foreground">
+        Davet edilen: {invitation.maskedEmail}
+      </p>
+      {invitation.replacesInactiveMembership && (
+        <Alert className="mb-4">
+          <AlertDescription>
+            Bu kişinin bu mağazadaki eski rol ve firma erişimleri bu davettekilerle
+            değiştirilecek.
+          </AlertDescription>
+        </Alert>
+      )}
+    </>
+  );
+}
+
+function AcceptAsCurrent({
+  token,
+  invitation,
+  email,
+  onDone,
+  onOtherAccount,
+  onInvalid,
+}: {
+  token: string;
+  invitation: InvitationLookup;
+  email: string;
+  onDone: (tenantName: string, tenantId: string) => void;
+  onOtherAccount: () => void;
+  onInvalid: () => void;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  const accept = async () => {
+    setError(null);
+    setPending(true);
+    try {
+      const { data } = await request<{ data: { tenantId: string; tenantName: string } }>(
+        '/api/bff/invitations/accept-as-current',
+        { method: 'POST', body: { token } },
+      );
+      onDone(data.tenantName || invitation.tenantName, data.tenantId);
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'INVITATION_OTHER_ACCOUNT') {
+        onOtherAccount();
+        return;
+      }
+      if (err instanceof ApiError && err.status === 404) {
+        onInvalid();
+        return;
+      }
+      setError(errorMessage(err));
+      setPending(false);
+    }
+  };
+  return (
+    <>
+      <InvitationHeader invitation={invitation} />
+      {error && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      <p className="mb-4 text-sm text-muted-foreground">{email} hesabıyla oturum açıksınız.</p>
+      <Button variant="brand" className="h-10 w-full" disabled={pending} onClick={accept}>
+        {pending && <Loader2 className="size-4 animate-spin" />}
+        Bu hesapla kabul et
+      </Button>
+      <div className="text-center">
+        <SignOutButton />
+      </div>
+    </>
   );
 }
 
@@ -162,23 +361,7 @@ function AcceptForm({
 
   return (
     <>
-      <h1 className="text-2xl font-semibold text-brand-navy">
-        {invitation.tenantName} mağazasına davet
-      </h1>
-      <p className="mt-1.5 text-sm text-muted-foreground">
-        {invitation.inviterName} sizi davet etti: {invitation.roleSummary}
-      </p>
-      <p className="mt-1 mb-8 text-sm text-muted-foreground">
-        Davet edilen: {invitation.maskedEmail}
-      </p>
-      {invitation.replacesInactiveMembership && (
-        <Alert className="mb-4">
-          <AlertDescription>
-            Bu kişinin bu mağazadaki eski rol ve firma erişimleri bu davettekilerle
-            değiştirilecek.
-          </AlertDescription>
-        </Alert>
-      )}
+      <InvitationHeader invitation={invitation} />
       <form onSubmit={submit} noValidate className="space-y-4">
         {error && (
           <Alert variant="destructive">

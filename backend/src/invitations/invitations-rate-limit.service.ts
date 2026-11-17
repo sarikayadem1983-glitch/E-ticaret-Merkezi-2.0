@@ -30,4 +30,21 @@ export class InvitationsRateLimitService {
       this.limits.invitationAcceptPerIp,
     );
   }
+
+  /** Every invitation e-mail a store sends (create and resend). */
+  beforeSend(tenantId: string): Promise<void> {
+    return this.limiter.hit(
+      `invitation:send:tenant:${tenantId}`,
+      this.limits.invitationSendPerTenant,
+    );
+  }
+
+  /** One invitation is resent at most once per window. */
+  async beforeResend(tenantId: string, invitationId: string): Promise<void> {
+    await this.limiter.hit(
+      `invitation:resend:${invitationId}`,
+      this.limits.invitationResendPerInvitation,
+    );
+    await this.beforeSend(tenantId);
+  }
 }
