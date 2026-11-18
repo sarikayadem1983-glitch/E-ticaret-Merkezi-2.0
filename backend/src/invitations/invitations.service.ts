@@ -1,3 +1,4 @@
+import type { InvitationListStatus } from './invitations.dto.js';
 import {
   BadRequestException,
   ConflictException,
@@ -149,13 +150,11 @@ export class InvitationsService {
         message: 'Bu kişi zaten mağazanın üyesi',
       });
     }
-    if (membership) {
-      // Re-opening an inactive membership by invitation is USR-T10b.
-      throw new ConflictException({
-        code: 'MEMBERSHIP_INACTIVE',
-        message:
-          'Bu kişinin mağazada pasif bir üyeliği var; önce üyeliği aktifleştirin',
-      });
+    // USR-T10b: an inactive membership is re-opened on accept; its old roles and
+    // company access are replaced by the invitation's (the form warns the admin).
+    const replacesInactiveMembership = membership?.status === 'inactive';
+    if (replacesInactiveMembership) {
+      await this.assertReplaceable(actor.sub, membership.userId, false);
     }
 
     const roleIds = await this.access.systemRoleIds();
@@ -220,13 +219,13 @@ export class InvitationsService {
       id,
       status: 'pending' as const,
       delivery,
-      replacesInactiveMembership: false,
+      replacesInactiveMembership,
     };
   }
 
-  /** Pending invitations of the current tenant; expired ones are flagged. */
-  async listPending() {
-    const rows = await this.repository.listPending();
+  /** Invitations of the current tenant (default: pending, expired ones flagged). */
+  async list(filter?: InvitationListStatus) {
+    const rows = await this.repository.list(filter);
     const keys = await this.access.roleKeysByIds([
       ...new Set(rows.flatMap((r) => this.roleIdsOf(r))),
     ]);
@@ -325,11 +324,14 @@ export class InvitationsService {
     // Shown only to whoever holds the token, i.e. the invited mailbox.
     const accountExists =
       (await this.accounts.findByEmail(invitation.email)) !== null;
+    const membership = await TenantContext.run(invitation.tenantId, () =>
+      this.memberships.findByEmail(invitation.email),
+    );
     return {
       ...view,
       maskedEmail: maskEmail(invitation.email),
       accountExists,
-      replacesInactiveMembership: false,
+      replacesInactiveMembership: membership?.status === 'inactive',
     };
   }
 
@@ -385,6 +387,26 @@ export class InvitationsService {
     }
   }
 
+  /**
+   * USR-T10b: the signed-in user accepts an invitation addressed to their own
+   * e-mail. The session proves the account, so no password is asked; any other
+   * account is refused and the invitation stays pending. No tokens are returned
+   * and the caller's current store does not change.
+   */
+  async acceptAsCurrent(userId: string, token: string) {
+    const tokenHash = hashInvitationToken(token);
+    const invitation = await this.repository.findUsableByTokenHash(tokenHash);
+    if (!invitation) throw invalid();
+    const account = await this.accounts.findByEmail(invitation.email);
+    if (!account || account.id !== userId || !account.usable) {
+      throw new ForbiddenException({
+        code: 'INVITATION_OTHER_ACCOUNT',
+        message: 'Bu davet başka bir e-posta adresine gönderilmiş',
+      });
+    }
+    return this.acceptInTransaction(invitation, tokenHash, account, null);
+  }
+
   private acceptInTransaction(
     invitation: InvitationRow,
     tokenHash: string,
@@ -416,16 +438,35 @@ export class InvitationsService {
           invitation.email,
           tx,
         );
-        if (existing) {
+        if (existing?.status === 'active') {
           throw new ConflictException({
-            code:
-              existing.status === 'active'
-                ? 'ALREADY_MEMBER'
-                : 'MEMBERSHIP_INACTIVE',
+            code: 'ALREADY_MEMBER',
             message: 'Bu mağazada zaten bir üyeliğiniz var',
           });
         }
-        await this.memberships.create(tx, userId);
+        const reactivated = existing?.status === 'inactive';
+        if (reactivated) {
+          // Lock the row so a concurrent activate/deactivate waits for us.
+          const locked = await this.memberships.lockForUpdate(tx, tenantId, [
+            userId,
+          ]);
+          if (locked.get(userId) !== 'inactive') throw invalid();
+          // Owner/admin access is never replaced by an invitation (re-checked here:
+          // the role may have changed after the invitation was sent).
+          await this.assertReplaceable(
+            invitation.invitedByUserId,
+            userId,
+            true,
+            tx,
+          );
+          await this.memberships.setStatus(tx, userId, 'active');
+          // Old roles and company access go; only the invitation's are granted.
+          await this.access.removeAllRoles(tx, userId);
+          // Tokens issued under the old access are refused.
+          await this.memberships.bumpAuthVersion(tx, tenantId, userId);
+        } else {
+          await this.memberships.create(tx, userId);
+        }
         if (grant.tenantRole) {
           const roleId = invitation.tenantRoleId;
           if (!roleId) throw invalid();
@@ -442,7 +483,7 @@ export class InvitationsService {
           );
         }
         await this.repository.setAcceptedBy(tx, invitation.id, userId);
-        await this.recordAccepted(tx, invitation, userId, grant);
+        await this.recordAccepted(tx, invitation, userId, grant, reactivated);
 
         const tenant = await this.tenants.profile(tx, tenantId);
         return { tenantId, tenantName: tenant?.name ?? '' };
@@ -451,6 +492,34 @@ export class InvitationsService {
   }
 
   // ---- Internals --------------------------------------------------------
+
+  /**
+   * An inactive member's old access is replaced on accept. An owner's never is;
+   * an admin's only when the inviter is an owner. While accepting, the
+   * invitation is simply invalid (the transaction rolls back).
+   */
+  private async assertReplaceable(
+    actorId: string,
+    userId: string,
+    accepting: boolean,
+    tx?: PrismaTx,
+  ) {
+    const target = await this.access.tenantRoleKey(userId, tx);
+    if (target === 'owner') {
+      if (accepting) throw invalid();
+      throw new ForbiddenException({
+        code: 'OWNER_IMMUTABLE',
+        message: 'Sahibin rolü değiştirilemez',
+      });
+    }
+    if (target === 'admin') {
+      const actor = await this.access.tenantRoleKey(actorId, tx);
+      if (actor !== 'owner') {
+        if (accepting) throw invalid();
+        throw notGrantable();
+      }
+    }
+  }
 
   /** Exactly one of tenantRole and companyRoles (at least one company). */
   private requestedKeys(dto: CreateInvitationDto): { roleKey: RoleKey }[] {
@@ -562,6 +631,7 @@ export class InvitationsService {
     invitation: InvitationRow,
     userId: string,
     grant: Grant,
+    reactivated: boolean,
   ) {
     const base = { module: MODULE, actorUserId: userId };
     await this.audit.record(
@@ -578,10 +648,16 @@ export class InvitationsService {
     await this.audit.record(
       {
         ...base,
-        action: 'MEMBERSHIP_CREATED',
+        action: reactivated ? 'MEMBERSHIP_ACTIVATED' : 'MEMBERSHIP_CREATED',
         entityType: 'TenantMembership',
         entityId: userId,
-        after: { userId, status: 'active', invitationId: invitation.id },
+        ...(reactivated && { before: { status: 'inactive' } }),
+        after: {
+          userId,
+          status: 'active',
+          invitationId: invitation.id,
+          ...(reactivated && { accessReplaced: true }),
+        },
       },
       tx,
     );

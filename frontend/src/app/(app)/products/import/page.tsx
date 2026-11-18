@@ -21,6 +21,7 @@ import {
 import { useCompanies } from '@/hooks/queries';
 import { bff, errorMessage } from '@/lib/api';
 import { IMPORT_COLUMN_LABEL, IMPORT_MAX_BYTES, importTemplate } from '@/lib/product-import';
+import { XlsxImportError, xlsxToCsv } from '@/lib/xlsx-to-csv';
 
 interface ImportReport {
   rows: number;
@@ -68,9 +69,23 @@ export default function ProductImportPage() {
     setReport(null);
     setError(null);
     if (!f) return setFile(null);
+    const tooBig = `Dosya çok büyük (en çok ${Math.floor(IMPORT_MAX_BYTES / 1000)} KB, yaklaşık 1000 satır). Dosyayı bölün.`;
+    if (/\.xlsx$/i.test(f.name)) {
+      try {
+        const text = await xlsxToCsv(f);
+        if (new TextEncoder().encode(text).length > IMPORT_MAX_BYTES) {
+          setFile(null);
+          return setError(tooBig);
+        }
+        return setFile({ name: f.name, text });
+      } catch (e) {
+        setFile(null);
+        return setError(e instanceof XlsxImportError ? e.message : 'Excel dosyası okunamadı.');
+      }
+    }
     if (f.size > IMPORT_MAX_BYTES) {
       setFile(null);
-      return setError(`Dosya çok büyük (en çok ${Math.floor(IMPORT_MAX_BYTES / 1000)} KB, yaklaşık 1000 satır). Dosyayı bölün.`);
+      return setError(tooBig);
     }
     setFile({ name: f.name, text: await f.text() });
   };
@@ -78,7 +93,7 @@ export default function ProductImportPage() {
   const check = (dryRun: boolean) => {
     setError(null);
     if (!companyId) return setError('Firma seçin.');
-    if (!file) return setError('CSV dosyası seçin.');
+    if (!file) return setError('CSV veya Excel (.xlsx) dosyası seçin.');
     run.mutate(dryRun);
   };
 
@@ -92,7 +107,7 @@ export default function ProductImportPage() {
       </Link>
       <PageHeader
         title="Toplu ürün içe aktarma"
-        description="CSV dosyasından ürün ve varyant oluşturun. Önce kontrol edilir; hata yoksa içe aktarılır. Pazaryerine hiçbir şey gönderilmez."
+        description="CSV veya Excel (.xlsx) dosyasından ürün ve varyant oluşturun. Önce kontrol edilir; hata yoksa içe aktarılır. Pazaryerine hiçbir şey gönderilmez."
         actions={
           <Button variant="outline" onClick={download}>
             <Download className="size-4" aria-hidden />
@@ -110,7 +125,8 @@ export default function ProductImportPage() {
               <code className="text-foreground">{k}</code>: {l}
             </li>
           ))}
-          <li>Excel&apos;de &quot;CSV UTF-8 (virgül/noktalı virgülle ayrılmış)&quot; olarak kaydedin. =, +, -, @ ile başlayan hücreler güvenlik için reddedilir.</li>
+          <li>Excel dosyasını (.xlsx) doğrudan seçebilirsiniz; yalnızca ilk sayfa okunur. Ya da &quot;CSV UTF-8 (virgül/noktalı virgülle ayrılmış)&quot; olarak kaydedin.</li>
+          <li>Formül içeren ve =, +, -, @ ile başlayan hücreler güvenlik için reddedilir; değeri yazın.</li>
         </ul>
       </section>
 
@@ -127,11 +143,11 @@ export default function ProductImportPage() {
           </NativeSelect>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="file">CSV dosyası</Label>
+          <Label htmlFor="file">CSV veya Excel dosyası</Label>
           <input
             id="file"
             type="file"
-            accept=".csv,text/csv"
+            accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             onChange={(e) => void pick(e.target.files?.[0])}
             className="block h-10 w-full rounded-md border px-3 py-2 text-sm file:mr-3 file:border-0 file:bg-transparent file:text-sm file:font-medium"
           />

@@ -1,3 +1,4 @@
+import type { InvitationListStatus } from './invitations.dto.js';
 import { Injectable } from '@nestjs/common';
 import {
   InjectPrisma,
@@ -90,9 +91,20 @@ export class InvitationsRepository {
     return row && asRow(row);
   }
 
-  async listPending(): Promise<InvitationRow[]> {
+  /**
+   * Invitations of the current tenant. No filter: every pending one (expired included).
+   * `pending`/`expired` split pending rows by expiry; `accepted`/`revoked` match the status.
+   */
+  async list(filter?: InvitationListStatus): Promise<InvitationRow[]> {
+    const now = new Date();
+    const where =
+      filter === 'pending'
+        ? { status: 'pending' as const, expiresAt: { gt: now } }
+        : filter === 'expired'
+          ? { status: 'pending' as const, expiresAt: { lte: now } }
+          : { status: filter ?? ('pending' as const) };
     const rows = await this.prisma.invitation.findMany({
-      where: { status: 'pending' },
+      where,
       select: FIELDS,
       orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
       take: 500,

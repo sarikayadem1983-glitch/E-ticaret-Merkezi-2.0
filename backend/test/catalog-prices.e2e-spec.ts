@@ -3,7 +3,12 @@ import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { isValidVkn } from './../src/companies/tax-number.js';
-import { createTestApp, ownerPool, purgeTenants } from './helpers.js';
+import {
+  createTestApp,
+  ownerPool,
+  purgeTenants,
+  registerOwner,
+} from './helpers.js';
 
 const PASSWORD = 'Correct-Horse-9';
 
@@ -40,16 +45,13 @@ describe('Catalog prices API (e2e, CAT-05)', () => {
 
   const register = async (slug: string) =>
     (
-      await http()
-        .post('/api/v1/auth/register')
-        .send({
-          tenantName: `Mağaza ${slug}`,
-          tenantSlug: slug,
-          name: 'Sahip',
-          email: `${slug}@test.local`,
-          password: PASSWORD,
-        })
-        .expect(201)
+      await registerOwner(app, {
+        tenantName: `Mağaza ${slug}`,
+        tenantSlug: slug,
+        name: 'Sahip',
+        email: `${slug}@test.local`,
+        password: PASSWORD,
+      })
     ).body.data.accessToken as string;
 
   beforeAll(async () => {

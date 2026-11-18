@@ -17,6 +17,7 @@ import {
   purgeTenants,
   seedMember,
   systemRoleId,
+  registerOwner,
 } from './helpers.js';
 
 const PASSWORD = 'Sifre-12345';
@@ -74,16 +75,13 @@ describe('session revocation (e2e)', () => {
   beforeAll(async () => {
     app = await createTestApp();
     for (const key of ['a', 'b'] as const) {
-      const res = await http()
-        .post('/api/v1/auth/register')
-        .send({
-          tenantName: `İptal ${key}`,
-          tenantSlug: slugs[key],
-          name: `Sahip ${key}`,
-          email: `rv-owner-${key}-${run}@test.local`,
-          password: PASSWORD,
-        })
-        .expect(201);
+      const res = await registerOwner(app, {
+        tenantName: `İptal ${key}`,
+        tenantSlug: slugs[key],
+        name: `Sahip ${key}`,
+        email: `rv-owner-${key}-${run}@test.local`,
+        password: PASSWORD,
+      });
       tenant[key] = claims(res.body.data.accessToken).tid;
     }
   });
@@ -196,16 +194,13 @@ describe('session revocation (e2e)', () => {
 
   it('an inactive tenant revokes its sessions on the next request', async () => {
     const slug = `rv-closing-${run}`;
-    const res = await http()
-      .post('/api/v1/auth/register')
-      .send({
-        tenantName: 'Kapanacak',
-        tenantSlug: slug,
-        name: 'Sahip',
-        email: `rv-closing-${run}@test.local`,
-        password: PASSWORD,
-      })
-      .expect(201);
+    const res = await registerOwner(app, {
+      tenantName: 'Kapanacak',
+      tenantSlug: slug,
+      name: 'Sahip',
+      email: `rv-closing-${run}@test.local`,
+      password: PASSWORD,
+    });
     try {
       const token = res.body.data.accessToken as string;
       await sql('UPDATE tenants SET is_active = false WHERE id = $1', [

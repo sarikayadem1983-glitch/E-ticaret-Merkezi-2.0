@@ -26,10 +26,16 @@ export interface AuthRateLimits {
   /** How long an IP stays trusted for an account after a successful login. */
   trustedIpTtlMs: number;
   registerPerIp: FixedWindowPolicy;
+  /** INF-20: registrations per address (mail bombing through "account exists" notices). */
+  registerPerAccount: FixedWindowPolicy;
   refreshPerIp: FixedWindowPolicy;
   /** Public invitation endpoints: token guessing and account probing. */
   invitationLookupPerIp: FixedWindowPolicy;
   invitationAcceptPerIp: FixedWindowPolicy;
+  /** USR-T10b: resends of one invitation (mail bombing one address). */
+  invitationResendPerInvitation: FixedWindowPolicy;
+  /** USR-T10b: invitation e-mails (create + resend) of one store. */
+  invitationSendPerTenant: FixedWindowPolicy;
   /** USR-19: "forgot password" requests per IP and per address (mail bombing, probing). */
   passwordForgotPerIp: FixedWindowPolicy;
   passwordForgotPerAccount: FixedWindowPolicy;
@@ -59,9 +65,12 @@ export const DEFAULT_AUTH_RATE_LIMITS: AuthRateLimits = {
   },
   trustedIpTtlMs: 30 * 24 * HOUR,
   registerPerIp: { limit: 5, windowMs: HOUR },
+  registerPerAccount: { limit: 3, windowMs: HOUR },
   refreshPerIp: { limit: 30, windowMs: MINUTE },
   invitationLookupPerIp: { limit: 10, windowMs: MINUTE },
   invitationAcceptPerIp: { limit: 10, windowMs: MINUTE },
+  invitationResendPerInvitation: { limit: 1, windowMs: MINUTE },
+  invitationSendPerTenant: { limit: 50, windowMs: HOUR },
   passwordForgotPerIp: { limit: 5, windowMs: 15 * MINUTE },
   passwordForgotPerAccount: { limit: 3, windowMs: HOUR },
   tokenUsePerIp: { limit: 10, windowMs: MINUTE },

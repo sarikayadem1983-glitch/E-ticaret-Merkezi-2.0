@@ -21,8 +21,11 @@ describe('matchBffRoute', () => {
     ['POST', `users/${ID}/deactivate`, ''],
     ['POST', `users/${ID}/activate`, ''],
     ['GET', 'invitations', ''],
+    ['GET', 'invitations', 'status=revoked'],
     ['POST', 'invitations', ''],
     ['POST', `invitations/${ID}/revoke`, ''],
+    ['POST', `invitations/${ID}/resend`, ''],
+    ['POST', 'invitations/accept-as-current', ''],
     ['GET', 'products', 'page=1&per_page=20&search=x&status=active&company_id=a&category_id=b&brand_id=c'],
     ['POST', 'products', ''],
     ['GET', `products/${ID}`, ''],
@@ -57,8 +60,6 @@ describe('matchBffRoute', () => {
     // Session-less invitation endpoints have their own routes (/api/invitations/*).
     ['lookup through the session proxy', 'POST', 'invitations/lookup'],
     ['accept through the session proxy', 'POST', 'invitations/accept'],
-    ['accept-as-current (USR-T10b)', 'POST', 'invitations/accept-as-current'],
-    ['resend (USR-T13b)', 'POST', `invitations/${ID}/resend`],
     ['user detail (USR-T11b)', 'GET', `users/${ID}`],
     ['PUT without a body route', 'PUT', `users/${ID}`],
     ['PUT on companies', 'PUT', `companies/${ID}`],
@@ -72,7 +73,7 @@ describe('matchBffRoute', () => {
 
   it('accepts no query on the user management routes yet', () => {
     expect(match('GET', 'users', 'page=1')).toEqual({ ok: false, status: 400 });
-    expect(match('GET', 'invitations', 'status=pending')).toEqual({ ok: false, status: 400 });
+    expect(match('GET', 'invitations', 'page=1')).toEqual({ ok: false, status: 400 });
   });
 
   it.each([

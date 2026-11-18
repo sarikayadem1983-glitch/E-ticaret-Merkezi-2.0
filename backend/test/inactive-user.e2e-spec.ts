@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { INestApplication } from '@nestjs/common';
 import { hash } from '@node-rs/argon2';
 import request from 'supertest';
+import { AuthService } from './../src/auth/auth.service.js';
 import { App } from 'supertest/types.js';
 import {
   claims,
@@ -10,6 +11,7 @@ import {
   purgeTenants,
   seedMember,
   systemRoleId,
+  registerOwner,
 } from './helpers.js';
 
 const PASSWORD = 'Sifre-12345';
@@ -84,16 +86,13 @@ describe('inactive / deleted users (e2e)', () => {
 
   beforeAll(async () => {
     app = await createTestApp();
-    const res = await http()
-      .post('/api/v1/auth/register')
-      .send({
-        tenantName: `Pasif Kullanıcı ${run}`,
-        tenantSlug: slug,
-        name: 'Sahip',
-        email: `iu-owner-${run}@test.local`,
-        password: PASSWORD,
-      })
-      .expect(201);
+    const res = await registerOwner(app, {
+      tenantName: `Pasif Kullanıcı ${run}`,
+      tenantSlug: slug,
+      name: 'Sahip',
+      email: `iu-owner-${run}@test.local`,
+      password: PASSWORD,
+    });
     tenantId = claims(res.body.data.accessToken).tid;
     adminRole = await systemRoleId(tenantId, 'admin');
   });
@@ -198,7 +197,10 @@ describe('inactive / deleted users (e2e)', () => {
         email,
         password: PASSWORD,
       })
-      .expect(409);
-    expect(res.body.data).toBeUndefined();
+      .expect(202);
+    // INF-20: the same answer as for a new address, and no session.
+    expect(res.body).toEqual({ data: { status: 'check-email' } });
+    await app.get(AuthService).settled();
+    await login(email).expect(401);
   });
 });

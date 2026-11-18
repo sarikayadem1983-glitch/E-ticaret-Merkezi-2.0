@@ -1,7 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2 } from 'lucide-react';
+import { Loader2, MailCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -11,7 +11,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ApiError, errorMessage, request } from '@/lib/api';
-import { hardNavigate } from '@/lib/navigation';
 
 const schema = z.object({
   tenantName: z.string().trim().min(2, 'En az 2 karakter').max(100),
@@ -53,6 +52,7 @@ const FIELDS: {
 
 export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
+  const [sentTo, setSentTo] = useState<string | null>(null);
   const form = useForm<Values>({ resolver: zodResolver(schema) });
   const { errors, isSubmitting } = form.formState;
 
@@ -60,7 +60,7 @@ export default function RegisterPage() {
     setError(null);
     try {
       await request('/api/auth/register', { method: 'POST', body: values });
-      hardNavigate('/dashboard');
+      setSentTo(values.email);
     } catch (e) {
       if (e instanceof ApiError) {
         for (const d of e.details) {
@@ -73,13 +73,39 @@ export default function RegisterPage() {
     }
   });
 
+  // INF-20: the same screen whether the address was new or already had an account.
+  if (sentTo) {
+    return (
+      <div role="status">
+        <MailCheck className="size-10 text-brand-navy" aria-hidden />
+        <h1 className="mt-4 text-2xl font-semibold text-brand-navy">
+          E-postanızı kontrol edin
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">{sentTo}</span> adresine
+          bir e-posta gönderdik. Hesabınız yeni oluşturulduysa e-postadaki
+          bağlantıyla adresinizi doğrulayın, sonra giriş yapın. Bu adresin zaten
+          bir hesabı varsa e-postada giriş ve şifre sıfırlama bağlantıları var.
+        </p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Seçtiğiniz mağaza kısa adı doluysa sonuna bir sayı eklenir; mağaza
+          adresinizi giriş yaptıktan sonra görürsünüz.
+        </p>
+        <Button asChild variant="brand" className="mt-8 h-10 w-full">
+          <Link href="/login">Giriş sayfasına git</Link>
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <>
       <h1 className="text-2xl font-semibold text-brand-navy">
         Mağazanızı oluşturun
       </h1>
       <p className="mt-1.5 mb-8 text-sm text-muted-foreground">
-        Hesabınız oluşturulur ve mağaza sahibi olarak giriş yaparsınız.
+        Hesabınız oluşturulur; e-postanızı doğruladıktan sonra mağaza sahibi
+        olarak giriş yaparsınız.
       </p>
       <form onSubmit={onSubmit} noValidate className="space-y-4">
         {error && (

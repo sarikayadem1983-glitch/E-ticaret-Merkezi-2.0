@@ -113,6 +113,21 @@ describe('SessionManager', () => {
     await expect(manager.resolve(sid)).rejects.toBeInstanceOf(SessionUnavailableError);
   });
 
+  it('takes over the refresh when the lock holder releases it without refreshing (INF-19)', async () => {
+    // A holder that decided no refresh was needed (or failed) frees the lock without a
+    // new version. A waiter must not wait for a version that never comes: it retries the
+    // lock and refreshes itself, so the session stays open.
+    const refresh = vi.fn().mockResolvedValue(ok(1));
+    const sid = await store.create(expired({ accessExpiresAt: Date.now() + 600_000 }));
+    const stale = (await store.get(sid))!;
+    const holder = await store.lock(sid, 10_000);
+    setTimeout(() => void store.unlock(sid, holder!), 150);
+    const manager = new SessionManager(store, refresh, { waitMs: 2000 });
+    const session = await manager.forceRefresh(sid, stale);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(session?.accessToken).toBe('access-1');
+  });
+
   describe('send (per-request revocation)', () => {
     const fresh = () => expired({ accessExpiresAt: Date.now() + 600_000 });
     const json = (status: number, body: unknown) =>

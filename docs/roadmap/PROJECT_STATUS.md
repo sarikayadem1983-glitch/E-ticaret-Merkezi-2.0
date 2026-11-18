@@ -318,7 +318,7 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 | R-06 | Yüksek | Tenant izolasyonu yeni modüllerde ihlal edilebilir (her yeni tablo/sorgu, kuyruk job'ları, ai-engine istekleri) | Prisma eklentisi + izin listesi testi var; job'lar için yok | INF-09, her modülde S testleri, USR-T14 |
 | R-07 | Yüksek | Prod ağ/TLS/proxy yapılandırması yanlışsa IP rate limit herkesi birlikte engeller veya backend internete açılır | Prod yok | INF-17 |
 | R-08 | Orta | BFF `forceRefresh` `stillNeeded` yarışı: eşzamanlı isteklerde oturum kapanabilir (kabul edilmiş, düzeltilmedi; MVP'den B'ye ertelendi, pilotta kabul edilmiş risk) | Açık | INF-19 |
-| R-09 | Orta | Kayıtta `409` yanıtı e-postanın kayıtlı olduğunu sızdırır (kullanıcı numaralandırma) | Açık | INF-20 |
+| R-09 | Orta | Kayıtta `409` yanıtı e-postanın kayıtlı olduğunu sızdırır (kullanıcı numaralandırma) | Kapanıyor (INF-20 PR; merge sonrası kapanır) | INF-20 |
 | R-10 | Orta | CSP `script-src 'unsafe-inline'` | Açık | INF-16 |
 | R-11 | Orta | CI var (PR #11); zorunlu kontrol (branch protection) henüz açık değil — depo ayarı, kullanıcı | Kısmen | INF-10 + depo ayarı |
 | R-12 | Orta | (Kapandı: 2026-10-30 dev `f010233`'e geçti) Dev ortamı `main`'in gerisinde | Kapandı | — |
@@ -405,3 +405,4 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 | 2026-11-14 | ORD-01 → DONE-MERGED (merge `93c03b1`, dev `93c03b1`, kullanıcı onayı) | [#42](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/42) | PR CI ✓; izole prova ok; dev smoke 21/21 | dev `93c03b1` |
 | 2026-11-14 | ORD-01 → DONE-PR | [#42](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/42) | yerel: unit 353/353; izole `tm_e2e_orders` e2e 421/422 (1 skip Mailpit); migration testi 3/3; lint ok, build ok; bağımsız CRITICAL inceleme 2 tur → APPROVE (kalan 2 Düşük: içe alımda tutar sapma uyarısı, `channel_discount_total` negatif test vakası) | yok; migration dev DB'ye uygulanmadı |
 | 2026-11-14 | INT-03 → DONE-MERGED (merge `65fcf85`, dev `65fcf85`, kullanıcı onayı) | [#40](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/40) | PR CI ✓; dev smoke 21/21 | dev `65fcf85` |
+| 2026-11-15 | IMP-01 ek: .xlsx içe aktarma (tarayıcıda exceljs 4.4.0 → mevcut CSV doğrulaması; kullanıcı kararı 2026-11-15) → PR | (bu PR) | yerel: frontend unit 206/206 (8 yeni), lint ok (1 eski uyarı), typecheck ok | yok |

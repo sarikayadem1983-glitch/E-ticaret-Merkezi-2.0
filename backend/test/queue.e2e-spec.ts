@@ -15,7 +15,12 @@ import { QueueService } from './../src/queue/queue.service.js';
 import { defineJob, type JobContext } from './../src/queue/queue.types.js';
 import { TenantContext } from './../src/tenancy/tenant-context.js';
 import { TenantsService } from './../src/tenants/tenants.service.js';
-import { createTestApp, ownerPool, purgeTenants } from './helpers.js';
+import {
+  createTestApp,
+  ownerPool,
+  purgeTenants,
+  registerOwner,
+} from './helpers.js';
 
 const PASSWORD = 'Correct-Horse-9';
 
@@ -50,16 +55,13 @@ describe('Queue (e2e)', () => {
 
   async function register(slug: string, companies: number) {
     const token = (
-      await http()
-        .post('/api/v1/auth/register')
-        .send({
-          tenantName: `Mağaza ${slug}`,
-          tenantSlug: slug,
-          name: 'Sahip',
-          email: `${slug}@test.local`,
-          password: PASSWORD,
-        })
-        .expect(201)
+      await registerOwner(app, {
+        tenantName: `Mağaza ${slug}`,
+        tenantSlug: slug,
+        name: 'Sahip',
+        email: `${slug}@test.local`,
+        password: PASSWORD,
+      })
     ).body.data.accessToken as string;
     for (let i = 0; i < companies; i++) {
       await http()
