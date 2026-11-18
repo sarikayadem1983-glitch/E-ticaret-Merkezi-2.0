@@ -3,7 +3,7 @@ import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { isValidVkn } from './../src/companies/tax-number.js';
-import { createTestApp, purgeTenants } from './helpers.js';
+import { createTestApp, purgeTenants, registerOwner } from './helpers.js';
 
 const PASSWORD = 'Correct-Horse-9';
 
@@ -33,16 +33,13 @@ describe('Stock transfer and count (e2e, INV-04)', () => {
   const bearer = (t: string) => ({ Authorization: `Bearer ${t}` });
   const register = async (slug: string) =>
     (
-      await http()
-        .post('/api/v1/auth/register')
-        .send({
-          tenantName: `Mağaza ${slug}`,
-          tenantSlug: slug,
-          name: 'Sahip',
-          email: `${slug}@test.local`,
-          password: PASSWORD,
-        })
-        .expect(201)
+      await registerOwner(app, {
+        tenantName: `Mağaza ${slug}`,
+        tenantSlug: slug,
+        name: 'Sahip',
+        email: `${slug}@test.local`,
+        password: PASSWORD,
+      })
     ).body.data.accessToken as string;
   const company = async () =>
     (
@@ -83,15 +80,12 @@ describe('Stock transfer and count (e2e, INV-04)', () => {
     quantity: number,
     token = tokenA,
   ) =>
-    http()
-      .post('/api/v1/stock-transfers')
-      .set(bearer(token))
-      .send({
-        fromWarehouseId: from,
-        toWarehouseId: to,
-        variantId: variant,
-        quantity,
-      });
+    http().post('/api/v1/stock-transfers').set(bearer(token)).send({
+      fromWarehouseId: from,
+      toWarehouseId: to,
+      variantId: variant,
+      quantity,
+    });
   const count = (warehouseId: string, counted: number) =>
     http()
       .post('/api/v1/stock-counts')

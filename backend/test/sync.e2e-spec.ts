@@ -26,6 +26,7 @@ import {
   purgeTenants,
   seedMember,
   systemRoleId,
+  registerOwner,
 } from './helpers.js';
 
 const PASSWORD = 'Correct-Horse-9';
@@ -75,16 +76,13 @@ describe('Sync engine (e2e, INT-02)', () => {
 
   const register = async (slug: string) =>
     (
-      await http()
-        .post('/api/v1/auth/register')
-        .send({
-          tenantName: `Mağaza ${slug}`,
-          tenantSlug: slug,
-          name: 'Sahip',
-          email: `${slug}@test.local`,
-          password: PASSWORD,
-        })
-        .expect(201)
+      await registerOwner(app, {
+        tenantName: `Mağaza ${slug}`,
+        tenantSlug: slug,
+        name: 'Sahip',
+        email: `${slug}@test.local`,
+        password: PASSWORD,
+      })
     ).body.data.accessToken as string;
   const tenantOf = async (token: string) =>
     (await http().get('/api/v1/auth/me').set(bearer(token))).body.data

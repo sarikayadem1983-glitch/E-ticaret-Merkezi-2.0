@@ -38,6 +38,33 @@ export function passwordResetMail(url: string, expiresAt: Date): RecoveryMail {
   };
 }
 
+/**
+ * INF-20: someone registered with an address that already has an account. Sent
+ * to the owner instead of an error on the page, so the page reveals nothing.
+ */
+export function accountExistsMail(
+  loginUrl: string,
+  resetUrl: string,
+): RecoveryMail {
+  return {
+    subject: 'Ticaret Merkezi kayıt denemesi',
+    text: [
+      'Bu e-posta adresiyle Ticaret Merkezi’ne yeniden kayıt olunmaya çalışıldı.',
+      'Adresinizin zaten bir hesabı var; yeni hesap veya mağaza açılmadı.',
+      '',
+      `Giriş yapmak için: ${loginUrl}`,
+      `Şifrenizi unuttuysanız: ${resetUrl}`,
+      'Bu denemeyi siz yapmadıysanız e-postayı yok sayın; hesabınızda bir şey değişmedi.',
+    ].join('\n'),
+    html: [
+      '<p>Bu e-posta adresiyle Ticaret Merkezi’ne yeniden kayıt olunmaya çalışıldı.</p>',
+      '<p>Adresinizin zaten bir hesabı var; yeni hesap veya mağaza açılmadı.</p>',
+      `<p><a href="${escapeHtml(loginUrl)}">Giriş yap</a> · <a href="${escapeHtml(resetUrl)}">Şifremi unuttum</a></p>`,
+      '<p>Bu denemeyi siz yapmadıysanız e-postayı yok sayın; hesabınızda bir şey değişmedi.</p>',
+    ].join('\n'),
+  };
+}
+
 /** E-mail verification message. */
 export function emailVerifyMail(url: string, expiresAt: Date): RecoveryMail {
   return {

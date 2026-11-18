@@ -12,6 +12,7 @@ import {
   purgeTenants,
   seedMember,
   systemRoleId,
+  registerOwner,
 } from './helpers.js';
 
 const PASSWORD = 'Correct-Horse-9';
@@ -52,16 +53,13 @@ describe('Channel accounts API (e2e, INT-01)', () => {
 
   const register = async (slug: string) =>
     (
-      await http()
-        .post('/api/v1/auth/register')
-        .send({
-          tenantName: `Mağaza ${slug}`,
-          tenantSlug: slug,
-          name: 'Sahip',
-          email: `${slug}@test.local`,
-          password: PASSWORD,
-        })
-        .expect(201)
+      await registerOwner(app, {
+        tenantName: `Mağaza ${slug}`,
+        tenantSlug: slug,
+        name: 'Sahip',
+        email: `${slug}@test.local`,
+        password: PASSWORD,
+      })
     ).body.data.accessToken as string;
 
   const company = async (token: string) =>

@@ -1,9 +1,11 @@
-import type { Type } from '@nestjs/common';
+import type { INestApplication, Type } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { config } from 'dotenv';
 import pg from 'pg';
+import request from 'supertest';
 import { AppModule } from './../src/app.module.js';
+import { AuthService } from './../src/auth/auth.service.js';
 import {
   AUTH_RATE_LIMITS,
   type AuthRateLimits,
@@ -94,6 +96,12 @@ export async function purgeTenants(slugs: string[]): Promise<void> {
           ids,
         ]);
       }
+      // INF-20: registration issues an e-mail verification token.
+      await client.query(
+        `DELETE FROM user_tokens t WHERE t.user_id = ANY($1::uuid[])
+         AND NOT EXISTS (SELECT 1 FROM tenant_memberships m WHERE m.user_id = t.user_id)`,
+        [users.rows.map((r) => r.id)],
+      );
       await client.query(
         `DELETE FROM users u WHERE u.id = ANY($1::uuid[])
          AND NOT EXISTS (SELECT 1 FROM tenant_memberships m WHERE m.user_id = u.id)`,
@@ -190,6 +198,7 @@ export const RELAXED_RATE_LIMITS: AuthRateLimits = {
   loginPerAccountIp: { free: 1_000_000, baseMs: 1, maxMs: 1, windowMs: 60_000 },
   loginPerAccount: { free: 1_000_000, baseMs: 1, maxMs: 1, windowMs: 60_000 },
   registerPerIp: { limit: 1_000_000, windowMs: 60_000 },
+  registerPerAccount: { limit: 1_000_000, windowMs: 60_000 },
   refreshPerIp: { limit: 1_000_000, windowMs: 60_000 },
   invitationLookupPerIp: { limit: 1_000_000, windowMs: 60_000 },
   invitationAcceptPerIp: { limit: 1_000_000, windowMs: 60_000 },
@@ -234,4 +243,33 @@ export async function createTestApp(
   );
   await app.init();
   return app;
+}
+
+/**
+ * INF-20: registration answers 202 with no session and finishes after the
+ * response. Registers, waits for that work, then signs in, so a test gets the
+ * new owner's session (`res.body.data`) as before.
+ */
+export async function registerOwner(
+  app: INestApplication,
+  body: {
+    tenantName: string;
+    tenantSlug: string;
+    name: string;
+    email: string;
+    password: string;
+  },
+  headers: Record<string, string> = {},
+): Promise<request.Response> {
+  await request(app.getHttpServer())
+    .post('/api/v1/auth/register')
+    .set(headers)
+    .send(body)
+    .expect(202);
+  await app.get(AuthService).settled();
+  return request(app.getHttpServer())
+    .post('/api/v1/auth/login')
+    .set(headers)
+    .send({ email: body.email, password: body.password })
+    .expect(200);
 }

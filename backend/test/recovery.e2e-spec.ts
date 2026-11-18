@@ -7,7 +7,12 @@ import {
   type MailTransport,
   type OutgoingMail,
 } from './../src/mail/mail.transport.js';
-import { createTestApp, ownerPool, purgeTenants } from './helpers.js';
+import {
+  createTestApp,
+  ownerPool,
+  purgeTenants,
+  registerOwner,
+} from './helpers.js';
 
 const PASSWORD = 'Correct-Horse-9';
 const NEW_PASSWORD = 'Battery-Staple-7';
@@ -65,16 +70,13 @@ describe('Password reset and e-mail verification (e2e, USR-19)', () => {
       { APP_ORIGIN: 'http://localhost:3000' },
       { providers: [{ provide: MAIL_TRANSPORT, useValue: mail }] },
     );
-    const res = await http()
-      .post('/api/v1/auth/register')
-      .send({
-        tenantName: `Mağaza ${slug}`,
-        tenantSlug: slug,
-        name: 'Sahip',
-        email,
-        password: PASSWORD,
-      })
-      .expect(201);
+    const res = await registerOwner(app, {
+      tenantName: `Mağaza ${slug}`,
+      tenantSlug: slug,
+      name: 'Sahip',
+      email,
+      password: PASSWORD,
+    });
     refresh = res.body.data.refreshToken;
     access = res.body.data.accessToken;
   });
