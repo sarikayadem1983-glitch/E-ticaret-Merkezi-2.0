@@ -10,6 +10,7 @@ import {
   purgeTenants,
   seedMember,
   systemRoleId,
+  registerOwner,
 } from './helpers.js';
 
 const PASSWORD = 'Correct-Horse-9';
@@ -66,16 +67,13 @@ describe('Users API (e2e)', () => {
   const bearer = (t: string) => ({ Authorization: `Bearer ${t}` });
 
   const register = async (slug: string): Promise<Session> => {
-    const res = await http()
-      .post('/api/v1/auth/register')
-      .send({
-        tenantName: `Mağaza ${slug}`,
-        tenantSlug: slug,
-        name: 'Sahip',
-        email: `${slug}@test.local`,
-        password: PASSWORD,
-      })
-      .expect(201);
+    const res = await registerOwner(app, {
+      tenantName: `Mağaza ${slug}`,
+      tenantSlug: slug,
+      name: 'Sahip',
+      email: `${slug}@test.local`,
+      password: PASSWORD,
+    });
     const me = await http()
       .get('/api/v1/auth/me')
       .set(bearer(res.body.data.accessToken))

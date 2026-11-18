@@ -18,7 +18,11 @@ import {
 import { MailService } from '../mail/mail.service.js';
 import { MembershipsRepository } from '../memberships/memberships.repository.js';
 import { TenantContext } from '../tenancy/tenant-context.js';
-import { emailVerifyMail, passwordResetMail } from '../auth/recovery-mail.js';
+import {
+  accountExistsMail,
+  emailVerifyMail,
+  passwordResetMail,
+} from '../auth/recovery-mail.js';
 
 export type TokenPurpose = 'password_reset' | 'email_verify';
 
@@ -142,6 +146,15 @@ export class RecoveryService {
     );
     await this.mail.send({ to: user.email, ...msg });
     await this.closeOthers(user.id, 'email_verify', id);
+  }
+
+  /** INF-20: tells the owner of an existing account that someone tried to register with it. */
+  async notifyExistingAccount(email: string): Promise<void> {
+    const msg = accountExistsMail(
+      `${this.config.appOrigin}/login`,
+      `${this.config.appOrigin}/forgot-password`,
+    );
+    await this.mail.send({ to: email, ...msg });
   }
 
   /**

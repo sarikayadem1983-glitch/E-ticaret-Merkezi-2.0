@@ -1,8 +1,6 @@
 import { backendFetch } from '@/server/backend-client';
 import { checkCsrf, clientContext, readJsonBody, relay } from '@/server/http';
-import type { TokenPair } from '@/server/session-manager';
-import { readyRedis } from '@/server/redis';
-import { startSession, withSessionErrors } from '@/server/session';
+import { withSessionErrors } from '@/server/session';
 
 const FIELDS = [
   'tenantName',
@@ -12,7 +10,11 @@ const FIELDS = [
   'password',
 ] as const;
 
-/** Creates a store and its owner, then signs in. The backend validates every field. */
+/**
+ * Asks the backend to create a store and its owner (INF-20). The answer is the
+ * same for a new or a taken address and starts no session: the user reads the
+ * e-mail and then signs in. The backend validates every field.
+ */
 export async function POST(req: Request) {
   return withSessionErrors(async () => {
     const csrf = checkCsrf(req);
@@ -22,24 +24,15 @@ export async function POST(req: Request) {
     const input = (parsed.body ?? {}) as Record<string, unknown>;
     const body = Object.fromEntries(FIELDS.map((f) => [f, input[f]]));
 
-    // Fail before the backend call if sessions cannot be stored.
-    await readyRedis();
-    const client = clientContext(req);
     const res = await backendFetch('auth/register', {
       method: 'POST',
       body,
-      client,
+      client: clientContext(req),
     });
     if (!res.ok) return relay(res);
-
-    const { data } = (await res.json()) as { data: TokenPair };
-    const failed = await startSession(data, client);
-    return (
-      failed ??
-      Response.json(
-        { data: { ok: true } },
-        { status: 201, headers: { 'Cache-Control': 'no-store' } },
-      )
+    return Response.json(
+      { data: { status: 'check-email' } },
+      { status: 202, headers: { 'Cache-Control': 'no-store' } },
     );
   });
 }

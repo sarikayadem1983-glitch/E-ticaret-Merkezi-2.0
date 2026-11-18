@@ -3,6 +3,7 @@ import { INestApplication } from '@nestjs/common';
 import { hash } from '@node-rs/argon2';
 import { ROLE_CATALOG } from './../src/access/roles.catalog.js';
 import { AuditService } from './../src/audit/audit.service.js';
+import { AuthService } from './../src/auth/auth.service.js';
 import { TokenService } from './../src/auth/token.service.js';
 import { isValidVkn } from './../src/companies/tax-number.js';
 import request from 'supertest';
@@ -23,6 +24,7 @@ import {
   purgeTenants,
   seedMember,
   systemRoleId,
+  registerOwner,
 } from './helpers.js';
 
 const PASSWORD = 'Sifre-12345';
@@ -58,16 +60,13 @@ describe('API (e2e)', () => {
     prisma = app.get(PRISMA);
 
     for (const key of ['a', 'b'] as const) {
-      const res = await http()
-        .post('/api/v1/auth/register')
-        .send({
-          tenantName: `Mağaza ${key}`,
-          tenantSlug: tenants[key].slug,
-          name: `Sahip ${key}`,
-          email: tenants[key].email,
-          password: PASSWORD,
-        })
-        .expect(201);
+      const res = await registerOwner(app, {
+        tenantName: `Mağaza ${key}`,
+        tenantSlug: tenants[key].slug,
+        name: `Sahip ${key}`,
+        email: tenants[key].email,
+        password: PASSWORD,
+      });
       tokens[key] = res.body.data;
     }
   });
@@ -174,8 +173,8 @@ describe('API (e2e)', () => {
           expect(res.body.error.details.length).toBeGreaterThan(0);
         }));
 
-    it('returns 409 for a duplicate email', () =>
-      http()
+    it('answers a taken email like a new one (INF-20)', async () => {
+      const res = await http()
         .post('/api/v1/auth/register')
         .send({
           tenantName: 'Başka',
@@ -184,9 +183,12 @@ describe('API (e2e)', () => {
           email: tenants.a.email,
           password: PASSWORD,
         })
-        .expect(409));
+        .expect(202);
+      expect(res.body).toEqual({ data: { status: 'check-email' } });
+      await app.get(AuthService).settled();
+    });
 
-    it('does not leave a tenant behind when registration fails', async () => {
+    it('does not create a tenant for a taken email', async () => {
       const orphan = await TenantContext.runAsSystem(() =>
         prisma.tenant.findUnique({ where: { slug: `c-${run}` } }),
       );
@@ -551,16 +553,13 @@ describe('API (e2e)', () => {
     };
 
     beforeAll(async () => {
-      const res = await http()
-        .post('/api/v1/auth/register')
-        .send({
-          tenantName: `Fikstür ${run}`,
-          tenantSlug: fx.slug,
-          name: 'Fikstür Sahip',
-          email: fx.email,
-          password: PASSWORD,
-        })
-        .expect(201);
+      const res = await registerOwner(app, {
+        tenantName: `Fikstür ${run}`,
+        tenantSlug: fx.slug,
+        name: 'Fikstür Sahip',
+        email: fx.email,
+        password: PASSWORD,
+      });
       fxTenant = claims(res.body.data.accessToken).tid;
       fxAdmin = await systemRoleId(fxTenant, 'admin');
     });
@@ -850,16 +849,13 @@ describe('API (e2e)', () => {
       const d = await newTenant(sw.d);
       tenantC = c.id;
       tenantD = d.id;
-      const e = await http()
-        .post('/api/v1/auth/register')
-        .send({
-          tenantName: `Yabancı ${run}`,
-          tenantSlug: sw.e,
-          name: 'Yabancı',
-          email: `${sw.e}@test.local`,
-          password: PASSWORD,
-        })
-        .expect(201);
+      const e = await registerOwner(app, {
+        tenantName: `Yabancı ${run}`,
+        tenantSlug: sw.e,
+        name: 'Yabancı',
+        email: `${sw.e}@test.local`,
+        password: PASSWORD,
+      });
       tenantE = claims(e.body.data.accessToken).tid;
       userId = await seedMember({
         email,

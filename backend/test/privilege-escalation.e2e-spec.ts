@@ -17,6 +17,7 @@ import {
   purgeTenants,
   seedMember,
   systemRoleId,
+  registerOwner,
 } from './helpers.js';
 
 /**
@@ -78,16 +79,13 @@ describe('Privilege escalation and tenant isolation (e2e)', () => {
 
   const register = async (slug: string) => {
     const email = `${slug}@test.local`;
-    const res = await http()
-      .post('/api/v1/auth/register')
-      .send({
-        tenantName: `Mağaza ${slug}`,
-        tenantSlug: slug,
-        name: 'Sahip',
-        email,
-        password: PASSWORD,
-      })
-      .expect(201);
+    const res = await registerOwner(app, {
+      tenantName: `Mağaza ${slug}`,
+      tenantSlug: slug,
+      name: 'Sahip',
+      email,
+      password: PASSWORD,
+    });
     return session(email, res.body.data);
   };
 
