@@ -27,6 +27,20 @@ export class UsersController {
     return { data: await this.users.list() };
   }
 
+  @Get(':userId')
+  @RequirePermissions('users:read')
+  async detail(
+    @Param(
+      'userId',
+      new ParseUUIDPipe({
+        errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
+      }),
+    )
+    userId: string,
+  ) {
+    return { data: await this.users.detail(userId) };
+  }
+
   @Put(':userId/access')
   @RequirePermissions('users:manage')
   async updateAccess(

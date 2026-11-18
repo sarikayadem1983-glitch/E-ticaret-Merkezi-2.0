@@ -304,3 +304,7 @@ Pazaryeri API anahtarları `channel_accounts` tablosunda **zarf şifrelemesiyle*
 - Hata gövdesi değişmedi (`{ error: { code, message, details } }`); istek kimliği yalnızca yanıt başlığında — hesap varlığını sızdırmama testleri (birebir aynı gövde) korunur.
 - Harici hata izleme (Sentry vb.) kurulmadı: dış servis ve hesap gerektirir (kullanıcı kararı).
 
+
+### USR-T11b profil okuma
+
+`GET /users` ve `GET /users/:userId`, `users:read` izni ister; global guard hedef sorgusundan önce çalışır. Detay global kullanıcı tablosunda ID aramaz; MembershipsRepository mevcut tenant'ın üyeliği üzerinden yalnız id/ad/e-posta/lastLoginAt ve üyelik durumunu seçer. Olmayan/yabancı kullanıcı aynı 404 NOT_FOUND alır; yetkisiz kullanıcı iki durumda da 403 alır. UsersService açık alan eşlemesiyle döner; parola/hash/token/auth_version ve diğer tenant rolleri dönmez. Son giriş global hesap alanıdır; giriş yapılan mağaza, IP ve oturum içermez. Okuma yeni audit veya DB yazısı üretmez.

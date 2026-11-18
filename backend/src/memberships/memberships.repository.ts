@@ -6,6 +6,12 @@ import {
 import type { PrismaTx } from '../database/prisma.types.js';
 import { TenantContext } from '../tenancy/tenant-context.js';
 
+/** Public member profile only; no credentials, sessions or foreign memberships. */
+const PROFILE_FIELDS = {
+  status: true,
+  user: { select: { id: true, name: true, email: true, lastLoginAt: true } },
+} as const;
+
 export interface ActiveMembership {
   tenantId: string;
   tenantName: string;
@@ -101,11 +107,16 @@ export class MembershipsRepository {
   /** Tenant context: every member of the current tenant with the public profile. */
   listForTenant() {
     return this.prisma.tenantMembership.findMany({
-      select: {
-        status: true,
-        user: { select: { id: true, name: true, email: true } },
-      },
+      select: PROFILE_FIELDS,
       orderBy: [{ joinedAt: 'asc' }, { userId: 'asc' }],
+    });
+  }
+
+  /** Tenant context: the same limited profile as the list, or null. */
+  findForTenant(userId: string) {
+    return this.prisma.tenantMembership.findFirst({
+      where: { userId },
+      select: PROFILE_FIELDS,
     });
   }
 

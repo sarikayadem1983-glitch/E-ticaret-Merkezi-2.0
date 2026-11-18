@@ -29,6 +29,9 @@ const ENTITY = 'TenantMembership';
 
 type Status = 'active' | 'inactive';
 type CompanyRole = { companyId: string; roleKey: RoleKey };
+type MemberProfile = Awaited<
+  ReturnType<MembershipsRepository['listForTenant']>
+>[number];
 
 /** Not a member of this tenant: the same answer for unknown ids and other tenants' users. */
 const notFound = () =>
@@ -66,7 +69,16 @@ export class UsersService {
   ) {}
 
   async list() {
-    const members = await this.memberships.listForTenant();
+    return this.presentMembers(await this.memberships.listForTenant());
+  }
+
+  async detail(userId: string) {
+    const member = await this.memberships.findForTenant(userId);
+    if (!member) throw notFound();
+    return (await this.presentMembers([member]))[0];
+  }
+
+  private async presentMembers(members: MemberProfile[]) {
     const ids = members.map((m) => m.user.id);
     const access = await this.access.accessOf(ids);
     const names = await this.companies.namesByIds([
@@ -81,6 +93,7 @@ export class UsersService {
       name: m.user.name,
       email: m.user.email,
       status: m.status,
+      lastLoginAt: m.user.lastLoginAt,
       access: this.view(access.get(m.user.id)!, names),
     }));
   }
