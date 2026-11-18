@@ -1,6 +1,6 @@
 # Proje Durumu
 
-Son güncelleme: 2026-11-14 (`main` @ `cb07e60` dev'e deploy edildi) · Kaynak: `origin/main` @ `cb07e60` · Güncelleme kuralları: `AGENTS.md` → "Yol haritası ve durum takibi".
+Son güncelleme: 2026-11-15 (USR-T9, Sürüm B, PR #74) · Dalın başlangıcı: `origin/main` @ `f2cd4a4` · Dev kaydı değiştirilmedi · Güncelleme kuralları: `AGENTS.md` → "Yol haritası ve durum takibi".
 
 ## 1. Özet
 
@@ -10,9 +10,10 @@ Son güncelleme: 2026-11-14 (`main` @ `cb07e60` dev'e deploy edildi) · Kaynak: 
 | Tamamlanan | 55 (%38,7) — 55 `DONE-MERGED` (hepsi dev'de) |
 | BLOCKED | 1 — USR-18 (T16 + Aşama 2 migration onayı) |
 | Sürüm A (Trendyol-only MVP) ilerleme | 52 / 59 görev merge edildi ve dev'de. Kalan 7: INF-12 → IMG-01 (yerel MinIO kararı bekliyor), INT-TY-01…03 ve SHP-02 (Trendyol stage/IP erişimi, BLK-01), OPS-03 (prod yedekleme/PITR altyapısı). Hepsi dış karar/erişime bağlı |
-| Sürüm B / C | 62 / 21 görev |
-| Açık PR | Yok |
-| `origin/main` | `cb07e60` (PR #71 merge, INV-04). PR CI ✓ (backend, frontend) |
+| Sürüm B / C | 62 / 21 görev. B: 3 DONE-MERGED, 1 DONE-PR (USR-T9), 1 BLOCKED, 57 PLANNED; C: 21 PLANNED |
+| Açık PR | [#74 USR-T9](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/74): markalı davet e-postası, STANDARD öz-inceleme; merge/deploy yok |
+| `origin/main` | `f2cd4a4` (dal başlangıcında GitHub ile doğrulandı). Bu PR main'i değiştirmedi |
+| USR-T9 testleri | Kod `df54a82`, CI [43745748422](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/actions/runs/43745748422): backend unit 572/572, e2e 467 geçti + 1 Mailpit skip, frontend 198/198; build/lint yeşil. Yerel: mail/davet 30/30, tam unit 572/572, typecheck ve lint çıkış 0. Dev DB kullanılmadı |
 | Dev ortamı | `cb07e60` (2026-11-14, kullanıcı onayıyla, bkz. §3t). Önceki `dc64348` (bkz. §3s). Önceki `70bae17` (2026-11-13, bkz. §3d). Backend `node dist/main` (WMI ile ayrık). Smoke: `tm-backups/smoke-70bae17.log`. Önceki: `736cb40` (bkz. §3c) |
 | Dev DB şeması | Tüm migration'lar uygulandı; son `20261113120000_sync_engine` (INT-02, 2026-11-13, kullanıcı onayıyla; yedek `ticaret_merkezi-20261113-210949.dump`, izole prova ok). Önceki `20261112210000_user_tokens` (USR-19, kullanıcı onayıyla; yedek `ticaret_merkezi-20261112-210146.dump`; `migrate status` 2026-11-13: güncel). Önceki `20261112190000_channel_mapping` (CAT-06, 2026-11-12, kullanıcı onayıyla; yedek `ticaret_merkezi-20261112-184613.dump` + izole prova 10/10). Aşama 2 (`migrations-pending/`) uygulanmadı |
 | Son testler (`main` @ `0437c16`, CI run 41096842266) | backend unit 283/283, e2e 331/332 (1 skip: `mail.e2e-spec.ts`, Mailpit); frontend unit 124/124. Önceki tam tur (`8fc7ae3`, CI run 41053467144): build, lint, typecheck ok. Playwright CI'da koşmuyor. Önceki yerel tam tur (`95b5bdb`): build ok; frontend 81/81, lint ok, typecheck ok, `next build` ok; Playwright 13/13 yalnızca `next dev` ile — `next start` (prod modu, http) 11/13: `APP_ORIGIN` https koruması, bkz. R-24 |
@@ -23,7 +24,7 @@ Son güncelleme: 2026-11-14 (`main` @ `cb07e60` dev'e deploy edildi) · Kaynak: 
 |---|---|---|---|
 | M01 INF | 11 / 20 | 55 | Hepsi dev'de |
 | OPS | 2 / 8 | 25 | OPS-08 (`63bbb94`), OPS-01 (`ce85f36`) |
-| M02 USR | 21 / 29 | 72 | Hepsi dev'de (USR-19, USR-19b dahil) |
+| M02 USR | 21 / 29 | 72 | Bu 21 görev dev'de (USR-19, USR-19b dahil); USR-T9 ayrıca PR #74'te, tamamlanan sayısına dahil değil |
 | M03 DSH | 2 / 3 | 67 | DSH-01 iskelet, DSH-02 KPI kartları (Sürüm B, öne alındı) dev'de |
 | M04 CAT | 6 / 6 | 100 | Hepsi dev'de; CAT-06 backend dilimi (UI: CAT-06b) |
 | M08 INT | 3 / 25 | 12 | INT-01 (`7b3c0b9`), INT-02 (`70bae17`), INT-03 (`65fcf85`) dev'de |
@@ -271,7 +272,9 @@ Kullanıcı onayıyla, yalnızca dev ortamında (`localhost:5432/ticaret_merkezi
 
 **Geri dönüş:** kod için önceki sürümü yeniden başlatmak yeterli (eski kod yeni tabloları kullanmaz). Smoke testi katalogda satır oluşturduğundan `down.sql` artık kendini durdurur; şemayı geri almak için 1. adımdaki yedekten geri yükleme gerekir (yedekten sonraki dev verisi kaybolur).
 
-## 4. Sıradaki görevler (2026-11-14 itibarıyla)
+## 4. Sıradaki görevler (B akışı 2026-11-15; A listesi 2026-11-14)
+
+B geliştirmesi kullanıcı onayıyla A'dan bağımsız bir dalda başladı. İlk iş USR-T9, PR #74'te incelemeye hazırdır. Sonraki B işi seçilirken Claude'un aktif A dalı ve bağımlılıklar yeniden kontrol edilir; bu PR başka görev başlatmaz.
 
 | # | ID | Başlık | Engel / not |
 |---|---|---|---|
@@ -355,6 +358,7 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 
 | Tarih | Değişiklik | PR | Test | Deploy |
 |---|---|---|---|---|
+| 2026-11-15 | USR-T9 kalan B dilimi → DONE-PR; markalı davet HTML/düz metin şablonu. STANDARD öz-inceleme. Görev satırları tekilleştirildi: 142 toplam, 55 DONE-MERGED, 1 DONE-PR, 1 BLOCKED, 85 PLANNED; takvim yeniden hesaplanmadı | [#74](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/74) | kod `df54a82`, CI 43745748422: unit 572/572, e2e 467 geçti + 1 skip, frontend 198/198; build/lint yeşil. Yerel mail/davet 30/30, typecheck/lint temiz | yok; migration yok |
 | 2026-10-28 | INF-01…08, USR-01, USR-02, DSH-01 → DONE-MERGED | #1–#5 | — | dev |
 | 2026-10-29 | USR-T1…T6, USR-17 → DONE-PR | #6 | unit 184/184, e2e 165/165, fe 81/81 | yok (dev `eda38da`) |
 | 2026-10-29 | Yol haritası oluşturuldu | — | — | — |
