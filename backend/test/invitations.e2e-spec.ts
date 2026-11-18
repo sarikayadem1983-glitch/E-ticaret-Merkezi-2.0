@@ -666,6 +666,58 @@ describe('Invitations (e2e)', () => {
       expect(user.email_verified_at).not.toBeNull();
     });
 
+    it('refuses to replace an inactive owner or let an admin replace an inactive admin', async () => {
+      for (const key of ['owner', 'admin']) {
+        const address = email(`inactive-${key}`);
+        await seedMember({
+          email: address,
+          name: key,
+          passwordHash: await hash(PASSWORD),
+          memberships: [
+            {
+              tenantId: tenantA,
+              status: 'inactive',
+              roleId: await roleId(tenantA, key),
+            },
+          ],
+        });
+        const response = await inviteCompany(
+          key === 'owner' ? ownerA : adminA,
+          address,
+        ).expect(403);
+        expect(response.body.error.code).toBe(
+          key === 'owner' ? 'OWNER_IMMUTABLE' : 'ROLE_NOT_GRANTABLE',
+        );
+      }
+    });
+
+    it('re-checks protected access on accept and rolls back', async () => {
+      const address = email('protected-after-invite');
+      const userId = await seedMember({
+        email: address,
+        name: 'Eski',
+        passwordHash: await hash(PASSWORD),
+        memberships: [{ tenantId: tenantA, status: 'inactive' }],
+      });
+      await inviteCompany(adminA, address).expect(201);
+      const token = mail.tokenFor(address);
+      await sql(
+        'INSERT INTO user_roles (tenant_id,user_id,role_id,updated_at) VALUES ($1,$2,$3,now())',
+        [tenantA, userId, await roleId(tenantA, 'admin')],
+      );
+      await accept(token).expect(404);
+      const [row] = await sql<{ status: string }>(
+        'SELECT status FROM invitations WHERE token_hash=$1',
+        [sha256(token)],
+      );
+      expect(row.status).toBe('pending');
+      const [membership] = await sql<{ status: string }>(
+        'SELECT status FROM tenant_memberships WHERE tenant_id=$1 AND user_id=$2',
+        [tenantA, userId],
+      );
+      expect(membership.status).toBe('inactive');
+    });
+
     it('accept-as-current: the signed-in invitee accepts without a password (USR-T10b)', async () => {
       const to = email('as-current');
       await seedMember({
