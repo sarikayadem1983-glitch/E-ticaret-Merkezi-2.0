@@ -153,6 +153,9 @@ export class InvitationsService {
     // USR-T10b: an inactive membership is re-opened on accept; its old roles and
     // company access are replaced by the invitation's (the form warns the admin).
     const replacesInactiveMembership = membership?.status === 'inactive';
+    if (replacesInactiveMembership) {
+      await this.assertReplaceable(actor.sub, membership.userId, false);
+    }
 
     const roleIds = await this.access.systemRoleIds();
     const roleId = (key: RoleKey) => {
@@ -448,6 +451,14 @@ export class InvitationsService {
             userId,
           ]);
           if (locked.get(userId) !== 'inactive') throw invalid();
+          // Owner/admin access is never replaced by an invitation (re-checked here:
+          // the role may have changed after the invitation was sent).
+          await this.assertReplaceable(
+            invitation.invitedByUserId,
+            userId,
+            true,
+            tx,
+          );
           await this.memberships.setStatus(tx, userId, 'active');
           // Old roles and company access go; only the invitation's are granted.
           await this.access.removeAllRoles(tx, userId);
@@ -481,6 +492,34 @@ export class InvitationsService {
   }
 
   // ---- Internals --------------------------------------------------------
+
+  /**
+   * An inactive member's old access is replaced on accept. An owner's never is;
+   * an admin's only when the inviter is an owner. While accepting, the
+   * invitation is simply invalid (the transaction rolls back).
+   */
+  private async assertReplaceable(
+    actorId: string,
+    userId: string,
+    accepting: boolean,
+    tx?: PrismaTx,
+  ) {
+    const target = await this.access.tenantRoleKey(userId, tx);
+    if (target === 'owner') {
+      if (accepting) throw invalid();
+      throw new ForbiddenException({
+        code: 'OWNER_IMMUTABLE',
+        message: 'Sahibin rolü değiştirilemez',
+      });
+    }
+    if (target === 'admin') {
+      const actor = await this.access.tenantRoleKey(actorId, tx);
+      if (actor !== 'owner') {
+        if (accepting) throw invalid();
+        throw notGrantable();
+      }
+    }
+  }
 
   /** Exactly one of tenantRole and companyRoles (at least one company). */
   private requestedKeys(dto: CreateInvitationDto): { roleKey: RoleKey }[] {
