@@ -25,7 +25,7 @@ async function inviteThroughDialog(page: Page, email: string, company: string) {
   await page.goto('/users');
   await expect(page.getByRole('heading', { name: 'Kullanıcılar' })).toBeVisible();
   // The table is client data: once it shows, the page is hydrated.
-  await expect(page.getByText('(siz)')).toBeVisible();
+  await expect(page.getByText('(siz)').filter({ visible: true })).toBeVisible();
   await page.getByRole('button', { name: 'Kullanıcı davet et' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Email').fill(email);
@@ -203,6 +203,42 @@ test.describe('users and invitations', () => {
     await otherPage.getByRole('button', { name: 'Bu hesapla kabul et' }).click();
     await expect(otherPage.getByRole('heading', { name: 'Davet başka bir hesaba ait' })).toBeVisible();
     await expect(otherPage.getByRole('button', { name: 'Çıkış yap' })).toBeVisible();
+    await context.close();
+  });
+
+  test('role change in an open tab takes effect without signing out (USR-T15b)', async ({
+    page,
+    browser,
+  }) => {
+    await register(page, newAccount('role-owner'));
+    const company = `Rol Firması ${Date.now()}`;
+    const companyId = await createCompany(page, company);
+    const invitee = newAccount('rol').email;
+    const created = await bffPost(page, 'invitations', {
+      email: invitee,
+      companyRoles: [{ companyId, roleKey: 'operations' }],
+    });
+    expect(created.status()).toBe(201);
+    const { context, page: other } = await acceptAsNewAccount(browser, invitee);
+    const product = (name: string) =>
+      bffPost(other, 'products', { companyId, name, variants: [{ sku: `${name}-${Date.now()}` }] });
+    expect((await product('once')).status()).toBe(201);
+
+    const members = (await (await page.request.get('/api/bff/users')).json()) as {
+      data: { userId: string; email: string }[];
+    };
+    const userId = members.data.find((m) => m.email === invitee)!.userId;
+    const changed = await page.request.put(`/api/bff/users/${userId}/access`, {
+      headers: { Origin: new URL(page.url()).origin, 'x-tm-csrf': '1' },
+      data: { companyRoles: [{ companyId, roleKey: 'viewer' }] },
+    });
+    expect(changed.ok()).toBe(true);
+
+    // Same tab, same session: reading still works, writing no longer does.
+    expect((await product('sonra')).status()).toBe(403);
+    await other.goto('/companies');
+    await expect(other.getByRole('link', { name: company })).toBeVisible();
+    expect((await other.request.get('/api/session')).status()).toBe(200);
     await context.close();
   });
 

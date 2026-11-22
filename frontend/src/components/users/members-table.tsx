@@ -73,9 +73,43 @@ export function MembersTable({
     }
   };
 
+  /** Row menu, shared by the table (md and up) and the cards (phones). */
+  const actions = (m: Member) => {
+    const canEdit = editable(m, selfId, actorIsOwner);
+    const isOwner = 'tenantRole' in m.access && m.access.tenantRole === 'owner';
+    // An owner who is not the last active owner may be deactivated (backend decides).
+    const canToggle = m.userId !== selfId && (canEdit || (isOwner && actorIsOwner));
+    if (!canEdit && !canToggle) return null;
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-10 shrink-0"
+            aria-label={`${m.name} işlemleri`}
+            disabled={setActive.isPending}
+          >
+            <MoreHorizontal className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {canEdit && (
+            <DropdownMenuItem onSelect={() => setEditing(m)}>Erişimi düzenle</DropdownMenuItem>
+          )}
+          {canToggle && (
+            <DropdownMenuItem onSelect={() => toggle(m)}>
+              {m.status === 'active' ? 'Pasife al' : 'Aktifleştir'}
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  };
+
   return (
     <>
-      <Table>
+      <Table className="hidden md:table">
         <TableHeader>
           <TableRow>
             <TableHead className="pl-4">Ad soyad</TableHead>
@@ -89,11 +123,6 @@ export function MembersTable({
         </TableHeader>
         <TableBody>
           {members.map((m) => {
-            const canEdit = editable(m, selfId, actorIsOwner);
-            const isOwner =
-              'tenantRole' in m.access && m.access.tenantRole === 'owner';
-            // An owner who is not the last active owner may be deactivated (backend decides).
-            const canToggle = m.userId !== selfId && (canEdit || (isOwner && actorIsOwner));
             return (
               <TableRow key={m.userId}>
                 <TableCell className="pl-4 font-medium">
@@ -114,38 +143,35 @@ export function MembersTable({
                   <CompanyStatus active={m.status === 'active'} />
                 </TableCell>
                 <TableCell>
-                  {(canEdit || canToggle) && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`${m.name} işlemleri`}
-                          disabled={setActive.isPending}
-                        >
-                          <MoreHorizontal className="size-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {canEdit && (
-                          <DropdownMenuItem onSelect={() => setEditing(m)}>
-                            Erişimi düzenle
-                          </DropdownMenuItem>
-                        )}
-                        {canToggle && (
-                          <DropdownMenuItem onSelect={() => toggle(m)}>
-                            {m.status === 'active' ? 'Pasife al' : 'Aktifleştir'}
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
+                  {actions(m)}
                 </TableCell>
               </TableRow>
             );
           })}
         </TableBody>
       </Table>
+      <ul className="divide-y md:hidden" aria-label="Kullanıcı listesi">
+        {members.map((m) => (
+          <li key={m.userId} className="flex items-start justify-between gap-3 p-4">
+            <div className="min-w-0 space-y-1">
+              <p className="font-medium break-words">
+                {m.name}
+                {m.userId === selfId && (
+                  <span className="ml-2 text-xs text-muted-foreground">(siz)</span>
+                )}
+              </p>
+              <p className="text-sm break-all text-muted-foreground">{m.email}</p>
+              <ul className="space-y-0.5 text-sm break-words">
+                {describeAccess(m.access).map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+              <CompanyStatus active={m.status === 'active'} />
+            </div>
+            {actions(m)}
+          </li>
+        ))}
+      </ul>
       {editing && (
         <EditAccessDialog
           member={editing}
