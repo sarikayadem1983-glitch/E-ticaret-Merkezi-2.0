@@ -26,17 +26,27 @@ DUMP="$DIR/$BASE.dump"
 TAR="$DIR/$BASE.objects.tar"
 [ -f "$DUMP" ] && [ -f "$TAR" ] || die "set eksik (.dump ve .objects.tar gerekli)"
 [ -f "$REPO/backend/dist/main.js" ] || die "backend derlenmemiş"
+[ -z "$(find "$REPO/backend/src" -name '*.ts' -newer "$REPO/backend/dist/main.js" | head -n1)" ] || die "backend/dist kaynaktan eski: npm run build"
 
 ID="tm-drill-$$"
 PG="$ID-pg"; S3="$ID-s3"; REDIS="$ID-redis"; VOL="$ID-vol"
+LABEL="tm-drill=1"
+# A killed run leaves real data behind; never start on top of it unnoticed.
+LEFT="$(docker ps -aq --filter "label=$LABEL"; docker volume ls -q --filter "label=$LABEL")"
+[ -z "$LEFT" ] || die "önceki tatbikattan kalan konteyner/birim var (başka tatbikat sürmüyorsa silin): $(echo $LEFT)"
 BE=""
 TMP="$(mktemp -d)"
 cleanup() {
   set +e
-  [ -z "$BE" ] || kill "$BE" 2>/dev/null
+  if [ -n "$BE" ]; then
+    # Git Bash: the child is a native process; end it by its Windows PID.
+    if [ -r "/proc/$BE/winpid" ]; then taskkill /F /T /PID "$(cat "/proc/$BE/winpid")" >/dev/null 2>&1; fi
+    kill "$BE" 2>/dev/null
+    wait "$BE" 2>/dev/null
+  fi
   docker rm -fv "$PG" "$S3" "$REDIS" >/dev/null 2>&1
   docker volume rm "$VOL" >/dev/null 2>&1
-  rm -rf "$TMP"
+  rm -rf "$TMP" || echo "uyarı: $TMP silinemedi" >&2
 }
 trap cleanup EXIT
 trap 'exit 130' INT
@@ -50,14 +60,14 @@ START=$(date +%s)
 
 # 1. Checksums: both files must be listed, and match.
 for f in "$BASE.dump" "$BASE.objects.tar"; do
-  awk -v f="$f" '{ n=$2; sub(/^\*/, "", n); if (n == f) found=1 } END { exit !found }' "$SUMS" || die "sha256 listesinde yok: $f"
+  [ "$(awk -v f="$f" 'length($1) == 64 && $1 !~ /[^0-9a-f]/ && NF == 2 && ($2 == f || $2 == "*" f)' "$SUMS" | wc -l | tr -d ' ')" = 1 ] || die "sha256 listesinde geçerli tek satır yok: $f"
 done
-(cd "$DIR" && sha256sum -c --quiet "$BASE.sha256")
+(cd "$DIR" && sha256sum -c --strict --quiet "$BASE.sha256")
 ok "sha256"
 
 # 2. New cluster: nothing but the superuser exists before setup-roles.sql.
 APP_PW="$(rnd)"; MIG_PW="$(rnd)"
-docker run -d --name "$PG" -p 127.0.0.1::5432 -e POSTGRES_USER=drill_su -e POSTGRES_PASSWORD="$(rnd)" \
+docker run -d --label "$LABEL" --name "$PG" -p 127.0.0.1::5432 -e POSTGRES_USER=drill_su -e POSTGRES_PASSWORD="$(rnd)" \
   -e POSTGRES_DB=drill postgres:16-alpine >/dev/null
 for i in $(seq 1 90); do
   docker exec "$PG" pg_isready -h 127.0.0.1 -U drill_su -d drill >/dev/null 2>&1 && break
@@ -94,14 +104,20 @@ ok "migrate status güncel"
 # 4. Object archive into a new MinIO; the files are written before it starts.
 STORAGE_ACCESS_KEY="drill$(rnd | cut -c1-12)"
 STORAGE_SECRET_KEY="$(rnd)"
+# Only plain files and folders under data/; the archive is unpacked as root (in a container).
+tar -tf "$TAR" > "$TMP/names"
+[ -s "$TMP/names" ] || die "nesne arşivi boş"
+if grep -qvE '^data(/|$)' "$TMP/names" || grep -qE '(^|/)\.\.(/|$)' "$TMP/names"; then die "arşivde data/ dışında yol var"; fi
+tar -tvf "$TAR" | cut -c1 > "$TMP/types"
+if grep -qv '^[-d]$' "$TMP/types"; then die "arşivde bağ veya özel dosya var"; fi
 # The bucket is the only non-system folder under data/.
-tar -tf "$TAR" | sed -nE 's#^data/([a-z0-9][a-z0-9.-]+)/.*#\1#p' | sort -u > "$TMP/buckets"
+sed -nE 's#^data/([a-z0-9][a-z0-9.-]+)/.*#\1#p' "$TMP/names" | sort -u > "$TMP/buckets"
 [ "$(wc -l < "$TMP/buckets" | tr -d ' ')" = 1 ] || die "arşivde tam bir kova bekleniyordu"
 STORAGE_BUCKET="$(cat "$TMP/buckets")"
 export STORAGE_ACCESS_KEY STORAGE_SECRET_KEY STORAGE_BUCKET STORAGE_REGION=us-east-1 STORAGE_FORCE_PATH_STYLE=true
-docker volume create "$VOL" >/dev/null
-docker run --rm -i -u 0 -v "$VOL:/data" --entrypoint sh tm-minio:dev -c 'tar -xf - -C / && chown -R minio /data' < "$TAR"
-docker run -d --name "$S3" -p 127.0.0.1::9000 -v "$VOL:/data" -e MINIO_ROOT_USER="$STORAGE_ACCESS_KEY" \
+docker volume create --label "$LABEL" "$VOL" >/dev/null
+docker run --rm -i --label "$LABEL" -u 0 -v "$VOL:/data" --entrypoint sh tm-minio:dev -c 'tar -xf - -C / && chown -R minio /data' < "$TAR"
+docker run -d --label "$LABEL" --name "$S3" -p 127.0.0.1::9000 -v "$VOL:/data" -e MINIO_ROOT_USER="$STORAGE_ACCESS_KEY" \
   -e MINIO_ROOT_PASSWORD="$STORAGE_SECRET_KEY" -e MINIO_BUCKET="$STORAGE_BUCKET" tm-minio:dev >/dev/null
 STORAGE_ENDPOINT="http://127.0.0.1:$(port "$S3" 9000)"
 export STORAGE_ENDPOINT
@@ -140,25 +156,51 @@ do {
   total += r.KeyCount ?? 0;
   token = r.NextContinuationToken;
 } while (token);
-console.log(`ok: ${rows.length} etkin görsel okundu, boyut/tür/çözme doğru, anonim 403; depoda ${total} nesne`);
+if (total !== Number(e.OBJECTS)) throw new Error(`nesne sayısı: depo ${total}, arşiv ${e.OBJECTS}`);
+console.log(`ok: ${rows.length} etkin görsel okundu, boyut/tür/çözme doğru, anonim 403; depoda ${total} nesne (arşivle eşit)`);
 EOF
+OBJECTS="$(grep -cE "^data/$STORAGE_BUCKET/.*/xl\.meta$" "$TMP/names")"
+export OBJECTS
 node "$(win "$TMP/check.mjs")" "$(win "$REPO/backend/package.json")" "$(win "$TMP/images")"
 
 # 5. The application itself on the restored data; its own Redis, no workers, no live calls.
-docker run -d --name "$REDIS" -p 127.0.0.1::6379 redis:7-alpine >/dev/null
+# Clean environment and working directory, so neither the shell nor the repository .env leaks in.
+# The preload binds it to a free loopback port and reports that port: the answers below can only
+# come from this process.
+docker run -d --label "$LABEL" --name "$REDIS" -p 127.0.0.1::6379 redis:7-alpine >/dev/null
 REDIS_URL="redis://127.0.0.1:$(port "$REDIS" 6379)"
-JWT_ACCESS_SECRET="$(rnd)"
-export REDIS_URL JWT_ACCESS_SECRET BACKEND_PORT="${DRILL_BACKEND_PORT:-4199}"
-export QUEUE_WORKERS=false SYNC_LIVE_CALLS=false MAIL_TRANSPORT=log
-(cd "$REPO/backend" && exec node dist/main) > "$TMP/be.log" 2>&1 &
+mkdir -p "$TMP/run/cwd"
+cat > "$TMP/run/listen.cjs" <<'EOF'
+const { Server } = require('node:net');
+const { writeFileSync, renameSync } = require('node:fs');
+const listen = Server.prototype.listen;
+Server.prototype.listen = function (...args) {
+  this.once('listening', () => {
+    const file = process.env.DRILL_PORT_FILE;
+    writeFileSync(`${file}.part`, String(this.address().port));
+    renameSync(`${file}.part`, file);
+  });
+  const cb = args.find((a) => typeof a === 'function');
+  return listen.call(this, { port: 0, host: '127.0.0.1' }, cb);
+};
+EOF
+(cd "$TMP/run/cwd" && exec env -i PATH="$PATH" SYSTEMROOT="${SYSTEMROOT:-}" TEMP="$(win "$TMP")" TMP="$(win "$TMP")" \
+  DRILL_PORT_FILE="$(win "$TMP/run")/port" NODE_ENV=development DATABASE_URL="$DATABASE_URL" REDIS_URL="$REDIS_URL" \
+  JWT_ACCESS_SECRET="$(rnd)" QUEUE_WORKERS=false SYNC_LIVE_CALLS=false MAIL_TRANSPORT=log \
+  STORAGE_ENDPOINT="$STORAGE_ENDPOINT" STORAGE_REGION="$STORAGE_REGION" STORAGE_BUCKET="$STORAGE_BUCKET" \
+  STORAGE_ACCESS_KEY="$STORAGE_ACCESS_KEY" STORAGE_SECRET_KEY="$STORAGE_SECRET_KEY" STORAGE_FORCE_PATH_STYLE=true \
+  node --require "$(win "$TMP/run/listen.cjs")" "$(win "$REPO/backend/dist/main.js")") > "$TMP/be.log" 2>&1 &
 BE=$!
 HEALTH=""
 for _ in $(seq 1 60); do
   kill -0 "$BE" 2>/dev/null || die "backend kapandı: $(tail -n3 "$TMP/be.log")"
-  HEALTH="$(curl -sf "http://127.0.0.1:$BACKEND_PORT/api/v1/health")" && break
+  if [ -s "$TMP/run/port" ]; then
+    API="http://127.0.0.1:$(cat "$TMP/run/port")/api/v1"
+    HEALTH="$(curl -sf "$API/health")" && break
+  fi
   sleep 1
 done
 case "$HEALTH" in *'"status":"ok"'*'"database":"up"'*) ok "backend /health" ;; *) die "health: $HEALTH" ;; esac
-[ "$(curl -s -w '|%{http_code}' "http://127.0.0.1:$BACKEND_PORT/api/v1/auth/me" | sed "s/.*|//")" = 401 ] || die "yetkisiz istek 401 değil"
-kill -0 "$BE" 2>/dev/null || die "yanıt bu tatbikatın backend'inden gelmedi"
-ok "toplam $(($(date +%s) - START)) sn"
+CODE="$(curl -s -w '|%{http_code}' "$API/auth/me")"
+[ "${CODE##*|}" = 401 ] || die "yetkisiz istek 401 değil"
+ok "toplam $(($(date +%s) - START)) sn (kod: $(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo bilinmiyor))"

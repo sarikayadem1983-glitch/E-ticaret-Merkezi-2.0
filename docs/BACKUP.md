@@ -30,7 +30,7 @@ Windows'ta `umask` etkisizdir: yedek klasörünün ACL'ini elle kısıtlayın. D
 
 ## Temiz ortam tatbikatı
 
-`bash database/scripts/restore-rehearsal.sh <set>.sha256` — yeni PostgreSQL kümesi, yeni MinIO ve backend, geçici konteynerlerde. 2026-11-22 (dev verisi, 595 051 bayt dump): 42 tablo eşit, migration'lar güncel, 6 etkin görsel okundu ve çözüldü, anonim 403, `/health` ok; toplam 28 sn. Negatif: bozuk arşiv (SHA-256) ve eksik nesne (`NoSuchKey`) tatbikatı başarısız yaptı. Prod boyutu için süre ölçümü değildir.
+`bash database/scripts/restore-rehearsal.sh <set>.sha256` — yeni PostgreSQL kümesi, yeni MinIO ve backend, geçici konteynerlerde. 2026-11-22 (dev verisi, 595 051 bayt dump): 42 tablo eşit, migration'lar güncel, 6 etkin görsel okundu ve çözüldü, anonim 403, `/health` ok; toplam 28 sn. Negatif: bozuk arşiv (SHA-256) ve eksik nesne (`NoSuchKey`) tatbikatı başarısız yaptı. Prod boyutu için süre ölçümü değildir. Önkoşul: derlenmiş güncel `backend/dist`, `backend/node_modules`, `tm-minio:dev`. PostgreSQL, MinIO ve Redis konteynerde; backend ana makinede, yalnız loopback'te, repo `.env`'i olmadan çalışır. Denetim çalışma ağacındaki kod ve migration'larla yapılır (eski yedekte bekleyen migration hatadır). Kapsam dışı: silinmiş görsellerin içeriği (yalnız nesne sayısı), sequence değerleri, oturum açma akışları. `kill -9` sonrası `tm-drill` etiketli kalıntı elle silinir; betik kalıntı varken başlamaz.
 
 ## PITR tatbikatı
 
