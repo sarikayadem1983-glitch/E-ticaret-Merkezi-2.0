@@ -348,6 +348,7 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 | R-24 | Orta | Playwright yalnızca `next dev` ile 13/13; `next start` (prod modu) http'de `APP_ORIGIN` https koruması nedeniyle 11/13. Prod benzeri tarayıcı testi yok | Açık; koruma kapatılmayacak, testler yerel TLS ile koşturulacak | Sürüm A kabul |
 | R-26 | Düşük (test) | Katalog yazımları SERIALIZABLE; tam e2e paralel koşarken nadiren bir ürün oluşturma 409 `CONCURRENT_UPDATE` alıyor ve aynı dosyadaki sonraki adımlar zincirleme düşüyor (2026-11-14'te 2 kez görüldü, tekrar koşuda temiz). Üretim davranışı doğru (istemci yeniden dener) | Kapandı (PR #60): `catalogWrite` serileştirme hatasında işlemi en çok 3 kez yeniden dener; iki ardışık tam e2e koşusu temiz | Test yardımcısında 409 için tek yeniden deneme veya katalog e2e dosyalarını sıralı koşma |
 | R-25 | Orta (plan) | INT-01 (A) INF-13'e (B, KMS) bağlı; A'da yalnızca yerel anahtarla şifreleme mümkün. Prod öncesi KMS gerekir | Açık | INF-13 (B) |
+| R-27 | Düşük | IMG-01: depodan silinemeyen nesneler sahipsiz kalır (anahtar loglanır); süpürücü iş yok. Prod depolamanın genel adresi `STORAGE_ENDPOINT`'ten farklı olursa CSP `img-src` ayrı değişken ister. Yeni tekil indeks `product_variants` yazmalarını oluşturulurken kilitler | Açık | Prod depolama seçimi |
 
 ### 5.2 Canlıya (production) çıkmadan önce mutlaka düzeltilecekler
 

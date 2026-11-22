@@ -84,6 +84,45 @@ export async function readJsonBody(
   }
 }
 
+const MAX_RAW_BYTES = 8 * 1024 * 1024;
+
+/** Reads raw bytes of at most 8 MB, counting while reading (Content-Length is not trusted). */
+export async function readRawBody(
+  req: Request,
+): Promise<
+  { ok: true; raw: Uint8Array<ArrayBuffer> } | { ok: false; response: Response }
+> {
+  if (req.headers.get('content-type') !== 'application/octet-stream') {
+    return {
+      ok: false,
+      response: errorResponse(415, 'UNSUPPORTED_MEDIA_TYPE', 'Dosya bekleniyor'),
+    };
+  }
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  const reader = req.body?.getReader();
+  while (reader) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_RAW_BYTES) {
+      await reader.cancel();
+      return {
+        ok: false,
+        response: errorResponse(413, 'PAYLOAD_TOO_LARGE', 'Dosya en çok 8 MB olabilir'),
+      };
+    }
+    chunks.push(value);
+  }
+  const raw = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    raw.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return { ok: true, raw };
+}
+
 /** Relays a backend response: status, JSON body and Retry-After only. */
 export async function relay(res: Response): Promise<Response> {
   const headers: Record<string, string> = { 'Cache-Control': 'no-store' };

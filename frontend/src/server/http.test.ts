@@ -1,4 +1,4 @@
-import { checkCsrf, readJsonBody } from './http';
+import { checkCsrf, readJsonBody, readRawBody } from './http';
 
 const APP = 'http://localhost:3000';
 
@@ -54,6 +54,25 @@ describe('readJsonBody', () => {
     const big = await readJsonBody(
       req('POST', { 'content-type': 'application/json' }, JSON.stringify({ x: 'a'.repeat(70_000) })),
     );
+    expect(!big.ok && big.response.status).toBe(413);
+  });
+});
+
+describe('readRawBody (IMG-01)', () => {
+  const raw = (body: BodyInit, type = 'application/octet-stream') =>
+    readRawBody(
+      new Request('http://localhost:3000/x', { method: 'POST', body, headers: { 'content-type': type } }),
+    );
+
+  it('returns the bytes', async () => {
+    const r = await raw(new Uint8Array([1, 2, 3]));
+    expect(r.ok && Array.from(r.raw)).toEqual([1, 2, 3]);
+  });
+
+  it('refuses other content types and more than 8 MB', async () => {
+    const form = await raw('a=1', 'application/x-www-form-urlencoded');
+    expect(!form.ok && form.response.status).toBe(415);
+    const big = await raw(new Uint8Array(8 * 1024 * 1024 + 1));
     expect(!big.ok && big.response.status).toBe(413);
   });
 });

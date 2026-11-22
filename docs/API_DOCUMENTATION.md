@@ -580,3 +580,14 @@ Hepsi üyenin firma rollerine göre süzülür.
 - CSV: UTF-8 BOM, `;` ayraç, tutarlar `249,90` biçiminde. Ürün dosyası içe aktarma şablonuyla **aynı kolonlardadır** (düzenlenip yeniden içe aktarılabilir); stok dosyası: `urun_adi;sku;depo;eldeki;ayrilmis;kullanilabilir;esik`.
 - `=`, `+`, `-`, `@`, sekme veya CR ile başlayan her hücrenin başına `'` eklenir (CSV/formül enjeksiyonu); `;`, `"` veya satır sonu içeren hücreler tırnaklanır.
 - En çok 20 000 satır (fazlası 422 `EXPORT_TOO_LARGE`; firma seçerek daraltın).
+
+### Ürün görselleri (IMG-01)
+
+`/api/v1/products/:id/images` — yetkiler ürünle aynı (firma rolü yok 404, salt okuma 403, firma pasif 409).
+
+- `GET` → `{ data: [{ id, variantId, contentType, width, height, byteSize, position, createdAt, url }] }`; `url` kısa ömürlü imzalı bağlantıdır, depolama anahtarı dönmez.
+- `POST ?variant_id` — gövde ham bayt, `Content-Type: application/octet-stream` (415), en çok 8 MB (413). Tür içerikten belirlenir: JPEG/PNG/WebP (422 `IMAGE_TYPE_UNSUPPORTED`); bozuk veya 25 MP üstü 422 `IMAGE_INVALID`; kısa kenar < 100 px 422 `IMAGE_TOO_SMALL`; işlenmiş hali 10 MB üstü 422 `IMAGE_TOO_LARGE`; ürün başına 20 (409 `IMAGE_LIMIT`); kullanıcı başına 60 yükleme/dk (429); süreç/mağaza başına eşzamanlı 24/4 okuma, 6/2 işleme (503 `UPLOAD_BUSY`); 30 sn'de gelmeyen gövde 408. Görsel yeniden kodlanır: yön uygulanır, EXIF/GPS/XMP ve fazladan baytlar atılır.
+- `PUT /order` `{ imageIds }` — güncel görsellerin tamamı (422 `IMAGE_ORDER_MISMATCH`).
+- `PATCH /:imageId` `{ variantId | null }`; varyant aynı ürünün olmalı (404).
+- `DELETE /:imageId` → 204; satır soft delete, nesne silinir (silinemezse sahipsiz kalır, loglanır).
+- Depolama kapalıysa 503 `STORAGE_DISABLED`. Frontend CSP `img-src` yalnızca `STORAGE_ENDPOINT` origin'ini ekler (`next build` sırasında ayarlı olmalı).

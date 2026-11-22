@@ -180,7 +180,7 @@ Kaynak: `docs/superpowers/plans/2026-10-28-user-management.md` (T1–T16 numaral
 
 | ID | Görev | Öncelik | Bağımlılık | Tahmin | Mod | Sürüm | Durum | Kabul kriteri | Test | Güvenlik riski | Kaynak |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| IMG-01 | Görsel yükleme, sıralama, ürün/varyanta bağlama | P0 | INF-12, CAT-02 | 3 | STANDARD | A | PLANNED | MIME içerikten doğrulanır, boyut sınırı, EXIF temizlenir | U, E, S | Orta (dosya yükleme) | Öneri (onay bekliyor) |
+| IMG-01 | Görsel yükleme, sıralama, ürün/varyanta bağlama | P0 | INF-12, CAT-02 | 3 | CRITICAL | A | DONE-PR (PR #86; dev migration onayı bekliyor) | MIME içerikten doğrulanır, boyut sınırı, EXIF temizlenir | U, E, S | Orta (dosya yükleme) | Öneri (onay bekliyor) |
 | IMG-02 | Yeniden boyutlandırma/türev üretimi ve pazaryeri görsel kurallarına uygunluk kontrolü | P1 | IMG-01, INF-09 | 2 | STANDARD | B | PLANNED | Kural ihlali listeleme öncesi gösterilir | U | Düşük | Öneri (onay bekliyor) |
 | IMG-03 | AI arka plan temizleme / beyaz fon | P3 | IMG-02, AIE-01 | 2 | FAST | C | PLANNED | Orijinal korunur | U | Düşük | Öneri (onay bekliyor) |
 
@@ -382,7 +382,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | OPS-01 | Yapılandırılmış log + hata izleme (ör. Sentry), istek kimliği | P0 | — | 2 | STANDARD | A | DONE-MERGED (`ce85f36`, PR yok — süreç sapması, bkz. PROJECT_STATUS §3n; dev `ce85f36`, 2026-11-14; Sentry hariç, kullanıcı kararı) | Loglarda kişisel veri/secret yok (otomatik maskeleme testi) | U | Orta | Öneri (onay bekliyor) |
 | OPS-02 | Metrikler, uptime ve alarm (DB, Redis, kuyruk, entegrasyon hata oranı) | P0 | OPS-01, INF-11 | 3 | STANDARD | B | PLANNED | Alarm kanalı test edildi | Smoke | Orta | Öneri (onay bekliyor) |
-| OPS-03 | Otomatik yedekleme ve geri yükleme (PITR), geri yükleme tatbikatı | P0 | — | 3 | CRITICAL | A | PLANNED | Belgelenmiş RPO/RTO; tatbikat başarılı | M | Kritik | Öneri (onay bekliyor) |
+| OPS-03 | Otomatik yedekleme ve geri yükleme (PITR), geri yükleme tatbikatı | P0 | — | 3 | CRITICAL | A | IN PROGRESS (feature/ops-03-backup: dev yedek + geri yükleme + PITR provası; kalan: prod altyapı kararı) | Belgelenmiş RPO/RTO; tatbikat başarılı | M | Kritik | Öneri (onay bekliyor) |
 | OPS-06 | Yük ve performans testi (senkron, sipariş içeri alma, raporlar) | P1 | INF-11 | 3 | STANDARD | B | PLANNED | Hedef p95 süreleri belgelendi ve karşılandı | L | Orta | Öneri (onay bekliyor) |
 | OPS-08 | `backup-and-rehearse.sh` genelleştirme: başlangıç noktası hedef DB'nin son uygulanmış migration'ından otomatik; yalnızca bekleyen migration'ların kontrolleri (migration klasöründe `verify.sql`); `down.sql` provası (boş ve dolu veriyle durma koşulu); Aşama 1 kontrolleri yalnızca Aşama 1 bekliyorken | P1 | — | 1 | STANDARD | A | DONE-MERGED (PR #45, merge `63bbb94`; dev provasında kullanıldı, 2026-11-14) | Dev'in mevcut durumunda (CAT-01 uygulanmış) betik çıkış 0 verir; bekleyen migration yoksa açıkça bunu raporlar; CAT-01 benzeri yeni bir migration için `verify.sql` kontrolleri ve `down.sql` provası raporda görünür; hiçbir aşamada kaynak DB'ye yazılmaz (yalnızca `pg_dump`); `tm_` dışı DB oluşturulmaz/silinmez; rapor satır içeriği içermez | M (izole) | Orta (yanlış prova güveni) | Kullanıcı kararı (2026-10-30) |
 
@@ -441,7 +441,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | CAT-05 | Fiyat yönetimi: liste fiyatı, kanal fiyatı, KDV oranı (`decimal` + para birimi) | DONE-MERGED (PR #29, merge `28a03ae`; dev `5ac1401`, 2026-11-12) | 2 | STANDARD | Öneri (onay bekliyor) |
 | CAT-06 | Kanal kategori ağacı ve zorunlu özellik eşleme modeli + UI | DONE-MERGED (PR #34, merge `8ee40bb`; dev `8ee40bb`, 2026-11-12; backend dilimi, UI → CAT-06b) | 4 | STANDARD | Öneri (onay bekliyor) |
 | IMP-01 | Excel/CSV şablonu, satır doğrulama, deneme (dry-run) raporu | DONE-MERGED (PR #57, merge `0568b56`; dev `0568b56`, 2026-11-14) | 3 | STANDARD | Öneri (onay bekliyor) |
-| IMG-01 | Görsel yükleme, sıralama, ürün/varyanta bağlama | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
+| IMG-01 | Görsel yükleme, sıralama, ürün/varyanta bağlama | DONE-PR (PR #86; dev migration onayı bekliyor) | 3 | CRITICAL | Öneri (onay bekliyor) |
 | INT-01 | `ChannelAdapter` arayüzü, kanal hesabı modeli, kimlik bilgisi şifreleme (envelope encryption, anahtar rotasyonu) | DONE-MERGED (PR #32, merge `7b3c0b9`; dev `7b3c0b9`, 2026-11-12) | 4 | CRITICAL | Öneri (onay bekliyor) |
 | INT-02 | Senkron motoru: kanal başına rate limiter, retry, idempotency, senkron logu, çakışma çözümü | DONE-MERGED | 5 | CRITICAL | Öneri (onay bekliyor) |
 | INT-03 | Entegrasyon yönetim UI: bağla, test et, durum, hata logu | DONE-MERGED (PR #40, merge `65fcf85`; dev `65fcf85`, 2026-11-14) | 3 | STANDARD | Öneri (onay bekliyor) |
@@ -457,7 +457,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | SHP-02 | Pazaryeri kargo entegrasyonu üzerinden etiket ve takip numarası | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
 | RPT-01 | Satış raporları (dönem, kanal, ürün) | DONE-MERGED (PR #53, merge `633f250`; dev `633f250`, 2026-11-14) | 3 | STANDARD | Öneri (onay bekliyor) |
 | OPS-01 | Yapılandırılmış log + hata izleme (ör. Sentry), istek kimliği | DONE-MERGED (`ce85f36`, PR yok — süreç sapması, bkz. PROJECT_STATUS §3n; dev `ce85f36`, 2026-11-14; Sentry hariç, kullanıcı kararı) | 2 | STANDARD | Öneri (onay bekliyor) |
-| OPS-03 | Otomatik yedekleme ve geri yükleme (PITR), geri yükleme tatbikatı | PLANNED | 3 | CRITICAL | Öneri (onay bekliyor) |
+| OPS-03 | Otomatik yedekleme ve geri yükleme (PITR), geri yükleme tatbikatı | IN PROGRESS (feature/ops-03-backup: dev yedek + geri yükleme + PITR provası; kalan: prod altyapı kararı) | 3 | CRITICAL | Öneri (onay bekliyor) |
 | OPS-08 | `backup-and-rehearse.sh` genelleştirme (son migration'dan başlangıç, `verify.sql`, `down.sql` provası) | DONE-MERGED (PR #45, merge `63bbb94`; dev provasında kullanıldı, 2026-11-14) | 1 | STANDARD | Kullanıcı kararı (2026-10-30) |
 
 ### Sürüm B — Ticari SaaS (62 görev: 0 tamamlandı + 62 kalan; kalan tahmin 190 iş günü; 23 EPIC)

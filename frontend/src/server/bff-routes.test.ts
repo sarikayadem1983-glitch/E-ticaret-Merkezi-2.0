@@ -38,6 +38,11 @@ describe('matchBffRoute', () => {
     ['PUT', `products/${ID}/variants/${ID}/prices/list`, ''],
     ['PUT', `products/${ID}/variants/${ID}/prices/hepsi-burada`, ''],
     ['DELETE', `products/${ID}/variants/${ID}/prices/trendyol`, ''],
+    ['GET', `products/${ID}/images`, ''],
+    ['POST', `products/${ID}/images`, `variant_id=${ID}`],
+    ['PUT', `products/${ID}/images/order`, ''],
+    ['PATCH', `products/${ID}/images/${ID}`, ''],
+    ['DELETE', `products/${ID}/images/${ID}`, ''],
     ['GET', 'categories', 'search=a'],
     ['GET', 'brands', 'page=2'],
     ['GET', 'attributes', 'per_page=100'],
@@ -48,7 +53,8 @@ describe('matchBffRoute', () => {
   });
 
   it('forwards a body only where the route takes one', () => {
-    expect(match('POST', 'companies')).toMatchObject({ body: true });
+    expect(match('POST', 'companies')).toMatchObject({ body: true, raw: false });
+    expect(match('POST', `products/${ID}/images`)).toMatchObject({ body: false, raw: true });
     expect(match('POST', `companies/${ID}/deactivate`)).toMatchObject({ body: false });
     expect(match('PUT', `users/${ID}/access`)).toMatchObject({ body: true });
     expect(match('POST', 'invitations')).toMatchObject({ body: true });
@@ -188,6 +194,7 @@ describe('matchBffRoute', () => {
       path: 'auth/email/verification',
       search: new URLSearchParams(),
       body: false,
+      raw: false,
     });
     expect(match('POST', 'auth/email/verify')).toEqual({ ok: false, status: 404 });
   });
