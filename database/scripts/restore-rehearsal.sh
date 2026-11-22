@@ -27,8 +27,7 @@ TAR="$DIR/$BASE.objects.tar"
 [ -f "$DUMP" ] && [ -f "$TAR" ] || die "set eksik (.dump ve .objects.tar gerekli)"
 [ -f "$REPO/backend/dist/main.js" ] || die "backend derlenmemiş"
 # Incremental builds rewrite only changed files: compare with the newest output.
-BUILT="$(find "$REPO/backend/dist" "$REPO/backend" -maxdepth 6 -path '*/node_modules' -prune -o -type f \( -path '*/dist/*.js' -o -name '*.tsbuildinfo' \) -printf '%T@ %p
-' | sort -n | tail -n1 | cut -d' ' -f2-)"
+BUILT="$(find "$REPO/backend/dist" "$REPO/backend" -maxdepth 6 -path '*/node_modules' -prune -o -type f \( -path '*/dist/*.js' -o -name '*.tsbuildinfo' \) -printf '%T@ %p\n' | sort -n | tail -n1 | cut -d' ' -f2-)"
 [ -z "$(find "$REPO/backend/src" -name '*.ts' ! -name '*.spec.ts' -newer "$BUILT" | head -n1)" ] || die "backend/dist kaynaktan eski: npm run build"
 
 ID="tm-drill-$$"
