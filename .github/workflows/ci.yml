@@ -97,3 +97,99 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+
+  # Production build over TLS in a real browser, and storage against a real MinIO server.
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      STORAGE_ENDPOINT: http://127.0.0.1:9000
+      STORAGE_REGION: us-east-1
+      STORAGE_BUCKET: tm-ci
+      STORAGE_ACCESS_KEY: ci-storage-throwaway
+      STORAGE_SECRET_KEY: ci-storage-secret-throwaway
+      STORAGE_FORCE_PATH_STYLE: 'true'
+      MAIL_TRANSPORT: smtp
+      SMTP_HOST: 127.0.0.1
+      SMTP_PORT: '1025'
+      MAIL_FROM: Ticaret Merkezi <no-reply@localhost>
+      E2E_LOG_DIR: ${{ github.workspace }}/e2e-logs
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ci_su
+          POSTGRES_PASSWORD: ci-su-throwaway
+          POSTGRES_DB: tm_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U ci_su -d tm_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      mailpit:
+        image: axllent/mailpit:v1.21
+        ports: ['1025:1025', '8025:8025']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+      # Built from source (docker/minio/Dockerfile); the image is cached between runs.
+      - uses: actions/cache@v4
+        id: minio
+        with:
+          path: ~/tm-minio.tar
+          key: tm-minio-${{ hashFiles('docker/minio/Dockerfile') }}
+      - name: Build MinIO
+        if: steps.minio.outputs.cache-hit != 'true'
+        run: docker build -t tm-minio:dev docker/minio && docker save tm-minio:dev -o ~/tm-minio.tar
+      - name: Start MinIO
+        run: |
+          docker load -q -i ~/tm-minio.tar
+          docker run -d --name tm-minio -p 127.0.0.1:9000:9000 \
+            -e MINIO_ROOT_USER="$STORAGE_ACCESS_KEY" -e MINIO_ROOT_PASSWORD="$STORAGE_SECRET_KEY" \
+            -e MINIO_BUCKET="$STORAGE_BUCKET" tm-minio:dev
+          curl -sf --retry 30 --retry-delay 1 --retry-all-errors http://127.0.0.1:9000/minio/health/live
+      - run: npm ci
+        working-directory: backend
+      - name: Create least-privilege roles
+        env:
+          PGPASSWORD: ci-su-throwaway
+        run: >-
+          psql -h 127.0.0.1 -U ci_su -d tm_ci -X -q -v ON_ERROR_STOP=1
+          -v app_password=ci-app-throwaway -v migrator_password=ci-migrator-throwaway
+          -f database/roles/setup-roles.sql
+      - run: npx prisma migrate deploy
+        working-directory: backend
+      - run: npm run build
+        working-directory: backend
+      - name: Object storage against MinIO, product images API
+        working-directory: backend
+        run: |
+          set -o pipefail
+          npm run test:e2e -- storage-live product-images --no-color | tee "$RUNNER_TEMP/storage.log"
+          # The live suite skips itself without storage; here a skip is a failure.
+          if grep -E '^ +Tests .*skipped' "$RUNNER_TEMP/storage.log"; then exit 1; fi
+      - run: npm ci
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - name: Playwright on the production build over TLS
+        run: bash frontend/e2e/run-prod.sh --reporter=list --forbid-only
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-logs
+          path: |
+            e2e-logs
+            frontend/test-results
+          retention-days: 3

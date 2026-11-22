@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import {
   APP_ORIGIN,
+  SID_COOKIE,
   PASSWORD,
   expireSession,
   login,
@@ -30,9 +31,10 @@ test.describe('authentication and session', () => {
     await register(page, account);
 
     const cookies = await context.cookies();
-    expect(cookies.map((c) => c.name)).toEqual(['tm_sid']);
+    expect(cookies.map((c) => c.name)).toEqual([SID_COOKIE]);
     const [sid] = cookies;
     expect(sid.httpOnly).toBe(true);
+    expect(sid.secure).toBe(APP_ORIGIN.startsWith('https:'));
     expect(sid.sameSite).toBe('Lax');
     expect(sid.path).toBe('/');
 
@@ -74,13 +76,13 @@ test.describe('authentication and session', () => {
 
     // The old id is dead server-side even if an attacker kept a copy.
     await context.addCookies([
-      { name: 'tm_sid', value: first, domain: 'localhost', path: '/' },
+      { name: SID_COOKIE, value: first, url: APP_ORIGIN, secure: APP_ORIGIN.startsWith('https:') },
     ]);
     expect((await page.request.get('/api/session')).status()).toBe(401);
 
     await login(page, account.email);
     await expect(page).toHaveURL(/\/dashboard$/);
-    const second = (await context.cookies()).find((c) => c.name === 'tm_sid');
+    const second = (await context.cookies()).find((c) => c.name === SID_COOKIE);
     expect(second?.value).not.toBe(first);
   });
 });
@@ -230,7 +232,7 @@ test.describe('unauthorized access and session expiry', () => {
 
     // A well-formed but unknown (forged) session id gets nothing either.
     await context.addCookies([
-      { name: 'tm_sid', value: 'A'.repeat(43), domain: 'localhost', path: '/' },
+      { name: SID_COOKIE, value: 'A'.repeat(43), url: APP_ORIGIN, secure: APP_ORIGIN.startsWith('https:') },
     ]);
     expect((await page.request.get('/api/bff/companies')).status()).toBe(401);
     expect(
@@ -260,12 +262,12 @@ test.describe('unauthorized access and session expiry', () => {
   test('an expired session signs the user out safely', async ({ page, context }) => {
     await register(page, newAccount('expiry'));
     await expect(page.getByText('Henüz firma eklenmedi')).toBeVisible();
-    const sid = (await context.cookies()).find((c) => c.name === 'tm_sid')!.value;
+    const sid = (await context.cookies()).find((c) => c.name === SID_COOKIE)!.value;
 
     await expireSession(sid);
     expect((await page.request.get('/api/bff/companies')).status()).toBe(401);
     await page.goto('/dashboard');
     await expect(page).toHaveURL(/\/login/);
-    expect((await context.cookies()).find((c) => c.name === 'tm_sid')).toBeUndefined();
+    expect((await context.cookies()).find((c) => c.name === SID_COOKIE)).toBeUndefined();
   });
 });
