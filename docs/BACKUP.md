@@ -32,6 +32,19 @@ Windows'ta `umask` etkisizdir: yedek klasörünün ACL'ini elle kısıtlayın. D
 
 `bash database/scripts/restore-rehearsal.sh <set>.sha256` — yeni PostgreSQL kümesi, yeni MinIO ve backend, geçici konteynerlerde. 2026-11-22 (dev verisi, 595 051 bayt dump): 42 tablo eşit, migration'lar güncel, 6 etkin görsel okundu ve çözüldü, anonim 403, `/health` ok; toplam 34–90 sn (yerel yük altında değişken). Negatif: bozuk arşiv (SHA-256) ve eksik nesne (`NoSuchKey`) tatbikatı başarısız yaptı. Prod boyutu için süre ölçümü değildir. Önkoşul: derlenmiş güncel `backend/dist`, `backend/node_modules`, `tm-minio:dev`. PostgreSQL, MinIO ve Redis konteynerde; backend ana makinede, yalnız loopback'te, repo `.env`'i olmadan çalışır. Denetim çalışma ağacındaki kod ve migration'larla yapılır (eski yedekte bekleyen migration hatadır). Kapsam dışı: silinmiş görsellerin içeriği (yalnız nesne sayısı), sequence değerleri, oturum açma akışları. `kill -9` sonrası `tm-drill` etiketli kalıntı elle silinir; betik kalıntı varken başlamaz.
 
+## Prod aday A: DigitalOcean — teknik doğrulama (2026-11-22)
+
+Satın alınmadı, kurulmadı, veri aktarılmadı. Gerçek hizmette denenmedi; aşağıdakiler yerel taklit ve resmî doküman sonuçlarıdır.
+
+| Konu | Sonuç |
+|---|---|
+| `setup-roles.sql` | Superuser olmayan `doadmin` benzeri rolle (PG 16, 18) önce çalışmadı; düzeltmeden sonra roller, tüm migration'lar ve dump geri yükleme geçti. Şart: veritabanını yönetici rolü oluşturmuş olmalı. `tm_app` sonradan SUPERUSER/CREATEDB olursa betik durur |
+| Valkey + BullMQ 6.3.15 | Valkey 8.1 ve 9.2, TLS, noeviction, DO'nun yasakladığı komutlar kapalı: backend e2e 496 + 1 skip, reddedilen komut 0. Frontend BFF Valkey'de koşulmadı. Hizmet Valkey yedeği sunmuyor: düğüm kaybında oturum, sayaç ve kuyruk işleri kaybolabilir |
+| RPO 5 dk (hedef) | Doküman: WAL beş dakikada bir. Yalnız PostgreSQL; görseller, Valkey ve uzak kopya kapsam dışı. Doğrulanmış garanti değil |
+| RTO 1 saat (hedef) | Doküman süre vermiyor; tek düğümde SLA %99,5. Yerel tatbikat 34–90 sn (dev verisi), hizmette ölçülmedi. Garanti değil |
+| 30 gün saklama (hedef) | Hizmetin PITR'si 7 gün. Kalanı uzak şifreli dump gerektirir; dump'lar arası anlık geri dönüş yok |
+| KMS (`CHANNEL_KEKS`) | DO'da KMS ürünü listede bulunamadı. Aday: AWS KMS simetrik anahtar, 1 USD/ay (ilk iki rotasyon +1'er), 20 000 istek/ay ücretsiz. INF-13 kodu yazılmadı |
+
 ## PITR tatbikatı
 
 `bash database/scripts/pitr-rehearsal.sh` — sentetik veri, geçici konteynerler; temel yedek + WAL arşivi ile silme kazasından önceki ana döner. 2026-11-22: başarılı, kurtarma 7 sn (önemsiz boyutta veri; prod süresi değildir).

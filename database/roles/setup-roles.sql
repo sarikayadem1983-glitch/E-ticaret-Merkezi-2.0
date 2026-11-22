@@ -1,4 +1,5 @@
--- Bootstrap database roles. Run as a superuser, once per database; safe to re-run.
+-- Bootstrap database roles; safe to re-run. Run once per database as a superuser or, on a managed
+-- PostgreSQL 16+, as the CREATEROLE admin that owns the database.
 -- Required psql variables: app_password, migrator_password
 --   psql -v ON_ERROR_STOP=1 -v app_password=... -v migrator_password=... -f setup-roles.sql
 -- No data is modified: only roles, ownership and privileges change.
@@ -30,8 +31,17 @@ SELECT 'CREATE ROLE tm_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATI
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'tm_app') \gexec
 
 -- Re-assert attributes and set passwords (rotation = re-run with new values).
-ALTER ROLE tm_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
-ALTER ROLE tm_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT;
+-- Only when something differs: a managed database's admin (no SUPERUSER) may not even
+-- restate NOSUPERUSER. A role that drifted to SUPERUSER therefore still stops the script there.
+SELECT 'ALTER ROLE tm_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS'
+FROM pg_roles WHERE rolname = 'tm_migrator'
+  AND (NOT rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls) \gexec
+SELECT 'ALTER ROLE tm_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT'
+FROM pg_roles WHERE rolname = 'tm_app'
+  AND (NOT rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls OR rolinherit) \gexec
+-- Without SUPERUSER, handing objects to tm_migrator needs membership in it (PostgreSQL 16+).
+SELECT format('GRANT tm_migrator TO %I WITH INHERIT TRUE, SET TRUE', current_user)
+FROM pg_roles WHERE rolname = current_user AND NOT rolsuper \gexec
 SELECT format('ALTER ROLE tm_migrator PASSWORD %L', :'migrator_password') \gexec
 SELECT format('ALTER ROLE tm_app PASSWORD %L', :'app_password') \gexec
 
