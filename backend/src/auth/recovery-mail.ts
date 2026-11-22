@@ -20,9 +20,9 @@ export interface RecoveryMail {
 /** Password reset e-mail. The link is single-use and expires. */
 export function passwordResetMail(url: string, expiresAt: Date): RecoveryMail {
   return {
-    subject: 'Ticaret Merkezi şifre sıfırlama',
+    subject: 'E-Ticaret Merkezi 2.0 şifre sıfırlama',
     text: [
-      'Ticaret Merkezi hesabınız için şifre sıfırlama istendi.',
+      'E-Ticaret Merkezi 2.0 hesabınız için şifre sıfırlama istendi.',
       '',
       `Yeni şifre belirlemek için: ${url}`,
       `Bağlantı ${when(expiresAt)} tarihine kadar geçerlidir ve tek kullanımlıktır.`,
@@ -30,7 +30,7 @@ export function passwordResetMail(url: string, expiresAt: Date): RecoveryMail {
       'Bu isteği siz yapmadıysanız e-postayı yok sayın; şifreniz değişmez.',
     ].join('\n'),
     html: [
-      '<p>Ticaret Merkezi hesabınız için şifre sıfırlama istendi.</p>',
+      '<p>E-Ticaret Merkezi 2.0 hesabınız için şifre sıfırlama istendi.</p>',
       `<p><a href="${escapeHtml(url)}">Yeni şifre belirle</a></p>`,
       `<p>Bağlantı ${escapeHtml(when(expiresAt))} tarihine kadar geçerlidir ve tek kullanımlıktır. Şifre değişince tüm cihazlardaki oturumlarınız kapanır.</p>`,
       '<p>Bu isteği siz yapmadıysanız e-postayı yok sayın; şifreniz değişmez.</p>',
@@ -47,9 +47,9 @@ export function accountExistsMail(
   resetUrl: string,
 ): RecoveryMail {
   return {
-    subject: 'Ticaret Merkezi kayıt denemesi',
+    subject: 'E-Ticaret Merkezi 2.0 kayıt denemesi',
     text: [
-      'Bu e-posta adresiyle Ticaret Merkezi’ne yeniden kayıt olunmaya çalışıldı.',
+      'Bu e-posta adresiyle E-Ticaret Merkezi 2.0’a yeniden kayıt olunmaya çalışıldı.',
       'Adresinizin zaten bir hesabı var; yeni hesap veya mağaza açılmadı.',
       '',
       `Giriş yapmak için: ${loginUrl}`,
@@ -57,7 +57,7 @@ export function accountExistsMail(
       'Bu denemeyi siz yapmadıysanız e-postayı yok sayın; hesabınızda bir şey değişmedi.',
     ].join('\n'),
     html: [
-      '<p>Bu e-posta adresiyle Ticaret Merkezi’ne yeniden kayıt olunmaya çalışıldı.</p>',
+      '<p>Bu e-posta adresiyle E-Ticaret Merkezi 2.0’a yeniden kayıt olunmaya çalışıldı.</p>',
       '<p>Adresinizin zaten bir hesabı var; yeni hesap veya mağaza açılmadı.</p>',
       `<p><a href="${escapeHtml(loginUrl)}">Giriş yap</a> · <a href="${escapeHtml(resetUrl)}">Şifremi unuttum</a></p>`,
       '<p>Bu denemeyi siz yapmadıysanız e-postayı yok sayın; hesabınızda bir şey değişmedi.</p>',
@@ -68,7 +68,7 @@ export function accountExistsMail(
 /** E-mail verification message. */
 export function emailVerifyMail(url: string, expiresAt: Date): RecoveryMail {
   return {
-    subject: 'Ticaret Merkezi e-posta doğrulama',
+    subject: 'E-Ticaret Merkezi 2.0 e-posta doğrulama',
     text: [
       'E-posta adresinizi doğrulamak için bağlantıyı açın:',
       url,

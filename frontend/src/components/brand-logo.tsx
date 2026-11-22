@@ -14,7 +14,7 @@ export function BrandLogo({
         aria-hidden
         className="grid size-9 place-items-center rounded-lg bg-brand-orange text-base font-bold text-brand-navy"
       >
-        TM
+        EM
       </span>
       <span className="leading-tight">
         <span
@@ -23,7 +23,7 @@ export function BrandLogo({
             inverted ? 'text-white' : 'text-brand-navy',
           )}
         >
-          Ticaret Merkezi
+          E-Ticaret Merkezi 2.0
         </span>
         <span
           className={cn(

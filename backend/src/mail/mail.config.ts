@@ -22,7 +22,7 @@ type Env = Record<string, string | undefined>;
 export class MailConfigError extends Error {}
 
 export const MAIL_TIMEOUT_MS = 10_000;
-const DEV_FROM = 'Ticaret Merkezi <no-reply@localhost>';
+const DEV_FROM = 'E-Ticaret Merkezi 2.0 <no-reply@localhost>';
 /** `Name <addr@host>` or a bare `addr@host`; no line breaks. */
 const FROM = /^(?:[^<>\r\n]*<[^\s<>@]+@[^\s<>@]+>|[^\s<>@]+@[^\s<>@]+)$/;
 

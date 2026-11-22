@@ -3,7 +3,7 @@ import { BrandLogo } from '@/components/brand-logo';
 
 const POINTS = [
   { icon: Building2, text: 'Tüm firmalarınızı tek panelden yönetin' },
-  { icon: TrendingUp, text: 'Sipariş, stok ve pazaryeri modülleri yolda' },
+  { icon: TrendingUp, text: 'Sipariş ve stok tek panelde, pazaryeri modülleri yolda' },
   { icon: ShieldCheck, text: 'Kurumsal güvenlik ve işlem kaydı' },
 ];
 
