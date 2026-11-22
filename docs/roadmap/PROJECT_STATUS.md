@@ -1,35 +1,35 @@
 # Proje Durumu
 
-Son güncelleme: 2026-11-22 (dev deploy `804886c`) · Kaynak görev durumları TASK_REGISTER.md.
+Son güncelleme: 2026-11-22 (dev deploy `ceee47e`) · Kaynak görev durumları TASK_REGISTER.md.
 
 ## 1. Özet
 
 | Ölçü | Değer |
 |---|---|
 | Toplam EPIC / görev | 33 / 142 (133 + 6 kullanıcı yönetimi MVP dilimi + 2 kullanıcı kararı 2026-10-30: OPS-08, USR-21 + USR-19b, 2026-11-14) |
-| Tamamlanan | 61 (%43,0) — `DONE-MERGED`; ayrıca 1 DONE-NOT-DEPLOYED (INF-12) |
+| Tamamlanan | 65 (%45,8) — `DONE-MERGED` |
 | BLOCKED | 1 — USR-18 (T16 + Aşama 2 migration onayı) |
-| Sürüm A (Trendyol-only MVP) ilerleme | 52 / 59 görev dev'de. Kalan 7: INF-12 (DONE-NOT-DEPLOYED) → IMG-01, OPS-03, INT-TY-01…03 ve SHP-02 (BLK-01) |
-| Sürüm B / C | 62 / 21 görev. B: 9 DONE-MERGED, 2 IN PROGRESS (USR-T13, USR-T15), 1 BLOCKED (USR-18), kalan PLANNED; C: 21 PLANNED |
-| Açık PR | Yok (#83 merge sonrası) |
-| `origin/main` | `804886c` (2026-11-18). CI ✓ (backend, frontend) |
+| Sürüm A (Trendyol-only MVP) ilerleme | 54 / 59 görev dev'de. Kalan 5: OPS-03 (prod altyapısı), INT-TY-01…03 ve SHP-02 (BLK-01) |
+| Sürüm B / C | 62 / 21 görev. B: 11 DONE-MERGED, 1 BLOCKED (USR-18), kalan PLANNED; C: 21 PLANNED |
+| Açık PR | Yalnızca bu doküman PR'ı |
+| `origin/main` | `ceee47e` (2026-11-22). CI ✓ (backend, frontend), run [45035439029](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/actions/runs/45035439029) |
 | USR-T11 doğrulama (geçmiş, 2026-11-16) | Kod 3f42e76, CI [43843739033](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/actions/runs/43843739033): unit 571/571, e2e 471 geçti + 1 Mailpit skip, frontend 206/206; build/lint yeşil. Yerel typecheck/lint çıkış 0. CRITICAL bağımsız inceleme temiz |
 | USR-T9 testleri (geçmiş, 2026-11-15) | Kod `df54a82`, CI [43745748422](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/actions/runs/43745748422): backend unit 572/572, e2e 467 geçti + 1 Mailpit skip, frontend 198/198; build/lint yeşil. Yerel: mail/davet 30/30, tam unit 572/572, typecheck ve lint çıkış 0. Dev DB kullanılmadı |
-| Dev ortamı | `804886c` (2026-11-22, kullanıcı onayı 2026-11-19, bkz. §3u). Önceki `cb07e60` (2026-11-14, kullanıcı onayıyla, bkz. §3t). Önceki `dc64348` (bkz. §3s). Önceki `70bae17` (2026-11-13, bkz. §3d). Backend `node dist/main` (WMI ile ayrık). Smoke: `tm-backups/smoke-804886c.log`. Önceki: `736cb40` (bkz. §3c) |
-| Dev DB şeması | Tüm migration'lar uygulandı; son `20261114190000_stock_thresholds` (2026-11-22'de veritabanından doğrulandı). Önceki `20261113120000_sync_engine` (INT-02, 2026-11-13, kullanıcı onayıyla; yedek `ticaret_merkezi-20261113-210949.dump`, izole prova ok). Önceki `20261112210000_user_tokens` (USR-19, kullanıcı onayıyla; yedek `ticaret_merkezi-20261112-210146.dump`; `migrate status` 2026-11-13: güncel). Önceki `20261112190000_channel_mapping` (CAT-06, 2026-11-12, kullanıcı onayıyla; yedek `ticaret_merkezi-20261112-184613.dump` + izole prova 10/10). Aşama 2 (`migrations-pending/`) uygulanmadı |
-| Son testler (`main` @ `804886c`, 2026-11-18, CI run [44371923978](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/actions/runs/44371923978)) | backend unit 591/591, e2e 479 geçti + 1 skip (Mailpit); frontend 208/208. Playwright CI'da koşmuyor, bu commit'te koşulmadı. Eski turlar §6'da tarihleriyle durur |
+| Dev ortamı | `ceee47e` (2026-11-22, kullanıcı onayıyla, bkz. §3v). Smoke: `tm-backups/smoke-ceee47e.log`. Önceki `804886c` (2026-11-22, kullanıcı onayı 2026-11-19, bkz. §3u). Önceki `cb07e60` (2026-11-14, kullanıcı onayıyla, bkz. §3t). Önceki `dc64348` (bkz. §3s). Önceki `70bae17` (2026-11-13, bkz. §3d). Backend `node dist/main` (WMI ile ayrık). Smoke: `tm-backups/smoke-804886c.log`. Önceki: `736cb40` (bkz. §3c) |
+| Dev DB şeması | Tüm migration'lar (18) uygulandı; son `20261122170000_product_images` (IMG-01, 2026-11-22, kullanıcı onayıyla; yedek `deploy-ceee47e/ticaret_merkezi-20261122-150035.dump`, izole prova 13/13). Önceki `20261114190000_stock_thresholds`. Önceki `20261113120000_sync_engine` (INT-02, 2026-11-13, kullanıcı onayıyla; yedek `ticaret_merkezi-20261113-210949.dump`, izole prova ok). Önceki `20261112210000_user_tokens` (USR-19, kullanıcı onayıyla; yedek `ticaret_merkezi-20261112-210146.dump`; `migrate status` 2026-11-13: güncel). Önceki `20261112190000_channel_mapping` (CAT-06, 2026-11-12, kullanıcı onayıyla; yedek `ticaret_merkezi-20261112-184613.dump` + izole prova 10/10). Aşama 2 (`migrations-pending/`) uygulanmadı |
+| Son testler (`ceee47e`, yerel, 2026-11-22) | backend unit 600/600, e2e 496 geçti + 1 skip (Mailpit); frontend unit 215/215; Playwright 23/23 (çalışan dev), ayrıca eski süre sınırlarıyla izole DB'de 23/23 ×2; smoke 46/46. Önceki (`804886c`, 2026-11-18): unit 591/591, e2e 479 + 1 skip, frontend 208/208 |
 
 ### Modül bazında tamamlanma (görev sayısına göre)
 
 | Modül | Tamamlanan / Toplam | % | Not |
 |---|---|---|---|
-| M01 — SaaS altyapısı ve güvenlik (INF) | 13 / 20 | 65 | INF-12 DONE-NOT-DEPLOYED |
-| M02 — Kullanıcılar, firmalar, roller (USR) | 25 / 30 | 83 | USR-T13 IN PROGRESS, USR-T15 IN PROGRESS, USR-18 BLOCKED |
+| M01 — SaaS altyapısı ve güvenlik (INF) | 14 / 20 | 70 | Kalanlar PLANNED |
+| M02 — Kullanıcılar, firmalar, roller (USR) | 27 / 30 | 90 | USR-18 BLOCKED, 2 PLANNED |
 | M03 — Dashboard (DSH) | 2 / 3 | 67 | Kalanlar PLANNED |
 | M04 — Ürün kataloğu (CAT) | 6 / 6 | 100 | Tamamı dev'de |
 | M05 — AI destekli ürün yükleme (AIU) | 0 / 3 | 0 | Başlanmadı |
 | M06 — Toplu içe aktarma: Excel/CSV ve URL (IMP) | 2 / 4 | 50 | Kalanlar PLANNED |
-| M07 — Ürün görsel yönetimi (IMG) | 0 / 3 | 0 | Başlanmadı |
+| M07 — Ürün görsel yönetimi (IMG) | 1 / 3 | 33 | Kalanlar PLANNED |
 | M08 — Pazaryeri API entegrasyonları (INT) | 3 / 25 | 12 | Kalanlar PLANNED |
 | M09 — Siparişler (ORD) | 3 / 4 | 75 | Kalanlar PLANNED |
 | M10 — Stok ve depo (INV) | 4 / 4 | 100 | Tamamı dev'de |
@@ -42,14 +42,31 @@ Son güncelleme: 2026-11-22 (dev deploy `804886c`) · Kaynak görev durumları T
 | M17 — Raporlama (RPT) | 1 / 4 | 25 | Kalanlar PLANNED |
 | M18 — AI asistan ve otomasyonlar (AIE) | 0 / 4 | 0 | Başlanmadı |
 | M19 — Abonelik ve ödeme (SUB) | 0 / 4 | 0 | Başlanmadı |
-| M20 — Sistem yönetimi, izleme ve güvenlik (OPS) | 2 / 8 | 25 | Kalanlar PLANNED |
-| **Toplam** | **61 / 142** | **43,0** | TASK_REGISTER kanonik tablolarından sayıldı (2026-11-22) |
+| M20 — Sistem yönetimi, izleme ve güvenlik (OPS) | 2 / 8 | 25 | OPS-03 IN PROGRESS, kalanlar PLANNED |
+| **Toplam** | **65 / 142** | **45,8** | TASK_REGISTER kanonik tablolarından sayıldı (2026-11-22) |
 
 ## 2. Merge edilen, deploy edilmemiş PR'lar
 
-#77 INF-12: kod dev'de, depolama servisi ve ayarları yok (bkz. §3u). #25–#30 (`5ac1401`) 2026-11-12'de dev'e deploy edildi. #6–#16 (`f010233`), #19 (`8fc7ae3`), #22 ve #23 (`0437c16`) 2026-10-30'da dev'e deploy edildi ve bu tablodan çıkarıldı; ayrıntı §3 ve §6.
+Yok (dev `ceee47e` = `main`). #25–#30 (`5ac1401`) 2026-11-12'de dev'e deploy edildi. #6–#16 (`f010233`), #19 (`8fc7ae3`), #22 ve #23 (`0437c16`) 2026-10-30'da dev'e deploy edildi ve bu tablodan çıkarıldı; ayrıntı §3 ve §6.
 
 Aşama 2 SQL'i (`migrations-pending/`) uygulanmadı (USR-18).
+
+## 3v. Dev deploy kaydı (2026-11-22, `main` @ `ceee47e`)
+
+Yalnızca dev ortamında, kullanıcı onayıyla (merge, migration ve deploy). Prod'a dokunulmadı.
+
+| İş | Merge | Dev deploy | Doğrulama |
+|---|---|---|---|
+| Next.js 16.4.6 (#84) | `f5b7bae` | `ceee47e` | Playwright 23/23 dev'de; eski sınırlarla (test 60 sn, beklenti 5 sn) izole DB'de iki ardışık tur 23/23 |
+| OPS-03 dev dilimi (#85) | `f708d47` | Betik; servis yok | `backup.sh` bu deploy'da kullanıldı: 41 tablo geri yüklemede eşit. Prod kısmı, zamanlayıcı, temiz küme ve nesne arşivi geri yüklemesi doğrulanmadı |
+| IMG-01 + INF-12 canlı testler (#86) | `e341cc1` | `ceee47e` + migration | İzole prova 13/13; deploy sonrası verify.sql 4/4, eski 40 tablonun satır sayısı değişmedi; smoke'ta yükleme, imzalı URL 200, imzasız 403, başka tenant 404, silme, nesne 404 |
+| USR-T13 / USR-T15 (#87) | `ceee47e` | `ceee47e` | Playwright davet, rol değişikliği ve mobil kart testleri |
+
+Yedekler: `tm-backups/deploy-ceee47e/` (DB + nesne arşivi), `tm-backups/rehearse-ceee47e/`. Backend e2e 496 + 1 skip, unit 600/600; frontend unit 215/215. Smoke 46/46 (`tm-backups/smoke-ceee47e.log`). Playwright CI'da koşmuyor; CI'da MinIO olmadığından canlı depolama testi orada atlanır.
+
+Test süresi artışı (#84): `ceee47e` artışsız da geçiyor; mevcut testlerde artışın gizlediği bir hata görülmedi. #84'ün ilk turlarındaki düşüşlerden biri (`users.spec.ts` davet iptali, `revoked.ok()`) zaman aşımı değil başarısız HTTP yanıtıydı; o turun yanıt kodu saklanmadığı için nedeni kesinleşmedi, `ceee47e` üzerindeki üç turda tekrarlamadı. `next start` http'de çalışmadığından (R-24) prod modunda Playwright koşulmadı.
+
+Geri alma: `git checkout 071ad34`, `npm ci` + backend build + yeniden başlatma (migration yalnızca tablo ve indeks ekler). Şema geri alma: `down.sql` yalnızca `product_images` boşken çalışır; doluysa durur.
 
 ## 3u. Dev deploy kaydı (2026-11-22, `main` @ `804886c`)
 
@@ -290,9 +307,9 @@ Kullanıcı onayıyla, yalnızca dev ortamında (`localhost:5432/ticaret_merkezi
 
 | # | ID | Başlık | Engel / not |
 |---|---|---|---|
-| 1 | INF-12 → IMG-01 | Nesne depolama (dev'de MinIO) → görsel yükleme | MinIO kurulumu kullanıcı tarafından onaylandı (2026-11-22) |
+| 1 | — | INF-12, IMG-01 tamamlandı | Dev'de doğrulandı (§3v) |
 | 2 | INT-TY-01 → 02 → 03 → SHP-02 | Trendyol ürün, stok/fiyat, sipariş, kargo | BLK-01: stage/IP erişimi; pazaryerine yazma her adımda kullanıcı onayıyla |
-| 3 | OPS-03 | Otomatik yedekleme + PITR + geri yükleme tatbikatı | Prod altyapısı kararı (CRITICAL) |
+| 3 | OPS-03 | Dev dilimi merge edildi (#85) | Kalan: prod WAL arşivi ve uzak şifreli kopya kararı, zamanlayıcı, temiz kümede ve nesne arşivi geri yükleme tatbikatı |
 | 4 | IMP-02, RPT-02, CRM-01, SHP-01 | Sürüm B: asenkron içe aktarma, stok raporu, müşteri (KVKK), iade akışı | Sürüm A sonrası |
 | 5 | USR-18 | Aşama 2 migration (eski kullanıcı kolonları) | BLOCKED, onay |
 
@@ -323,7 +340,7 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 | ID | Ciddiyet | Risk | Bugünkü durum | Çözüm görevi |
 |---|---|---|---|---|
 | R-01 | Kritik | Aşama 2 migration'ı (`users.is_active`, `users.tenant_id` kaldırma) guard ve login/refresh hâlâ `users.is_active` okurken çalıştırılırsa tüm girişler bozulur veya pasif kullanıcı kontrolü kaybolur (`backend/src/auth/user-state.ts`, `auth.repository.ts`) | Aşama 2 uygulanmadı, `migrations-pending/`'de | USR-18 (önce kod, sonra migration, onay) |
-| R-02 | Kritik | Prod öncesi otomatik yedek, PITR ve geri yükleme tatbikatı yok; şu an yalnızca elle çalışan betik var | Açık | OPS-03 |
+| R-02 | Kritik | Prod öncesi otomatik yedek, PITR ve geri yükleme tatbikatı yok; şu an yalnızca elle çalışan betik var | Kısmen: dev yedeği ve geri yükleme doğrulandı, PITR provası sentetik veriyle (#85); zamanlayıcı ve prod altyapısı yok | OPS-03 |
 | R-03 | Yüksek | Firma rolü yetki sınırları henüz uygulanmıyor: `user_company_roles` var ama companies modülü firma bazlı izin kontrol etmiyor; davet/kullanıcı yönetimi gelince yetki yükseltme yüzeyi açılır | USR-T7/T8 `main`'de (firma rolü kontrolü var); davet/kullanıcı yönetimi gelince yüzey açılır | USR-T14 |
 | R-04 | Yüksek | (Kapandı: PR #10 merge `113b522`; dev'e deploy edildi `f010233`, 2026-10-30) Mağaza değiştirme sırasında Redis çökerse refresh zinciri yeniden kullanım (token hırsızlığı) olarak algılanabilir → sahte audit kaydı ve kullanıcının tüm cihazlardan çıkışı | Açık | INF-18 |
 | R-05 | Yüksek | Redis tek nokta: rate limiting ve BFF oturumu fail-closed; Redis kesintisinde kimse giriş yapamaz | Dev'de tek Redis | INF-14 |
@@ -349,6 +366,7 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 | R-26 | Düşük (test) | Katalog yazımları SERIALIZABLE; tam e2e paralel koşarken nadiren bir ürün oluşturma 409 `CONCURRENT_UPDATE` alıyor ve aynı dosyadaki sonraki adımlar zincirleme düşüyor (2026-11-14'te 2 kez görüldü, tekrar koşuda temiz). Üretim davranışı doğru (istemci yeniden dener) | Kapandı (PR #60): `catalogWrite` serileştirme hatasında işlemi en çok 3 kez yeniden dener; iki ardışık tam e2e koşusu temiz | Test yardımcısında 409 için tek yeniden deneme veya katalog e2e dosyalarını sıralı koşma |
 | R-25 | Orta (plan) | INT-01 (A) INF-13'e (B, KMS) bağlı; A'da yalnızca yerel anahtarla şifreleme mümkün. Prod öncesi KMS gerekir | Açık | INF-13 (B) |
 | R-27 | Düşük | IMG-01: depodan silinemeyen nesneler sahipsiz kalır (anahtar loglanır); süpürücü iş yok. Prod depolamanın genel adresi `STORAGE_ENDPOINT`'ten farklı olursa CSP `img-src` ayrı değişken ister. Yeni tekil indeks `product_variants` yazmalarını oluşturulurken kilitler | Açık | Prod depolama seçimi |
+| R-28 | Orta | IMG-01 son inceleme (`fe11e19`, engelleyici yok), 3 MEDIUM: işleme kapısı doluysa 503 gövde okunduktan sonra döner; yüklemede idempotency yok, zaman aşımı sonrası yeniden deneme çift görsel oluşturabilir; 6 eşzamanlı işleme ≈ 850 MB (tahmin, ölçülmedi), bellek sınırı tanımlı değil. LOW: BFF gövde okumasında ayrı zaman aşımı ve eşzamanlılık sınırı yok | Açık | Prod öncesi (OPS-06 yük testi) |
 
 ### 5.2 Canlıya (production) çıkmadan önce mutlaka düzeltilecekler
 
@@ -371,6 +389,7 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 
 | Tarih | Değişiklik | PR | Test | Deploy |
 |---|---|---|---|---|
+| 2026-11-22 | INF-12, IMG-01, USR-T13, USR-T15 → DONE-MERGED; OPS-03 dev dilimi merge edildi (IN PROGRESS); Next.js 16.4.6 | [#84](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/84), [#85](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/85), [#86](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/86), [#87](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/87) | unit 600/600, e2e 496 + 1 skip, fe 215/215, Playwright 23/23, smoke 46/46; IMG-01 üçüncü inceleme: engelleyici yok | dev `ceee47e` |
 | 2026-11-22 | Dev deploy: USR-T9, T10, T11, T12, INF-19, INF-20 dev'de; INF-12 → DONE-NOT-DEPLOYED (depolama ayarı yok) | #73–#75, #77–#82 | dev smoke tümü geçti | dev `804886c` |
 | 2026-11-16 | USR-T11 kalan dilim → DONE-PR: tenant kapsamlı kullanıcı detayı, liste/detayda global lastLoginAt; CRITICAL bağımsız incelemede bulgu yok | [#80](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/80) | kod 3f42e76, CI 43843739033: unit 571/571, e2e 471 geçti + 1 skip, frontend 206/206; build/lint yeşil. RED dd07458: 4 e2e başarısızlığı; yerel sözleşme 2 RED → 2 GREEN | yok; migration yok |
 | 2026-11-15 | USR-T9 kalan B dilimi → DONE-PR; markalı davet HTML/düz metin şablonu. STANDARD öz-inceleme. Görev satırları tekilleştirildi: 142 toplam, 55 DONE-MERGED, 1 DONE-PR, 1 BLOCKED, 85 PLANNED; takvim yeniden hesaplanmadı | [#74](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/74) | kod `df54a82`, CI 43745748422: unit 572/572, e2e 467 geçti + 1 skip, frontend 198/198; build/lint yeşil. Yerel mail/davet 30/30, typecheck/lint temiz | yok; migration yok |
