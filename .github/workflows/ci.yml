@@ -172,7 +172,7 @@ jobs:
         working-directory: backend
       - run: npm run build
         working-directory: backend
-      - name: Object storage and product images against MinIO
+      - name: Object storage against MinIO, product images API
         working-directory: backend
         run: |
           set -o pipefail

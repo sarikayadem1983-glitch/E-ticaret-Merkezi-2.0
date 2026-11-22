@@ -63,7 +63,8 @@ wait_for "$APP_ORIGIN/login"
 PLAIN="http://127.0.0.1:$FRONTEND_PORT"
 [ "$(curl -s -o /dev/null -w '%{http_code}' "$PLAIN/login")" = 308 ] || { echo "HATA: HTTP okuma yönlendirilmedi" >&2; exit 1; }
 [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$PLAIN/api/session")" = 426 ] || { echo "HATA: HTTP yazma reddedilmedi" >&2; exit 1; }
-curl -s --cacert "$CERT" -D - -o /dev/null "$APP_ORIGIN/login" | grep -qi '^strict-transport-security:' || { echo "HATA: HSTS yok" >&2; exit 1; }
+HEADERS="$(curl -s --cacert "$CERT" -D - -o /dev/null "$APP_ORIGIN/login")"
+grep -qi '^strict-transport-security:' <<< "$HEADERS" || { echo "HATA: HSTS yok" >&2; exit 1; }
 echo "ok: HTTP 308/426, HSTS"
 
 cd "$FE"
