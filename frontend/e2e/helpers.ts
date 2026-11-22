@@ -144,5 +144,8 @@ export async function createCompany(page: Page, legalName: string): Promise<stri
   return id!;
 }
 
+/** The browser's session cookie; `__Host-` (Secure) on the production build. */
+export const SID_COOKIE = process.env.E2E_BASE_URL?.startsWith('https:') ? '__Host-tm_sid' : 'tm_sid';
+
 /** Origin of the app under test (same as `baseURL` in playwright.config.ts). */
 export const APP_ORIGIN = process.env.E2E_BASE_URL ?? 'http://localhost:3000';
