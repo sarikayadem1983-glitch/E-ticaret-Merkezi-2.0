@@ -9,7 +9,9 @@ export default defineConfig({
   globalSetup: './e2e/global-setup.ts',
   fullyParallel: false,
   workers: 1,
-  timeout: 60_000,
+  timeout: 120_000,
+  // `next dev` compiles a page on first visit; 5 s is too short on slow machines.
+  expect: { timeout: 15_000 },
   use: {
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:3000',
     trace: 'retain-on-failure',
