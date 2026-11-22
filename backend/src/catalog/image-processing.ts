@@ -56,7 +56,7 @@ async function assertSize(input: Buffer): Promise<void> {
   } catch {
     throw refuse('IMAGE_INVALID', 'Görsel okunamadı veya çok büyük');
   }
-  if (width * height > MAX_IMAGE_PIXELS) {
+  if (!width || !height || width * height > MAX_IMAGE_PIXELS) {
     throw refuse('IMAGE_INVALID', 'Görsel okunamadı veya çok büyük');
   }
   if (Math.min(width, height) < MIN_IMAGE_SIDE) {

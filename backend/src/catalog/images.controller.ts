@@ -34,8 +34,9 @@ import { UploadGate } from './upload-gate.js';
 const uuid = new ParseUUIDPipe({ errorHttpStatusCode: HttpStatus.NOT_FOUND });
 
 const READ_TIMEOUT_MS = 30_000;
-/** Slots cover buffering and decoding; the database check runs before one is taken. */
-const gate = new UploadGate(6, 2);
+/** Separate limits: a slowly sent body holds a reading slot, never a decoding one. */
+const readGate = new UploadGate(24, 4);
+const decodeGate = new UploadGate(6, 2);
 
 const tooLarge = () =>
   new PayloadTooLargeException({
@@ -103,8 +104,9 @@ export class ImagesController {
       });
     }
     await this.images.assertUploadable(user, id, q.variant_id);
-    return gate.run(user.tid, async () =>
-      this.images.upload(user, id, q.variant_id, await readBody(req)),
+    const body = await readGate.run(user.tid, () => readBody(req));
+    return decodeGate.run(user.tid, () =>
+      this.images.upload(user, id, q.variant_id, body),
     );
   }
 
