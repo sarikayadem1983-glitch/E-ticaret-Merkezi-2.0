@@ -38,7 +38,7 @@ Satın alınmadı, kurulmadı, veri aktarılmadı. Gerçek hizmette denenmedi; a
 
 | Konu | Sonuç |
 |---|---|
-| `setup-roles.sql` | Superuser olmayan `doadmin` benzeri rolle (PG 16, 18) önce çalışmadı; düzeltmeden sonra roller, tüm migration'lar ve dump geri yükleme geçti. Şart: veritabanını yönetici rolü oluşturmuş olmalı. `tm_app` sonradan SUPERUSER/CREATEDB olursa betik durur |
+| `setup-roles.sql` | Superuser olmayan `doadmin` benzeri rolle (PG 16, 18) önce çalışmadı; düzeltmeden sonra roller, tüm migration'lar ve dump geri yükleme geçti. Şart: veritabanını yönetici rolü oluşturmuş olmalı. Rol nitelikleri sonradan değişmişse betik yönetilen ortamda onarmaz, durur (parolalar değişmez). Repo testi PG 16 ve boş veritabanıyla; PG 18, migration ve dump elle koşuldu |
 | Valkey + BullMQ 6.3.15 | Valkey 8.1 ve 9.2, TLS, noeviction, DO'nun yasakladığı komutlar kapalı: backend e2e 496 + 1 skip, reddedilen komut 0. Frontend BFF Valkey'de koşulmadı. Hizmet Valkey yedeği sunmuyor: düğüm kaybında oturum, sayaç ve kuyruk işleri kaybolabilir |
 | RPO 5 dk (hedef) | Doküman: WAL beş dakikada bir. Yalnız PostgreSQL; görseller, Valkey ve uzak kopya kapsam dışı. Doğrulanmış garanti değil |
 | RTO 1 saat (hedef) | Doküman süre vermiyor; tek düğümde SLA %99,5. Yerel tatbikat 34–90 sn (dev verisi), hizmette ölçülmedi. Garanti değil |

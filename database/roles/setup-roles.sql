@@ -32,7 +32,8 @@ WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'tm_app') \gexec
 
 -- Re-assert attributes and set passwords (rotation = re-run with new values).
 -- Only when something differs: a managed database's admin (no SUPERUSER) may not even
--- restate NOSUPERUSER. A role that drifted to SUPERUSER therefore still stops the script there.
+-- restate NOSUPERUSER. There, any drift stops the script (nothing is repaired); a superuser
+-- run repairs it.
 SELECT 'ALTER ROLE tm_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS'
 FROM pg_roles WHERE rolname = 'tm_migrator'
   AND (NOT rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls) \gexec

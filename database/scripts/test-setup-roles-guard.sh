@@ -83,7 +83,16 @@ else
 fi
 for attr in SUPERUSER CREATEDB; do
   su_sql "ALTER ROLE tm_app $attr"
-  if as_admin; then echo "FAIL: managed admin accepted tm_app $attr"; FAILED=1; else echo "ok: managed admin stops on tm_app $attr"; fi
+  before="$(su_sql "SELECT string_agg(rolname || rolpassword, ',' ORDER BY rolname) FROM pg_authid WHERE rolname IN ('tm_app','tm_migrator')")"
+  if out="$(docker exec "$NAME" psql -U managed_admin -d managed -X -q -f /tmp/setup-roles.sql       -v app_password=changed-test-value -v migrator_password=changed-test-value 2>&1)"; then
+    echo "FAIL: managed admin accepted tm_app $attr"; FAILED=1
+  elif ! grep -q 'permission denied to alter role' <<<"$out"; then
+    echo "FAIL: tm_app $attr: stopped for another reason"; FAILED=1
+  elif [ "$before" != "$(su_sql "SELECT string_agg(rolname || rolpassword, ',' ORDER BY rolname) FROM pg_authid WHERE rolname IN ('tm_app','tm_migrator')")" ]; then
+    echo "FAIL: tm_app $attr: passwords changed"; FAILED=1
+  else
+    echo "ok: managed admin stops on tm_app $attr, passwords unchanged"
+  fi
   su_sql "ALTER ROLE tm_app NO$attr"
 done
 su_sql "ALTER ROLE tm_app SUPERUSER"
