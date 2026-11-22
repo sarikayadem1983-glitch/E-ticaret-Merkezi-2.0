@@ -329,6 +329,8 @@ Kullanıcı onayıyla, yalnızca dev ortamında (`localhost:5432/ticaret_merkezi
 | Stage ortamı ve IP whitelist | Doğrulanmadı | Stage denenmedi; 2026-10-29'da 403 (IP whitelist yok) |
 | Resmî istek limiti | Doğrulanmadı | Canlı yanıtlarda rate-limit başlığı yoktu. `SYNC_RATE_TRENDYOL` varsayılanı (10:5) doğrulanmış limit değil; `SYNC_LIVE_CALLS` kapalı |
 
+**BLK-01 resmî doküman okuması (2026-11-22, AÇIK):** stage IP yetkisi 0850 258 58 00 üzerinden satıcı bildirimiyle istenir; stage hesabı ve anahtarları canlıdan farklıdır (`stagepartner.trendyol.com`). IP listesi: yalnız IPv4, en çok 7. Dokümandaki statik IP cümlesi belirsiz, çağrı merkezine sorulmalı. İstek sınırı: uç başına 10 sn'de 50; grup sınırları Türkçe ve İngilizce sayfada çelişkili, hesap kademesine göre teyit gerekir.
+
 BLK-01, stage/IP erişimi ve resmî limit doğrulanmadan kapatılmaz.
 
 ## 5. Riskler
@@ -389,6 +391,7 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 
 | Tarih | Değişiklik | PR | Test | Deploy |
 |---|---|---|---|---|
+| 2026-11-22 | OPS-03: prod aday A (DigitalOcean) teknik doğrulaması, `docs/BACKUP.md`; `setup-roles.sql` yönetilen PostgreSQL düzeltmesi (PR). Satın alma, kurulum, veri aktarımı yok; KVKK, anahtar sahipliği, bildirim adresi kararlaştırılmadı | bu PR | rol testi 9/9; Valkey 8/9 ile backend e2e 496 + 1 skip | yok |
 | 2026-11-22 | R-24 kapandı (#89, merge `4aca721`); OPS-03 temiz ortam tatbikatı (#90, merge `d07c1fe`), OPS-03 IN PROGRESS | [#89](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/89), [#90](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/90) | #89: CI gerçek MinIO 6/6 + görsel API 11/11, Playwright 23/23; yerel ilk tur 22/23 (Redis zaman aşımı → 503), sonraki iki tur 23/23; inceleme engelleyicisiz. #90: 42 tablo eşit, 6 görsel, 13 nesne, `/health` ok, 34 sn; 5 negatif durum reddedildi; CRITICAL inceleme 3 tur (1 HIGH + MEDIUM bulgular kapandı, açık HIGH/MEDIUM yok). Linux tatbikatı koşulmadı | deploy gerektirmez (dev `ceee47e`) |
 | 2026-11-22 | INF-12, IMG-01, USR-T13, USR-T15 → DONE-MERGED; OPS-03 dev dilimi merge edildi (IN PROGRESS); Next.js 16.4.6 | [#84](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/84), [#85](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/85), [#86](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/86), [#87](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/87) | unit 600/600, e2e 496 + 1 skip, fe 215/215, Playwright 23/23, smoke 46/46; IMG-01 üçüncü inceleme: engelleyici yok | dev `ceee47e` |
 | 2026-11-22 | Dev deploy: USR-T9, T10, T11, T12, INF-19, INF-20 dev'de; INF-12 → DONE-NOT-DEPLOYED (depolama ayarı yok) | #73–#75, #77–#82 | dev smoke tümü geçti | dev `804886c` |

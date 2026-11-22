@@ -67,4 +67,39 @@ else
   echo "FAIL: valid passwords"; FAILED=1
 fi
 
+# Managed PostgreSQL: the admin has CREATEROLE but no SUPERUSER and owns its database.
+su_sql() { docker exec "$NAME" psql -U postgres -d postgres -X -q -At -c "$1"; }
+as_admin() {
+  docker exec "$NAME" psql -U managed_admin -d managed -X -q -f /tmp/setup-roles.sql     -v app_password=a-strong-test-value -v migrator_password=another-test-value >/dev/null 2>&1
+}
+su_sql "DROP OWNED BY tm_app, tm_migrator"
+docker exec "$NAME" psql -U postgres -d guard_test -X -q -c "ALTER SCHEMA public OWNER TO postgres"   -c "DROP OWNED BY tm_app, tm_migrator" -c "DROP ROLE tm_app" -c "DROP ROLE tm_migrator"
+su_sql "CREATE ROLE managed_admin LOGIN CREATEROLE CREATEDB REPLICATION BYPASSRLS"
+docker exec "$NAME" psql -U managed_admin -d postgres -X -q -c "CREATE DATABASE managed"
+if as_admin && as_admin   && [ "$(su_sql "SELECT count(*) FROM pg_roles WHERE rolname IN ('tm_app','tm_migrator') AND NOT (rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls)")" = 2 ]   && [ "$(su_sql "SELECT pg_has_role('tm_app', 'tm_migrator', 'MEMBER') OR pg_has_role('tm_app', 'managed_admin', 'MEMBER')")" = f ]; then
+  echo "ok: managed admin creates both roles, twice"
+else
+  echo "FAIL: managed admin"; FAILED=1
+fi
+for attr in SUPERUSER CREATEDB; do
+  su_sql "ALTER ROLE tm_app $attr"
+  before="$(su_sql "SELECT string_agg(rolname || rolpassword, ',' ORDER BY rolname) FROM pg_authid WHERE rolname IN ('tm_app','tm_migrator')")"
+  if out="$(docker exec "$NAME" psql -U managed_admin -d managed -X -q -f /tmp/setup-roles.sql       -v app_password=changed-test-value -v migrator_password=changed-test-value 2>&1)"; then
+    echo "FAIL: managed admin accepted tm_app $attr"; FAILED=1
+  elif ! grep -q 'permission denied to alter role' <<<"$out"; then
+    echo "FAIL: tm_app $attr: stopped for another reason"; FAILED=1
+  elif [ "$before" != "$(su_sql "SELECT string_agg(rolname || rolpassword, ',' ORDER BY rolname) FROM pg_authid WHERE rolname IN ('tm_app','tm_migrator')")" ]; then
+    echo "FAIL: tm_app $attr: passwords changed"; FAILED=1
+  else
+    echo "ok: managed admin stops on tm_app $attr, passwords unchanged"
+  fi
+  su_sql "ALTER ROLE tm_app NO$attr"
+done
+su_sql "ALTER ROLE tm_app SUPERUSER"
+if run_setup -v app_password=a-strong-test-value -v migrator_password=another-test-value   && [ "$(su_sql "SELECT rolsuper FROM pg_roles WHERE rolname = 'tm_app'")" = f ]; then
+  echo "ok: superuser repairs tm_app SUPERUSER"
+else
+  echo "FAIL: superuser repair"; FAILED=1
+fi
+
 exit "$FAILED"
