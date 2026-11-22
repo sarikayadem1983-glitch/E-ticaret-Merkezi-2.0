@@ -13,5 +13,6 @@ BEGIN
 END $$;
 
 DROP TABLE "product_images";
+DROP INDEX "product_variants_tenant_id_company_id_product_id_id_key";
 
 COMMIT;

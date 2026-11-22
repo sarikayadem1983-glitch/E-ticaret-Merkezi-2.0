@@ -3,6 +3,7 @@ import { AuditService } from '../audit/audit.service.js';
 import type { AuthUser } from '../auth/decorators.js';
 import type { PrismaTx } from '../database/prisma.types.js';
 import type { Prisma } from '../generated/prisma/client.js';
+import { RateLimiterService } from '../rate-limit/rate-limiter.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { TenantContext } from '../tenancy/tenant-context.js';
 import { conflict, notFound, unavailable } from './catalog.errors.js';
@@ -10,6 +11,8 @@ import { CatalogRepository } from './catalog.repository.js';
 import { catalogWrite, MODULE } from './catalog.tx.js';
 import { MAX_IMAGES_PER_PRODUCT, processImage } from './image-processing.js';
 import { ProductsService } from './products.service.js';
+
+const UPLOADS_PER_USER = { limit: 60, windowMs: 60_000 };
 
 const FIELDS = {
   id: true,
@@ -26,6 +29,9 @@ const FIELDS = {
 
 type Row = Prisma.ProductImageGetPayload<{ select: typeof FIELDS }>;
 
+/** Audit shape: the internal storage path stays out of the log. */
+const audited = ({ storageKey: _key, ...row }: Row) => row;
+
 /** Product images (IMG-01). Permissions are the product's; objects live under the tenant prefix. */
 @Injectable()
 export class ImagesService {
@@ -36,6 +42,7 @@ export class ImagesService {
     private readonly products: ProductsService,
     private readonly storage: StorageService,
     private readonly audit: AuditService,
+    private readonly limiter: RateLimiterService,
   ) {}
 
   private rows(
@@ -123,6 +130,10 @@ export class ImagesService {
     variantId?: string,
   ): Promise<void> {
     this.storage.assertEnabled();
+    await this.limiter.hit(
+      `image-upload:${user.tid}:${user.sub}`,
+      UPLOADS_PER_USER,
+    );
     await catalogWrite(this.repository.prisma, async (tx) => {
       await this.products.accessible(user, productId, true, tx);
       await this.assertVariant(productId, variantId, tx);
@@ -171,7 +182,7 @@ export class ImagesService {
           },
           select: FIELDS,
         });
-        await this.record('CREATE', created.id, undefined, created, tx);
+        await this.record('CREATE', created.id, undefined, audited(created), tx);
         return created;
       });
       return { data: await this.shape(row) };
@@ -256,7 +267,7 @@ export class ImagesService {
         where: { id: imageId },
         data: { deletedAt: new Date() },
       });
-      await this.record('DELETE', imageId, before, undefined, tx);
+      await this.record('DELETE', imageId, audited(before), undefined, tx);
       return before;
     });
     await this.discard(tenantId, row.storageKey);
@@ -267,7 +278,7 @@ export class ImagesService {
     try {
       await this.storage.remove(tenantId, key);
     } catch {
-      this.logger.warn('Görsel nesnesi silinemedi; depoda sahipsiz kaldı');
+      this.logger.warn(`Görsel nesnesi silinemedi, depoda sahipsiz: ${key}`);
     }
   }
 }

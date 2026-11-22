@@ -451,6 +451,8 @@ model ProductVariant {
 
   @@unique([tenantId, id])
   @@unique([tenantId, companyId, id])
+  /// Target of the image FK: an image's variant always belongs to the image's product.
+  @@unique([tenantId, companyId, productId, id])
   @@unique([tenantId, sku])
   @@unique([tenantId, barcode])
   @@index([tenantId, companyId, productId])
@@ -1006,7 +1008,7 @@ model ProductImage {
 
   tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   product Product         @relation(fields: [tenantId, companyId, productId], references: [tenantId, companyId, id], onDelete: Restrict)
-  variant ProductVariant? @relation(fields: [tenantId, companyId, variantId], references: [tenantId, companyId, id], onDelete: Restrict)
+  variant ProductVariant? @relation(fields: [tenantId, companyId, productId, variantId], references: [tenantId, companyId, productId, id], onDelete: Restrict)
 
   @@unique([tenantId, id])
   @@unique([storageKey])

@@ -3,9 +3,15 @@ import sharp, { type OutputInfo } from 'sharp';
 
 /** IMG-01 limits. The pixel count is checked before decoding (decompression bombs). */
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
-export const MAX_IMAGE_PIXELS = 40_000_000;
+export const MAX_IMAGE_PIXELS = 25_000_000;
+/** Re-encoding may grow a file; more than this is refused. */
+export const MAX_OUTPUT_BYTES = 10 * 1024 * 1024;
 export const MIN_IMAGE_SIDE = 100;
 export const MAX_IMAGES_PER_PRODUCT = 20;
+
+// Bounded memory and CPU per image: no libvips cache, one thread each.
+sharp.cache(false);
+sharp.concurrency(1);
 
 export type ImageFormat = 'jpeg' | 'png' | 'webp';
 
@@ -39,6 +45,28 @@ export function detectFormat(b: Buffer): ImageFormat | undefined {
   return riff && b.toString('latin1', 8, 12) === 'WEBP' ? 'webp' : undefined;
 }
 
+/** Dimensions from the header only, before any pixel is decoded. */
+async function assertSize(input: Buffer): Promise<void> {
+  let width = 0;
+  let height = 0;
+  try {
+    ({ width, height } = await sharp(input, {
+      limitInputPixels: MAX_IMAGE_PIXELS,
+    }).metadata());
+  } catch {
+    throw refuse('IMAGE_INVALID', 'Görsel okunamadı veya çok büyük');
+  }
+  if (width * height > MAX_IMAGE_PIXELS) {
+    throw refuse('IMAGE_INVALID', 'Görsel okunamadı veya çok büyük');
+  }
+  if (Math.min(width, height) < MIN_IMAGE_SIDE) {
+    throw refuse(
+      'IMAGE_TOO_SMALL',
+      `Görselin kısa kenarı en az ${MIN_IMAGE_SIDE} piksel olmalı`,
+    );
+  }
+}
+
 /**
  * Decodes and re-encodes the image: orientation is applied, then every byte outside the
  * pixels (EXIF, GPS, XMP, trailing data) is dropped. Animations keep the first frame.
@@ -51,6 +79,7 @@ export async function processImage(input: Buffer): Promise<ProcessedImage> {
       'Yalnızca JPEG, PNG ve WebP görselleri yüklenebilir',
     );
   }
+  await assertSize(input);
   let data: Buffer;
   let info: OutputInfo;
   try {
@@ -70,11 +99,8 @@ export async function processImage(input: Buffer): Promise<ProcessedImage> {
   } catch {
     throw refuse('IMAGE_INVALID', 'Görsel okunamadı veya çok büyük');
   }
-  if (Math.min(info.width, info.height) < MIN_IMAGE_SIDE) {
-    throw refuse(
-      'IMAGE_TOO_SMALL',
-      `Görselin kısa kenarı en az ${MIN_IMAGE_SIDE} piksel olmalı`,
-    );
+  if (data.byteLength > MAX_OUTPUT_BYTES) {
+    throw refuse('IMAGE_TOO_LARGE', 'Görsel işlendikten sonra çok büyük');
   }
   return {
     body: data,

@@ -25,10 +25,13 @@ CREATE INDEX "product_images_tenant_id_company_id_variant_id_idx" ON "product_im
 CREATE UNIQUE INDEX "product_images_tenant_id_id_key" ON "product_images"("tenant_id", "id");
 CREATE UNIQUE INDEX "product_images_storage_key_key" ON "product_images"("storage_key");
 
+-- Target of the image FK below. Additive: id is already unique.
+CREATE UNIQUE INDEX "product_variants_tenant_id_company_id_product_id_id_key" ON "product_variants"("tenant_id", "company_id", "product_id", "id");
+
 -- AddForeignKey
 ALTER TABLE "product_images" ADD CONSTRAINT "product_images_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "product_images" ADD CONSTRAINT "product_images_tenant_id_company_id_product_id_fkey" FOREIGN KEY ("tenant_id", "company_id", "product_id") REFERENCES "products"("tenant_id", "company_id", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "product_images" ADD CONSTRAINT "product_images_tenant_id_company_id_variant_id_fkey" FOREIGN KEY ("tenant_id", "company_id", "variant_id") REFERENCES "product_variants"("tenant_id", "company_id", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "product_images" ADD CONSTRAINT "product_images_tenant_id_company_id_product_id_variant_id_fkey" FOREIGN KEY ("tenant_id", "company_id", "product_id", "variant_id") REFERENCES "product_variants"("tenant_id", "company_id", "product_id", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- SQL-only CHECKs. The storage key must be inside the row's own tenant prefix.
 ALTER TABLE "product_images" ADD CONSTRAINT "product_images_key_tenant" CHECK (starts_with("storage_key", 'tenants/' || "tenant_id"::text || '/'));

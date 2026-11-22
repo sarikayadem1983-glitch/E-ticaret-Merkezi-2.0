@@ -13,6 +13,7 @@ import {
   Put,
   Query,
   Req,
+  RequestTimeoutException,
   UnsupportedMediaTypeException,
 } from '@nestjs/common';
 import type { Request } from 'express';
@@ -28,8 +29,13 @@ import {
   UploadImageQuery,
 } from './images.dto.js';
 import { ImagesService } from './images.service.js';
+import { UploadGate } from './upload-gate.js';
 
 const uuid = new ParseUUIDPipe({ errorHttpStatusCode: HttpStatus.NOT_FOUND });
+
+const READ_TIMEOUT_MS = 30_000;
+/** Slots cover buffering and decoding; the database check runs before one is taken. */
+const gate = new UploadGate(6, 2);
 
 const tooLarge = () =>
   new PayloadTooLargeException({
@@ -42,12 +48,30 @@ const tooLarge = () =>
  * without write access can make the server buffer megabytes.
  */
 async function readBody(req: Request): Promise<Buffer> {
+  const declared = Number(req.headers['content-length'] ?? 0);
+  if (declared > 2 * MAX_IMAGE_BYTES) throw tooLarge();
+  const deadline = setTimeout(
+    () => req.destroy(new Error('upload timeout')),
+    READ_TIMEOUT_MS,
+  );
   const chunks: Buffer[] = [];
   let size = 0;
-  for await (const chunk of req as AsyncIterable<Buffer>) {
-    size += chunk.length;
-    // Over the limit: keep reading but store nothing, so the client gets the 413 answer.
-    if (size <= MAX_IMAGE_BYTES) chunks.push(chunk);
+  try {
+    for await (const chunk of req as AsyncIterable<Buffer>) {
+      size += chunk.length;
+      // Slightly over: read on without storing, so the client gets the 413 answer.
+      // Far over: stop reading, which closes the connection.
+      if (size <= MAX_IMAGE_BYTES) chunks.push(chunk);
+      if (size > 2 * MAX_IMAGE_BYTES) throw tooLarge();
+    }
+  } catch (error) {
+    if (error instanceof PayloadTooLargeException) throw error;
+    throw new RequestTimeoutException({
+      code: 'UPLOAD_INCOMPLETE',
+      message: 'Görsel alınamadı, tekrar deneyin',
+    });
+  } finally {
+    clearTimeout(deadline);
   }
   if (size > MAX_IMAGE_BYTES) throw tooLarge();
   return Buffer.concat(chunks);
@@ -79,7 +103,9 @@ export class ImagesController {
       });
     }
     await this.images.assertUploadable(user, id, q.variant_id);
-    return this.images.upload(user, id, q.variant_id, await readBody(req));
+    return gate.run(user.tid, async () =>
+      this.images.upload(user, id, q.variant_id, await readBody(req)),
+    );
   }
 
   @Put('order')

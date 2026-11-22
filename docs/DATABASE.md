@@ -159,7 +159,7 @@
 - `tm_app`: SELECT/INSERT/UPDATE/DELETE (ayar verisi; eşik kaldırılabilir). Prova: `verify.sql`, `rehearsal-seed.sql`.
 
 ### catalog — ürün görselleri (IMG-01; migration `20261122170000_product_images`, dev'e uygulanmadı)
-- `product_images` — id, tenant_id, company_id, product_id, variant_id?, storage_key (tekil), content_type (jpeg/png/webp CHECK), width, height, byte_size, position, created_at, updated_at, deleted_at. FK `(tenant_id, company_id, product_id)` → `products`, `(tenant_id, company_id, variant_id)` → `product_variants`.
+- `product_images` — id, tenant_id, company_id, product_id, variant_id?, storage_key (tekil), content_type (jpeg/png/webp CHECK), width, height, byte_size, position, created_at, updated_at, deleted_at. FK `(tenant_id, company_id, product_id)` → `products`, `(tenant_id, company_id, product_id, variant_id)` → `product_variants` (yeni tekil indeks; varyant aynı ürünün olmalı).
 - CHECK `product_images_key_tenant`: `storage_key` satırın kendi `tenants/<tenant_id>/` önekinde olmalı.
 - `tm_app`: SELECT/INSERT/UPDATE (silme soft delete). Geri dönüş: `down.sql` (satır varken durur). Prova: `verify.sql`, `rehearsal-seed.sql`.
 

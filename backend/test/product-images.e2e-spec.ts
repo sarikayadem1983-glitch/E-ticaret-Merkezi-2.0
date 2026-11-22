@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { type Server, request as httpRequest } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { DeleteObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import type { INestApplication } from '@nestjs/common';
 import sharp from 'sharp';
@@ -193,6 +195,46 @@ describe('Product images API (e2e, IMG-01)', () => {
     expect(res.body.error.code).toBe('PAYLOAD_TOO_LARGE');
   });
 
+  it('refuses a streamed body far over the limit and stays up', async () => {
+    const server = app.getHttpServer() as unknown as Server;
+    if (!server.listening) await new Promise<void>((r) => server.listen(0, r));
+    const { port } = server.address() as AddressInfo;
+    const outcome = await new Promise<number | string>((resolve) => {
+      const req = httpRequest(
+        {
+          port,
+          path: url(),
+          method: 'POST',
+          headers: {
+            ...bearer(a),
+            'Content-Type': 'application/octet-stream',
+            'Transfer-Encoding': 'chunked',
+          },
+        },
+        (res) => {
+          resolve(res.statusCode ?? 0);
+          res.resume();
+          req.destroy();
+        },
+      );
+      req.on('error', (e: NodeJS.ErrnoException) => resolve(e.code ?? 'error'));
+      req.on('close', () => resolve('closed'));
+      const chunk = Buffer.alloc(1024 * 1024);
+      const write = () => {
+        if (!req.destroyed) req.write(chunk, () => setImmediate(write));
+      };
+      write();
+    });
+    expect([
+      413,
+      'ECONNRESET',
+      'ECONNABORTED',
+      'EPIPE',
+      'closed',
+    ]).toContain(outcome);
+    await http().get(url()).set(bearer(a)).expect(200);
+  });
+
   it("refuses another product's variant, also when re-binding", async () => {
     const before = objects.size;
     await upload(a, png, product, `?variant_id=${otherVariant}`).expect(404);
@@ -308,7 +350,11 @@ describe('Product images API (e2e, IMG-01)', () => {
        WHERE t.slug = $1 AND l.entity_type = 'ProductImage' ORDER BY 1`,
       [slugs[0]],
     );
+    const leaked = await pool.query(
+      "SELECT 1 FROM audit_logs WHERE entity_type = 'ProductImage' AND (after::text LIKE '%tenants/%' OR before::text LIKE '%tenants/%')",
+    );
     await pool.end();
+    expect(leaked.rowCount).toBe(0);
     expect(rows.map((r) => r.action)).toEqual(['CREATE', 'DELETE', 'UPDATE']);
   });
 

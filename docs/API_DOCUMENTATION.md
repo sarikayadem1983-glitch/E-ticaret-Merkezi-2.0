@@ -586,7 +586,7 @@ Hepsi üyenin firma rollerine göre süzülür.
 `/api/v1/products/:id/images` — yetkiler ürünle aynı (firma rolü yok 404, salt okuma 403, firma pasif 409).
 
 - `GET` → `{ data: [{ id, variantId, contentType, width, height, byteSize, position, createdAt, url }] }`; `url` kısa ömürlü imzalı bağlantıdır, depolama anahtarı dönmez.
-- `POST ?variant_id` — gövde ham bayt, `Content-Type: application/octet-stream` (415), en çok 8 MB (413). Tür içerikten belirlenir: JPEG/PNG/WebP (422 `IMAGE_TYPE_UNSUPPORTED`); bozuk veya 40 MP üstü 422 `IMAGE_INVALID`; kısa kenar < 100 px 422 `IMAGE_TOO_SMALL`; ürün başına 20 (409 `IMAGE_LIMIT`). Görsel yeniden kodlanır: yön uygulanır, EXIF/GPS/XMP ve fazladan baytlar atılır.
+- `POST ?variant_id` — gövde ham bayt, `Content-Type: application/octet-stream` (415), en çok 8 MB (413). Tür içerikten belirlenir: JPEG/PNG/WebP (422 `IMAGE_TYPE_UNSUPPORTED`); bozuk veya 25 MP üstü 422 `IMAGE_INVALID`; kısa kenar < 100 px 422 `IMAGE_TOO_SMALL`; işlenmiş hali 10 MB üstü 422 `IMAGE_TOO_LARGE`; ürün başına 20 (409 `IMAGE_LIMIT`); kullanıcı başına 60 yükleme/dk (429); süreç başına 6, mağaza başına 2 eşzamanlı yükleme (503 `UPLOAD_BUSY`); 30 sn'de gelmeyen gövde 408. Görsel yeniden kodlanır: yön uygulanır, EXIF/GPS/XMP ve fazladan baytlar atılır.
 - `PUT /order` `{ imageIds }` — güncel görsellerin tamamı (422 `IMAGE_ORDER_MISMATCH`).
 - `PATCH /:imageId` `{ variantId | null }`; varyant aynı ürünün olmalı (404).
 - `DELETE /:imageId` → 204; satır soft delete, nesne silinir (silinemezse sahipsiz kalır, loglanır).
