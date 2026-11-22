@@ -24,9 +24,13 @@ Windows'ta `umask` etkisizdir: yedek klasörünün ACL'ini elle kısıtlayın. D
 
 1. `sha256sum -c <db>-<zaman>.sha256`
 2. Yeni, boş bir veritabanı oluşturun; kaynak veritabanının üzerine yazmayın. Temiz kümede önce roller kurulur: `database/roles/setup-roles.sql` (`app_password`, `migrator_password` psql değişkenleri; dump rolleri içermez).
-3. `docker exec -i tm-postgres pg_restore -U <POSTGRES_USER> -d <yeni_db> --exit-on-error < <dump>`. Aynı kümede her yedekte denenir; **temiz kümede tatbik edilmedi**.
-4. Nesneler: `<db>-<zaman>.objects.tar` içindeki `data/` MinIO birimine açılır (MinIO kapalıyken). Bu adım tatbik edilmedi.
+3. `docker exec -i tm-postgres pg_restore -U <POSTGRES_USER> -d <yeni_db> --exit-on-error < <dump>`. Aynı kümede her yedekte denenir; temiz küme: aşağıdaki tatbikat.
+4. Nesneler: `<db>-<zaman>.objects.tar` içindeki `data/` MinIO birimine açılır (MinIO kapalıyken). Dosya sahibi `minio` olmalı (`chown -R minio /data`).
 5. Uygulamayı yeni veritabanına yönlendirin, `/health` ve smoke.
+
+## Temiz ortam tatbikatı
+
+`bash database/scripts/restore-rehearsal.sh <set>.sha256` — yeni PostgreSQL kümesi, yeni MinIO ve backend, geçici konteynerlerde. 2026-11-22 (dev verisi, 595 051 bayt dump): 42 tablo eşit, migration'lar güncel, 6 etkin görsel okundu ve çözüldü, anonim 403, `/health` ok; toplam 28 sn. Negatif: bozuk arşiv (SHA-256) ve eksik nesne (`NoSuchKey`) tatbikatı başarısız yaptı. Prod boyutu için süre ölçümü değildir.
 
 ## PITR tatbikatı
 
