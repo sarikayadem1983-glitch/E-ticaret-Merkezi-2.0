@@ -26,13 +26,16 @@ DUMP="$DIR/$BASE.dump"
 TAR="$DIR/$BASE.objects.tar"
 [ -f "$DUMP" ] && [ -f "$TAR" ] || die "set eksik (.dump ve .objects.tar gerekli)"
 [ -f "$REPO/backend/dist/main.js" ] || die "backend derlenmemiş"
-[ -z "$(find "$REPO/backend/src" -name '*.ts' -newer "$REPO/backend/dist/main.js" | head -n1)" ] || die "backend/dist kaynaktan eski: npm run build"
+# Incremental builds rewrite only changed files: compare with the newest output.
+BUILT="$(find "$REPO/backend/dist" "$REPO/backend" -maxdepth 6 -path '*/node_modules' -prune -o -type f \( -path '*/dist/*.js' -o -name '*.tsbuildinfo' \) -printf '%T@ %p
+' | sort -n | tail -n1 | cut -d' ' -f2-)"
+[ -z "$(find "$REPO/backend/src" -name '*.ts' ! -name '*.spec.ts' -newer "$BUILT" | head -n1)" ] || die "backend/dist kaynaktan eski: npm run build"
 
 ID="tm-drill-$$"
 PG="$ID-pg"; S3="$ID-s3"; REDIS="$ID-redis"; VOL="$ID-vol"
 LABEL="tm-drill=1"
 # A killed run leaves real data behind; never start on top of it unnoticed.
-LEFT="$(docker ps -aq --filter "label=$LABEL"; docker volume ls -q --filter "label=$LABEL")"
+LEFT="$(docker ps -aq --filter "label=$LABEL" && docker volume ls -q --filter "label=$LABEL")"
 [ -z "$LEFT" ] || die "önceki tatbikattan kalan konteyner/birim var (başka tatbikat sürmüyorsa silin): $(echo $LEFT)"
 BE=""
 TMP="$(mktemp -d)"
@@ -41,7 +44,7 @@ cleanup() {
   if [ -n "$BE" ]; then
     # Git Bash: the child is a native process; end it by its Windows PID.
     if [ -r "/proc/$BE/winpid" ]; then taskkill /F /T /PID "$(cat "/proc/$BE/winpid")" >/dev/null 2>&1; fi
-    kill "$BE" 2>/dev/null
+    kill -9 "$BE" 2>/dev/null
     wait "$BE" 2>/dev/null
   fi
   docker rm -fv "$PG" "$S3" "$REDIS" >/dev/null 2>&1
@@ -159,7 +162,8 @@ do {
 if (total !== Number(e.OBJECTS)) throw new Error(`nesne sayısı: depo ${total}, arşiv ${e.OBJECTS}`);
 console.log(`ok: ${rows.length} etkin görsel okundu, boyut/tür/çözme doğru, anonim 403; depoda ${total} nesne (arşivle eşit)`);
 EOF
-OBJECTS="$(grep -cE "^data/$STORAGE_BUCKET/.*/xl\.meta$" "$TMP/names")"
+OBJECTS="$(grep -cE "^data/$STORAGE_BUCKET/.*/xl\.meta$" "$TMP/names" || true)"
+[ "$OBJECTS" -gt 0 ] || die "arşivde nesne yok"
 export OBJECTS
 node "$(win "$TMP/check.mjs")" "$(win "$REPO/backend/package.json")" "$(win "$TMP/images")"
 
