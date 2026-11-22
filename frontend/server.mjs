@@ -95,6 +95,6 @@ createServer((req, res) => {
   handle(req, res);
 }).listen(port, () => {
   console.log(
-    `> Ticaret Merkezi frontend: http://localhost:${port} (${dev ? 'development' : process.env.NODE_ENV})`,
+    `> E-Ticaret Merkezi 2.0 frontend: http://localhost:${port} (${dev ? 'development' : process.env.NODE_ENV})`,
   );
 });

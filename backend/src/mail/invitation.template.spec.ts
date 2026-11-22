@@ -12,7 +12,7 @@ describe('renderInvitation', () => {
   it('provides a Turkish branded document and a complete plain-text alternative', () => {
     const mail = renderInvitation(base);
     expect(mail.html).toContain('<html lang="tr">');
-    expect(mail.html).toContain('Ticaret Merkezi');
+    expect(mail.html).toContain('E-Ticaret Merkezi 2.0');
     expect(mail.html).toContain('name="viewport"');
     expect(mail.html).toContain('Daveti kabul et');
     for (const value of [base.tenantName, base.inviterName, base.roleSummary]) {

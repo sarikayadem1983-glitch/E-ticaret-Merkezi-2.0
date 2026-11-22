@@ -5,7 +5,7 @@ const prodSmtp = {
   MAIL_TRANSPORT: 'smtp',
   SMTP_HOST: 'smtp.example.com',
   SMTP_PORT: '587',
-  MAIL_FROM: 'Ticaret Merkezi <no-reply@example.com>',
+  MAIL_FROM: 'E-Ticaret Merkezi 2.0 <no-reply@example.com>',
 };
 
 describe('loadMailConfig', () => {
@@ -91,7 +91,7 @@ describe('loadMailConfig', () => {
   });
 
   it('rejects a MAIL_FROM without an address', () => {
-    expect(() => loadMailConfig({ MAIL_FROM: 'Ticaret Merkezi' })).toThrow(
+    expect(() => loadMailConfig({ MAIL_FROM: 'E-Ticaret Merkezi 2.0' })).toThrow(
       MailConfigError,
     );
   });

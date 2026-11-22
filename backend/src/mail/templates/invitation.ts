@@ -36,9 +36,9 @@ export function renderInvitation(input: InvitationMailInput): {
   return {
     subject,
     text: [
-      'Ticaret Merkezi',
+      'E-Ticaret Merkezi 2.0',
       '',
-      `${inviter} sizi Ticaret Merkezi'nde ${tenant} mağazasına davet etti.`,
+      `${inviter} sizi E-Ticaret Merkezi 2.0'da ${tenant} mağazasına davet etti.`,
       `Rol: ${role}`,
       '',
       `Daveti kabul etmek için: ${input.url}`,
@@ -54,10 +54,10 @@ export function renderInvitation(input: InvitationMailInput): {
 </head>
 <body style="margin:0;padding:24px 12px;background-color:#f1f5f9;color:#0f172a;font-family:Arial,sans-serif;line-height:1.6;">
   <table role="presentation" style="width:100%;max-width:600px;margin:0 auto;border-collapse:collapse;background-color:#ffffff;">
-    <tr><td style="padding:24px;background-color:#0f172a;color:#ffffff;font-size:20px;font-weight:bold;">Ticaret Merkezi</td></tr>
+    <tr><td style="padding:24px;background-color:#0f172a;color:#ffffff;font-size:20px;font-weight:bold;">E-Ticaret Merkezi 2.0</td></tr>
     <tr><td style="padding:24px;">
       <h1 style="margin:0 0 16px;font-size:24px;line-height:1.3;">Mağazanıza davetlisiniz</h1>
-      <p>${escapeHtml(inviter)} sizi Ticaret Merkezi'nde <strong>${escapeHtml(tenant)}</strong> mağazasına davet etti.</p>
+      <p>${escapeHtml(inviter)} sizi E-Ticaret Merkezi 2.0'da <strong>${escapeHtml(tenant)}</strong> mağazasına davet etti.</p>
       <p><strong>Rol:</strong> ${escapeHtml(role)}</p>
       <p style="margin:24px 0;"><a href="${link}" style="display:inline-block;padding:12px 24px;background-color:#1d4ed8;color:#ffffff;text-decoration:underline;border-radius:6px;font-weight:bold;">Daveti kabul et</a></p>
       <p>${escapeHtml(expiry)}</p>

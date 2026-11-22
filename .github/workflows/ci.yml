@@ -112,7 +112,7 @@ jobs:
       MAIL_TRANSPORT: smtp
       SMTP_HOST: 127.0.0.1
       SMTP_PORT: '1025'
-      MAIL_FROM: Ticaret Merkezi <no-reply@localhost>
+      MAIL_FROM: E-Ticaret Merkezi 2.0 <no-reply@localhost>
       E2E_LOG_DIR: ${{ github.workspace }}/e2e-logs
     services:
       postgres:
