@@ -70,7 +70,7 @@ Son güncelleme: 2026-11-22 (dev deploy `804886c`; 2026-11-19: USR-T10/T12 PR #7
 | INF-17 | Prod ağ/TLS yapılandırması: `TRUST_PROXY`, `BFF_TRUST_PROXY`, backend yalnız iç ağ, HTTPS | P0 | INF-11 | 2 | CRITICAL | B | PLANNED | `req.ip` gerçek istemci IP'si; backend internetten erişilemez | Smoke, S | Yüksek | Öneri (onay bekliyor) |
 | INF-18 | Mağaza değiştirmede Redis hatası: sahte "token hırsızlığı" audit'i ve tüm cihazlardan çıkışın önlenmesi | P0 | PR #6 merge | 2 | CRITICAL | A | DONE-MERGED (PR #10, merge `113b522`; dev `f010233`, 2026-10-30) | Switch sırasında Redis hatası → istek 503, refresh zinciri bozulmaz, `REFRESH_REUSE` audit'i yazılmaz | U, E (Redis hata enjeksiyonu) | Yüksek | Öneri (onay bekliyor) |
 | INF-19 | BFF `forceRefresh` yarışı (`stillNeeded`) nedeniyle oturum kapanması | P1 | PR #6 merge | 2 | CRITICAL | B | DONE-MERGED (PR #78; dev `804886c`, 2026-11-22) | Eşzamanlı iki istek tek refresh yapar, oturum açık kalır | F, P | Orta | Öneri (onay bekliyor) |
-| INF-20 | Kayıtta `409` ile hesap varlığının sızması (kullanıcı numaralandırma) | P1 | USR-T9 | 1 | CRITICAL | B | DONE-MERGED (PR #81; kullanıcı onayı 2026-11-16: kayıt oturum açmaz, dolu slug sessizce `-2…` eki alır) | Var olan e-postayla kayıt aynı yanıtı döner, sahibine e-posta gider | E, S | Orta | Öneri (onay bekliyor) |
+| INF-20 | Kayıtta `409` ile hesap varlığının sızması (kullanıcı numaralandırma) | P1 | USR-T9 | 1 | CRITICAL | B | DONE-MERGED (PR #81; dev `804886c`, 2026-11-22; kullanıcı onayı 2026-11-16: kayıt oturum açmaz, dolu slug sessizce `-2…` eki alır) | Var olan e-postayla kayıt aynı yanıtı döner, sahibine e-posta gider | E, S | Orta | Öneri (onay bekliyor) |
 
 ## M02 — Kullanıcılar, firmalar, roller (`USR`)
 
@@ -476,8 +476,8 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | USR-T10 | Davet servisi (oluştur, yeniden gönder, iptal, lookup, kabul) | DONE-MERGED (PR #79; dev `804886c`, 2026-11-22) | 1 | CRITICAL | Onaylı plan |
 | USR-T11 | Users modülü (liste, erişim düzenleme, pasife alma) | DONE-MERGED (PR #80; dev `804886c`, 2026-11-22) | 0,5 | CRITICAL | Onaylı plan |
 | USR-T12 | BFF route'ları (kullanıcı/davet allowlist, oturumsuz davet route'ları) | DONE-MERGED (PR #79; dev `804886c`, 2026-11-22) | 0,5 | CRITICAL | Onaylı plan |
-| USR-T13 | Kullanıcılar sayfası, davet diyaloğu, davet kabul sayfası | PLANNED | 1 | STANDARD | Onaylı plan |
-| USR-T15 | Playwright akışları (davet, erişim, mağaza değiştirme, mobil) | PLANNED | 1 | STANDARD | Onaylı plan |
+| USR-T13 | Kullanıcılar sayfası, davet diyaloğu, davet kabul sayfası | IN PROGRESS (PR #79; kalan mobil kart görünümü) | 1 | STANDARD | Onaylı plan |
+| USR-T15 | Playwright akışları (davet, erişim, mağaza değiştirme, mobil) | IN PROGRESS (PR #79; kalan mobil kart ve rol değişikliği testleri) | 1 | STANDARD | Onaylı plan |
 | USR-18 | Aşama 2 migration: `users.tenant_id` / `users.is_active` eski kolonlarını kaldırma; önce guard ve login/refresh'in `users.is_active` okuması yeni modele taşınır | BLOCKED (T16 + ayrı migration onayı) | 3 | CRITICAL | Öneri (onay bekliyor) |
 | USR-20 | İki adımlı doğrulama (TOTP) ve kurtarma kodları | PLANNED | 3 | CRITICAL | Öneri (onay bekliyor) |
 | USR-21 | Sahiplik devri (owner rolünü devretme) | PLANNED | 1,5 | CRITICAL | Kullanıcı kararı (2026-10-30) |
@@ -569,9 +569,9 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | BLOCKED | 1 (USR-18) |
 | PLANNED | 77 |
 | Sürüm A | 59 görev (52 tamamlandı + 7 kalan), kalan tahmini efor 25 iş günü |
-| Sürüm B | 62 görev (3 tamamlandı + 59 kalan; 1 açık PR dahil), kalan tahmini efor 182 iş günü |
-| Sürüm C | 21 görev (0 tamamlandı + 21 kalan), 9 EPIC, kalan 87 iş günü |
+| Sürüm B | 62 görev (9 tamamlandı + 53 kalan), kalan tahmini efor 176,5 iş günü |
+| Sürüm C | 21 görev (0 tamamlandı + 21 kalan), kalan tahmini efor 87 iş günü |
 | Mod: CRITICAL / STANDARD / FAST | 55 / 80 / 7 |
 | Kaynak: Onaylı plan / Onaylı plan MVP dilimi / PR #6 düzeltmesi / Kullanıcı kararı / Öneri / Sonradan eklenen (USR-19b) | 27 / 6 / 1 / 2 / 105 / 1 |
 
-2026-11-15 sayımı yalnızca kanonik modül tablolarını kullanır; sürüm özetlerinde yinelenen satırlar tekrar sayılmaz. Eforlar kalan görevlerin tahmin toplamıdır; paralel çalışma ve dış beklemeler dahil takvim süresi değildir. Sürüm tarihleri bu değişiklikte yeniden hesaplanmadı.
+2026-11-22 sayımı yalnızca kanonik modül tablolarını kullanır; sürüm özetlerinde yinelenen satırlar tekrar sayılmaz. Eforlar kalan görevlerin tahmin toplamıdır; paralel çalışma ve dış beklemeler dahil takvim süresi değildir. Sürüm tarihleri bu değişiklikte yeniden hesaplanmadı.
