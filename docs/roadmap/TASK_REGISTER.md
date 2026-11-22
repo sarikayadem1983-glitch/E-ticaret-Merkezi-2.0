@@ -180,7 +180,7 @@ Kaynak: `docs/superpowers/plans/2026-10-28-user-management.md` (T1–T16 numaral
 
 | ID | Görev | Öncelik | Bağımlılık | Tahmin | Mod | Sürüm | Durum | Kabul kriteri | Test | Güvenlik riski | Kaynak |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| IMG-01 | Görsel yükleme, sıralama, ürün/varyanta bağlama | P0 | INF-12, CAT-02 | 3 | STANDARD | A | PLANNED | MIME içerikten doğrulanır, boyut sınırı, EXIF temizlenir | U, E, S | Orta (dosya yükleme) | Öneri (onay bekliyor) |
+| IMG-01 | Görsel yükleme, sıralama, ürün/varyanta bağlama | P0 | INF-12, CAT-02 | 3 | CRITICAL | A | IN PROGRESS (feature/img-01-product-images) | MIME içerikten doğrulanır, boyut sınırı, EXIF temizlenir | U, E, S | Orta (dosya yükleme) | Öneri (onay bekliyor) |
 | IMG-02 | Yeniden boyutlandırma/türev üretimi ve pazaryeri görsel kurallarına uygunluk kontrolü | P1 | IMG-01, INF-09 | 2 | STANDARD | B | PLANNED | Kural ihlali listeleme öncesi gösterilir | U | Düşük | Öneri (onay bekliyor) |
 | IMG-03 | AI arka plan temizleme / beyaz fon | P3 | IMG-02, AIE-01 | 2 | FAST | C | PLANNED | Orijinal korunur | U | Düşük | Öneri (onay bekliyor) |
 
@@ -441,7 +441,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | CAT-05 | Fiyat yönetimi: liste fiyatı, kanal fiyatı, KDV oranı (`decimal` + para birimi) | DONE-MERGED (PR #29, merge `28a03ae`; dev `5ac1401`, 2026-11-12) | 2 | STANDARD | Öneri (onay bekliyor) |
 | CAT-06 | Kanal kategori ağacı ve zorunlu özellik eşleme modeli + UI | DONE-MERGED (PR #34, merge `8ee40bb`; dev `8ee40bb`, 2026-11-12; backend dilimi, UI → CAT-06b) | 4 | STANDARD | Öneri (onay bekliyor) |
 | IMP-01 | Excel/CSV şablonu, satır doğrulama, deneme (dry-run) raporu | DONE-MERGED (PR #57, merge `0568b56`; dev `0568b56`, 2026-11-14) | 3 | STANDARD | Öneri (onay bekliyor) |
-| IMG-01 | Görsel yükleme, sıralama, ürün/varyanta bağlama | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
+| IMG-01 | Görsel yükleme, sıralama, ürün/varyanta bağlama | IN PROGRESS (feature/img-01-product-images) | 3 | CRITICAL | Öneri (onay bekliyor) |
 | INT-01 | `ChannelAdapter` arayüzü, kanal hesabı modeli, kimlik bilgisi şifreleme (envelope encryption, anahtar rotasyonu) | DONE-MERGED (PR #32, merge `7b3c0b9`; dev `7b3c0b9`, 2026-11-12) | 4 | CRITICAL | Öneri (onay bekliyor) |
 | INT-02 | Senkron motoru: kanal başına rate limiter, retry, idempotency, senkron logu, çakışma çözümü | DONE-MERGED | 5 | CRITICAL | Öneri (onay bekliyor) |
 | INT-03 | Entegrasyon yönetim UI: bağla, test et, durum, hata logu | DONE-MERGED (PR #40, merge `65fcf85`; dev `65fcf85`, 2026-11-14) | 3 | STANDARD | Öneri (onay bekliyor) |

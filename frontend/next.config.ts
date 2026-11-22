@@ -2,6 +2,16 @@ import type { NextConfig } from "next";
 
 const dev = process.env.NODE_ENV !== "production";
 
+// Product images (IMG-01) are loaded from object storage through signed URLs. Only that
+// origin is allowed; read when the server starts (`next build` bakes it in).
+function storageOrigin(): string {
+  try {
+    return process.env.STORAGE_ENDPOINT ? ` ${new URL(process.env.STORAGE_ENDPOINT).origin}` : "";
+  } catch {
+    return "";
+  }
+}
+
 // Next.js injects inline bootstrap scripts, so script-src needs
 // 'unsafe-inline' until nonce-based CSP is adopted (docs/SECURITY.md §5).
 // Dev mode also needs 'unsafe-eval' for React Refresh.
@@ -9,7 +19,7 @@ const csp = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
+  `img-src 'self' data: blob:${storageOrigin()}`,
   "font-src 'self' data:",
   `connect-src 'self'${dev ? " ws: wss:" : ""}`,
   "object-src 'none'",

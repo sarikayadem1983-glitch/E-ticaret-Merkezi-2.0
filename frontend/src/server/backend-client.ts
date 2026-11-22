@@ -9,6 +9,8 @@ export interface ClientContext {
 }
 
 const TIMEOUT_MS = 10_000;
+/** Image uploads: decoding, re-encoding and storing take longer. */
+const RAW_TIMEOUT_MS = 60_000;
 
 /**
  * Calls the backend API. The URL is always built from BACKEND_URL plus a
@@ -19,6 +21,8 @@ export async function backendFetch(
   init: {
     method?: string;
     body?: unknown;
+    /** Raw bytes sent instead of JSON. */
+    raw?: Uint8Array<ArrayBuffer>;
     accessToken?: string;
     client: ClientContext;
     search?: URLSearchParams;
@@ -35,15 +39,16 @@ export async function backendFetch(
     'User-Agent': init.client.userAgent.slice(0, 512),
   };
   if (init.body !== undefined) headers['Content-Type'] = 'application/json';
+  if (init.raw) headers['Content-Type'] = 'application/octet-stream';
   if (init.accessToken) headers.Authorization = `Bearer ${init.accessToken}`;
 
   return fetch(url, {
     method: init.method ?? 'GET',
     headers,
-    body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    body: init.raw ?? (init.body === undefined ? undefined : JSON.stringify(init.body)),
     redirect: 'error',
     cache: 'no-store',
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+    signal: AbortSignal.timeout(init.raw ? RAW_TIMEOUT_MS : TIMEOUT_MS),
   });
 }
 

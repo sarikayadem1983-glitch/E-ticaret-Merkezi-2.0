@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { ProductStatusBadge } from '@/components/catalog/common';
+import { ProductImages } from '@/components/catalog/product-images';
 import { ProductForm } from '@/components/catalog/product-form';
 import { VariantEditor } from '@/components/catalog/variant-editor';
 import { PageHeader } from '@/components/page-header';
@@ -85,6 +86,7 @@ export default function ProductPage() {
           }}
         />
       )}
+      <ProductImages product={p} readOnly={readOnly} />
       <VariantEditor product={p} readOnly={readOnly} />
 
       <Dialog open={confirming} onOpenChange={setConfirming}>
