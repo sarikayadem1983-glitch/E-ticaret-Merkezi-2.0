@@ -44,7 +44,7 @@ async function toError(res: Response): Promise<ApiError> {
  */
 export async function request<T>(
   url: string,
-  init: { method?: string; body?: unknown } = {},
+  init: { method?: string; body?: unknown; raw?: Blob } = {},
 ): Promise<T> {
   const res = await fetch(url, {
     method: init.method ?? 'GET',
@@ -52,8 +52,9 @@ export async function request<T>(
     headers: {
       ...CSRF_HEADERS,
       ...(init.body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      ...(init.raw ? { 'Content-Type': 'application/octet-stream' } : {}),
     },
-    body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    body: init.raw ?? (init.body === undefined ? undefined : JSON.stringify(init.body)),
     cache: 'no-store',
   });
   if (res.status === 401 && typeof window !== 'undefined') {
@@ -70,7 +71,7 @@ export async function request<T>(
 }
 
 /** Backend API through the BFF allowlist, e.g. bff('companies/summary'). */
-export function bff<T>(path: string, init?: { method?: string; body?: unknown }) {
+export function bff<T>(path: string, init?: { method?: string; body?: unknown; raw?: Blob }) {
   return request<T>(`/api/bff/${path}`, init);
 }
 

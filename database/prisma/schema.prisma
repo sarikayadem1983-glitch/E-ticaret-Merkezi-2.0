@@ -50,6 +50,7 @@ model Tenant {
   stockMovements            StockMovement[]
   stockReservations         StockReservation[]
   stockThresholds           StockThreshold[]
+  productImages             ProductImage[]
 
   @@map("tenants")
 }
@@ -411,6 +412,7 @@ model Product {
   category Category?        @relation(fields: [tenantId, categoryId], references: [tenantId, id], onDelete: Restrict)
   brand    Brand?           @relation(fields: [tenantId, brandId], references: [tenantId, id], onDelete: Restrict)
   variants ProductVariant[]
+  images   ProductImage[]
 
   channelValues ProductChannelAttributeValue[]
 
@@ -445,9 +447,12 @@ model ProductVariant {
   stockMovements    StockMovement[]
   stockReservations StockReservation[]
   stockThresholds   StockThreshold[]
+  images            ProductImage[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, companyId, id])
+  /// Target of the image FK: an image's variant always belongs to the image's product.
+  @@unique([tenantId, companyId, productId, id])
   @@unique([tenantId, sku])
   @@unique([tenantId, barcode])
   @@index([tenantId, companyId, productId])
@@ -980,4 +985,34 @@ model StockThreshold {
   @@unique([tenantId, variantId])
   @@index([tenantId, companyId])
   @@map("stock_thresholds")
+}
+
+/// IMG-01: one stored image of a product, optionally bound to one of its variants. The bytes live in
+/// object storage (INF-12) under the tenant prefix; they were re-encoded on upload (no metadata).
+model ProductImage {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  companyId   String    @map("company_id") @db.Uuid
+  productId   String    @map("product_id") @db.Uuid
+  variantId   String?   @map("variant_id") @db.Uuid
+  storageKey  String    @map("storage_key") @db.VarChar(300)
+  contentType String    @map("content_type") @db.VarChar(20)
+  width       Int
+  height      Int
+  byteSize    Int       @map("byte_size")
+  /// Display order within the product, from 0.
+  position    Int
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  product Product         @relation(fields: [tenantId, companyId, productId], references: [tenantId, companyId, id], onDelete: Restrict)
+  variant ProductVariant? @relation(fields: [tenantId, companyId, productId, variantId], references: [tenantId, companyId, productId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([storageKey])
+  @@index([tenantId, companyId, productId])
+  @@index([tenantId, companyId, variantId])
+  @@map("product_images")
 }

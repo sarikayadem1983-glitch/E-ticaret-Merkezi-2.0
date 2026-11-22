@@ -62,6 +62,11 @@ export class StorageService {
     return this.config !== undefined && this.client !== undefined;
   }
 
+  /** Throws the same 503 as a storage call, before any work is done. */
+  assertEnabled(): void {
+    this.ready();
+  }
+
   private ready(): { config: StorageConfig; client: StorageClient } {
     if (!this.config || !this.client) {
       throw new ServiceUnavailableException({

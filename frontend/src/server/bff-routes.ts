@@ -8,10 +8,12 @@ const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 interface BffRoute {
   method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   path: RegExp;
-  /** Allowed query parameters (GET only). */
+  /** Allowed query parameters. */
   query?: readonly string[];
   /** Whether a JSON body is forwarded. */
   body?: boolean;
+  /** Whether raw bytes are forwarded instead (image upload only). */
+  raw?: boolean;
 }
 
 const CHANNEL = '[a-z0-9]+(?:-[a-z0-9]+)*';
@@ -71,6 +73,17 @@ const ROUTES: readonly BffRoute[] = [
     body: true,
   },
   { method: 'DELETE', path: new RegExp(`^${VARIANT}/prices/${CHANNEL}$`) },
+  // Images (IMG-01). The upload forwards raw bytes; everything else is JSON.
+  { method: 'GET', path: new RegExp(`^${PRODUCT}/images$`) },
+  {
+    method: 'POST',
+    path: new RegExp(`^${PRODUCT}/images$`),
+    query: ['variant_id'],
+    raw: true,
+  },
+  { method: 'PUT', path: new RegExp(`^${PRODUCT}/images/order$`), body: true },
+  { method: 'PATCH', path: new RegExp(`^${PRODUCT}/images/${UUID}$`), body: true },
+  { method: 'DELETE', path: new RegExp(`^${PRODUCT}/images/${UUID}$`) },
   { method: 'GET', path: /^(categories|brands|attributes)$/, query: LIST_QUERY },
   { method: 'POST', path: /^attributes$/, body: true },
   { method: 'POST', path: new RegExp(`^attributes/${UUID}/values$`), body: true },
@@ -127,7 +140,7 @@ const SEGMENT = /^[a-z0-9-]{1,64}$/;
 const MAX_QUERY_VALUE = 100;
 
 export type BffMatch =
-  | { ok: true; path: string; search: URLSearchParams; body: boolean }
+  | { ok: true; path: string; search: URLSearchParams; body: boolean; raw: boolean }
   | { ok: false; status: 404 | 400 };
 
 export function matchBffRoute(
@@ -150,5 +163,5 @@ export function matchBffRoute(
     }
     search.set(key, value);
   }
-  return { ok: true, path, search, body: route.body ?? false };
+  return { ok: true, path, search, body: route.body ?? false, raw: route.raw ?? false };
 }

@@ -5,6 +5,7 @@ import {
   clientContext,
   errorResponse,
   readJsonBody,
+  readRawBody,
   relay,
   unauthenticated,
 } from '@/server/http';
@@ -51,6 +52,14 @@ async function handle(req: Request, { params }: Context): Promise<Response> {
       return unauthenticated();
     }
 
+    // After the session check: nobody signed out can make the BFF buffer a file.
+    let raw: Uint8Array<ArrayBuffer> | undefined;
+    if (route.raw) {
+      const parsed = await readRawBody(req);
+      if (!parsed.ok) return parsed.response;
+      raw = parsed.raw;
+    }
+
     // TOKEN_STALE: one refresh + one retry. SESSION_REVOKED or a second 401:
     // the session is destroyed (membership or store deactivated).
     const result = await current.manager.send(
@@ -60,6 +69,7 @@ async function handle(req: Request, { params }: Context): Promise<Response> {
         backendFetch(route.path, {
           method: req.method,
           body,
+          raw,
           accessToken,
           client,
           search: route.search,
