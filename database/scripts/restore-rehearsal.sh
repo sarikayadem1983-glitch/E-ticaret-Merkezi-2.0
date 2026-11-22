@@ -203,4 +203,4 @@ done
 case "$HEALTH" in *'"status":"ok"'*'"database":"up"'*) ok "backend /health" ;; *) die "health: $HEALTH" ;; esac
 CODE="$(curl -s -w '|%{http_code}' "$API/auth/me")"
 [ "${CODE##*|}" = 401 ] || die "yetkisiz istek 401 değil"
-ok "toplam $(($(date +%s) - START)) sn (kod: $(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo bilinmiyor))"
+ok "toplam $(($(date +%s) - START)) sn (kod: $(git -C "$(win "$REPO")" rev-parse --short HEAD 2>/dev/null || echo bilinmiyor))"
