@@ -295,6 +295,12 @@ export class QueueService implements OnModuleInit, OnApplicationShutdown {
     await Promise.allSettled(
       [...this.workers.entries()].map(async ([name, { worker, redis }]) => {
         if (worker) {
+          // Redis not connected: no job can be active or finish, so do not wait.
+          if (redis && redis.status !== 'ready') {
+            void worker.close(true).catch(() => undefined);
+            redis.disconnect();
+            return;
+          }
           const graceful = await withTimeout(
             worker.close().then(() => true),
             this.shutdownTimeoutMs,
