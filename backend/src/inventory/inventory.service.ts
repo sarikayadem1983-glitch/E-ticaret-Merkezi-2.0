@@ -210,6 +210,71 @@ export class InventoryService {
     return row?.id ?? null;
   }
 
+  /**
+   * For channel reads (INT-TY-02a): seeds a variant's stock from the
+   * marketplace ONCE. Writes an `opening` movement in the company's default
+   * warehouse only when the variant has no stock movement at all; afterwards
+   * the local stock is the source of truth and is never overwritten from the
+   * channel. No user check (sync job started with channels:manage). Audited.
+   */
+  async openingFromChannel(
+    companyId: string,
+    variantId: string,
+    quantity: number,
+    syncJobId: string,
+    actorUserId: string | null,
+  ): Promise<'created' | 'exists' | 'zero' | 'no_warehouse' | 'missing'> {
+    if (!Number.isInteger(quantity) || quantity <= 0) return 'zero';
+    return this.prisma.$transaction(async (tx) => {
+      // One opening per variant even with concurrent jobs.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`opening:${variantId}`}))`;
+      const [variant] = await this.products.variantsForOrder(
+        companyId,
+        [variantId],
+        tx,
+      );
+      if (!variant) return 'missing';
+      const any = await tx.stockMovement.findFirst({
+        where: { companyId, variantId },
+        select: { id: true },
+      });
+      if (any) return 'exists';
+      const warehouseId = await this.defaultWarehouse(companyId, tx);
+      if (!warehouseId) return 'no_warehouse';
+      const created = await tx.stockMovement.create({
+        data: {
+          tenantId: TenantContext.requireTenantId(),
+          companyId,
+          warehouseId,
+          variantId,
+          quantity,
+          reason: 'opening',
+          referenceType: 'sync_job',
+          referenceId: syncJobId,
+          createdBy: actorUserId,
+        },
+      });
+      await this.audit.record(
+        {
+          action: 'CREATE',
+          module: MODULE,
+          entityType: 'StockMovement',
+          entityId: created.id,
+          after: {
+            warehouseId,
+            variantId,
+            quantity,
+            reason: 'opening',
+            source: 'trendyol',
+          },
+          actorUserId,
+        },
+        tx,
+      );
+      return 'created';
+    });
+  }
+
   async createMovement(user: AuthUser, dto: CreateMovementDto) {
     const warehouse = await this.prisma.warehouse.findFirst({
       where: { id: dto.warehouseId },

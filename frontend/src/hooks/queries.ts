@@ -324,6 +324,19 @@ export function useImportTrendyolProducts(companyId: string, accountId: string) 
   });
 }
 
+/** INT-TY-02a: reads Trendyol stock + sale price into linked local variants. */
+export function usePullTrendyolStockPrice(companyId: string, accountId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      bff<{ data: { syncJobId: string; duplicate: boolean } }>(
+        `companies/${companyId}/channel-accounts/${accountId}/trendyol/stock-price-pull`,
+        { method: 'POST' },
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['sync-jobs', companyId, accountId] }),
+  });
+}
+
 export function useRetrySyncJob(companyId: string, accountId: string) {
   const qc = useQueryClient();
   return useMutation({

@@ -89,6 +89,7 @@ const SYNC_KIND_LABELS: Record<string, string> = {
   'trendyol.products.pull': 'Trendyol ürün çekme ve eşleştirme (atlanan = eşleşmeyen)',
   'trendyol.products.import':
     'Trendyol ürünlerini içe aktarma (güncellenen = yeni oluşturulan, atlanan = eşleşmeyen)',
+  'trendyol.stock-price.pull': "Trendyol'dan stok ve fiyat okuma",
 };
 
 /** Turkish name of a sync kind; unknown kinds are shown as their code. */
@@ -104,6 +105,9 @@ export function statsSummary(stats: Record<string, number>): string {
     ['unchanged', 'değişmedi'],
     ['stale', 'eski sürüm'],
     ['skipped', 'atlandı'],
+    ['pricesSet', 'fiyat yazıldı'],
+    ['stockSeeded', 'açılış stoğu girildi'],
+    ['stockKept', 'yerel stok korundu'],
   ];
   return parts
     .filter(([key]) => (stats[key] ?? 0) > 0)

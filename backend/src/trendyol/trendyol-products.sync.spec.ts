@@ -19,6 +19,8 @@ const item = (barcode: string, stockCode: string | null = null) => ({
   approved: true,
   lastUpdateDate: null,
   vatRate: null as number | null,
+  quantity: null,
+  salePrice: null,
 });
 
 describe('parseProductPage', () => {
@@ -46,6 +48,8 @@ describe('parseProductPage', () => {
         approved: null,
         lastUpdateDate: new Date(1700000000000),
         vatRate: null,
+        quantity: null,
+        salePrice: null,
       },
     ]);
   });

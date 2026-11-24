@@ -324,6 +324,74 @@ export class ProductsService {
   }
 
   /**
+   * For channel reads (INT-TY-02a): stores the marketplace's sale price as the
+   * variant's price for that channel. No user check (the sync job's starter
+   * had channels:manage). Unchanged amounts write nothing. Audited.
+   */
+  async setPriceFromChannel(
+    companyId: string,
+    variantId: string,
+    channel: string,
+    amount: string,
+    currency: string,
+    actorUserId: string | null,
+  ): Promise<'created' | 'updated' | 'unchanged' | 'missing'> {
+    return catalogWrite(this.repository.prisma, async (tx) => {
+      const variant = await tx.productVariant.findFirst({
+        where: {
+          id: variantId,
+          companyId,
+          deletedAt: null,
+          product: { deletedAt: null },
+        },
+        select: { id: true },
+      });
+      if (!variant) return 'missing';
+      const before = await this.repository.findPrice(tx, variantId, channel);
+      if (
+        before &&
+        money(before.amount) === money(amount) &&
+        before.currency === currency
+      ) {
+        return 'unchanged';
+      }
+      let entityId: string;
+      if (before) {
+        await this.repository.updatePrice(tx, before.id, { amount, currency });
+        entityId = before.id;
+      } else {
+        entityId = (
+          await this.repository.createPrice(tx, variantId, {
+            channel,
+            amount,
+            currency,
+          })
+        ).id;
+      }
+      await this.audit.record(
+        {
+          action: before ? 'UPDATE' : 'CREATE',
+          module: MODULE,
+          entityType: PRICE,
+          entityId,
+          before: before
+            ? {
+                variantId,
+                channel,
+                amount: money(before.amount),
+                currency: before.currency,
+              }
+            : undefined,
+          after: { variantId, channel, amount: money(amount), currency },
+          actorUserId,
+        },
+        tx,
+      );
+      return before ? 'updated' : 'created';
+    });
+  }
+
+  /**
    * For exports (IMP-04): one row per active variant of active products in the given
    * companies (all when undefined), with its list price. Caller checks products:read.
    */

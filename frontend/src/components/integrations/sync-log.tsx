@@ -25,6 +25,7 @@ import {
 import {
   useImportTrendyolProducts,
   usePullTrendyolProducts,
+  usePullTrendyolStockPrice,
   useRetrySyncJob,
   useSyncJobs,
 } from '@/hooks/queries';
@@ -63,6 +64,7 @@ export function SyncLog({
   const retry = useRetrySyncJob(companyId, accountId);
   const pull = usePullTrendyolProducts(companyId, accountId);
   const importAll = useImportTrendyolProducts(companyId, accountId);
+  const stockPrice = usePullTrendyolStockPrice(companyId, accountId);
 
   return (
     <div className="space-y-3">
@@ -110,6 +112,28 @@ export function SyncLog({
             }
           >
             Eşleşmeyenleri taslak ürün olarak içe aktar
+          </Button>
+        )}
+        {channel === 'trendyol' && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={stockPrice.isPending}
+            title="Trendyol satış fiyatı uygulamaya yazılır; stok yalnız hiç stok hareketi olmayan ürünlere bir kez açılış olarak girilir. Trendyol'da hiçbir şey değişmez."
+            onClick={() =>
+              stockPrice.mutate(undefined, {
+                onSuccess: (r) =>
+                  toast.success(
+                    r.data.duplicate
+                      ? 'Bu dakika içinde başlatılmış iş zaten var.'
+                      : 'Stok ve fiyat okuma işi kuyruğa alındı.',
+                  ),
+                onError: (e) => toast.error(errorMessage(e)),
+              })
+            }
+          >
+            {"Stok ve fiyatı Trendyol'dan oku"}
           </Button>
         )}
         <Select value={status} onValueChange={(v) => setStatus(v as SyncStatus | 'all')}>
