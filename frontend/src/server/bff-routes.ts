@@ -102,6 +102,8 @@ const ROUTES: readonly BffRoute[] = [
   { method: 'POST', path: new RegExp(`^${ACCOUNT}/sync-jobs/${UUID}/retry$`) },
   // INT-TY-01a: read-only product pull (nothing is written to Trendyol).
   { method: 'POST', path: new RegExp(`^${ACCOUNT}/trendyol/products-pull$`) },
+  // Same, plus draft local products for unmatched ones (still read-only towards Trendyol).
+  { method: 'POST', path: new RegExp(`^${ACCOUNT}/trendyol/products-import$`) },
   // Orders (ORD-03). Status changes of marketplace orders are refused by the backend.
   {
     method: 'GET',

@@ -113,6 +113,8 @@ export interface TrendyolProduct {
   productMainId: string | null;
   approved: boolean | null;
   lastUpdateDate: Date | null;
+  /** KDV percent as given by Trendyol (e.g. 20); null when absent. */
+  vatRate: number | null;
 }
 
 export interface TrendyolProductPage {
@@ -143,6 +145,10 @@ export function parseProductPage(body: unknown): TrendyolProductPage {
       approved: typeof raw.approved === 'boolean' ? raw.approved : null,
       lastUpdateDate:
         typeof ts === 'number' && Number.isFinite(ts) ? new Date(ts) : null,
+      vatRate:
+        typeof raw.vatRate === 'number' && Number.isFinite(raw.vatRate)
+          ? raw.vatRate
+          : null,
     });
   }
   const tp = Number(b.totalPages);
