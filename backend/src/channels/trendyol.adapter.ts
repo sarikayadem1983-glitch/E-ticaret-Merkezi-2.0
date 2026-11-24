@@ -1,5 +1,6 @@
 import type { ChannelAdapter, ConnectionResult } from './channel-adapter.js';
 import { channelDefinition } from './channel-adapter.js';
+import { SyncError, httpFailure } from '../sync/sync-errors.js';
 
 const DEFAULT_BASE = 'https://apigw.trendyol.com';
 const TIMEOUT_MS = 10_000;
@@ -55,6 +56,100 @@ export class TrendyolAdapter implements ChannelAdapter {
       return { ok: false, code: 'UNAVAILABLE' };
     return { ok: false, code: 'UNKNOWN' };
   }
+
+  /**
+   * INT-TY-01a: one page of the seller's products (read-only). Only the fields
+   * needed for matching are kept; anything else in the response is dropped.
+   * Non-2xx → SyncError via httpFailure; credentials never appear in errors.
+   */
+  async listProducts(
+    credentials: Readonly<Record<string, string>>,
+    page: number,
+    size: number,
+  ): Promise<TrendyolProductPage> {
+    const { supplierId, apiKey, apiSecret } = credentials;
+    if (
+      !supplierId ||
+      !apiKey ||
+      !apiSecret ||
+      !/^\d{1,20}$/.test(supplierId)
+    ) {
+      throw new SyncError('CHANNEL_AUTH_FAILED', 'auth');
+    }
+    const url = `${this.baseUrl}/integration/product/sellers/${supplierId}/products?page=${page}&size=${size}`;
+    let res: Response;
+    try {
+      res = await this.fetchImpl(url, {
+        method: 'GET',
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${apiKey}:${apiSecret}`).toString('base64')}`,
+          'User-Agent': `${supplierId} - SelfIntegration`,
+          Accept: 'application/json',
+        },
+        redirect: 'error',
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
+    } catch {
+      throw new SyncError('CHANNEL_TIMEOUT', 'transient');
+    }
+    if (res.status < 200 || res.status >= 300) {
+      await res.body?.cancel();
+      throw httpFailure(res.status, res.headers.get('retry-after'));
+    }
+    let body: unknown;
+    try {
+      body = await res.json();
+    } catch {
+      throw new SyncError('CHANNEL_BAD_RESPONSE', 'transient');
+    }
+    return parseProductPage(body);
+  }
+}
+
+export interface TrendyolProduct {
+  barcode: string;
+  stockCode: string | null;
+  title: string | null;
+  productMainId: string | null;
+  approved: boolean | null;
+  lastUpdateDate: Date | null;
+}
+
+export interface TrendyolProductPage {
+  items: TrendyolProduct[];
+  totalPages: number;
+}
+
+const str = (v: unknown, max: number): string | null =>
+  typeof v === 'string' && v.trim() !== '' ? v.trim().slice(0, max) : null;
+
+/** Exported for tests. Rejects a body without a content array; skips items without a barcode. */
+export function parseProductPage(body: unknown): TrendyolProductPage {
+  const b = body as { content?: unknown; totalPages?: unknown } | null;
+  if (!b || !Array.isArray(b.content)) {
+    throw new SyncError('CHANNEL_BAD_RESPONSE', 'transient');
+  }
+  const items: TrendyolProduct[] = [];
+  for (const raw of b.content as (Record<string, unknown> | null)[]) {
+    if (!raw || typeof raw !== 'object') continue;
+    const barcode = str(raw.barcode, 50);
+    if (!barcode) continue;
+    const ts = raw.lastUpdateDate;
+    items.push({
+      barcode,
+      stockCode: str(raw.stockCode, 100),
+      title: str(raw.title, 250),
+      productMainId: str(raw.productMainId, 100),
+      approved: typeof raw.approved === 'boolean' ? raw.approved : null,
+      lastUpdateDate:
+        typeof ts === 'number' && Number.isFinite(ts) ? new Date(ts) : null,
+    });
+  }
+  const tp = Number(b.totalPages);
+  return {
+    items,
+    totalPages: Number.isInteger(tp) && tp >= 0 ? Math.min(tp, 10_000) : 0,
+  };
 }
 
 /** Only https, or http to a loopback host (tests with a fake server). */

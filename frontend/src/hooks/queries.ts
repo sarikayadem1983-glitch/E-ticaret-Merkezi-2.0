@@ -298,6 +298,19 @@ export function useSyncJobs(companyId: string, accountId: string, status: SyncSt
   });
 }
 
+/** INT-TY-01a: read-only Trendyol product pull + match. Returns the queued job. */
+export function usePullTrendyolProducts(companyId: string, accountId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      bff<{ data: { syncJobId: string; duplicate: boolean } }>(
+        `companies/${companyId}/channel-accounts/${accountId}/trendyol/products-pull`,
+        { method: 'POST' },
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['sync-jobs', companyId, accountId] }),
+  });
+}
+
 export function useRetrySyncJob(companyId: string, accountId: string) {
   const qc = useQueryClient();
   return useMutation({

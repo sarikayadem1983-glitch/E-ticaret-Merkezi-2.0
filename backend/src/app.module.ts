@@ -19,6 +19,7 @@ import { MailModule } from './mail/mail.module.js';
 import { QueueModule } from './queue/queue.module.js';
 import { StorageModule } from './storage/storage.module.js';
 import { SyncModule } from './sync/sync.module.js';
+import { TrendyolModule } from './trendyol/trendyol.module.js';
 import { UsersModule } from './users/users.module.js';
 import { TenantContextMiddleware } from './tenancy/tenant-context.middleware.js';
 
@@ -45,6 +46,7 @@ import { TenantContextMiddleware } from './tenancy/tenant-context.middleware.js'
     // INF-12: validates storage settings at startup; production requires a bucket.
     StorageModule,
     SyncModule,
+    TrendyolModule,
     UsersModule,
   ],
 })
