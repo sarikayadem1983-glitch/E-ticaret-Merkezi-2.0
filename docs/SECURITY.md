@@ -36,6 +36,8 @@ Script tekrar çalıştırılabilir (idempotent). Şifre değiştirmek için `.e
 
 `setup-roles.sql` doğrudan `psql` ile de çalıştırılabilir; parola değişkenlerinden biri eksik veya boşsa hiçbir değişiklik yapmadan durur (boş değer `ALTER ROLE ... PASSWORD ''` ile rolün parolasını silerdi). Test: `bash database/scripts/test-setup-roles-guard.sh` (atılabilir konteynerde, mevcut veritabanı veya `.env` kullanılmaz).
 
+Yönetilen PostgreSQL'de (superuser verilmeyen, `doadmin` benzeri yönetici rolü) `setup-roles.sql` aynı şekilde `psql` ile o yönetici rolüyle çalıştırılır. Şart: veritabanını bu yönetici rolü oluşturmuş olmalı. Rol nitelikleri sonradan değişmişse betik onarmaz, durur. Ayrıntı ve doğrulama kaydı: `docs/BACKUP.md`.
+
 ### Production bağlantı bilgileri
 
 - `DATABASE_URL` ve `MIGRATION_DATABASE_URL` ayrı gizli değerlerdir. Bir secret manager (ör. AWS Secrets Manager, GCP Secret Manager, Vault, Kubernetes Secret) ile ortam değişkeni olarak verilir. Repoya, imaja veya loglara yazılmaz.
