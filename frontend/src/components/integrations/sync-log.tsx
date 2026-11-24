@@ -22,9 +22,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { useRetrySyncJob, useSyncJobs } from '@/hooks/queries';
+import { usePullTrendyolProducts, useRetrySyncJob, useSyncJobs } from '@/hooks/queries';
 import { errorMessage } from '@/lib/api';
-import { statsSummary, SYNC_STATUS_LABELS, type SyncStatus } from '@/lib/integrations';
+import {
+  statsSummary,
+  SYNC_STATUS_LABELS,
+  syncKindLabel,
+  type SyncStatus,
+} from '@/lib/integrations';
 
 const dateFormat = new Intl.DateTimeFormat('tr-TR', {
   dateStyle: 'short',
@@ -39,15 +44,46 @@ const BADGE: Record<SyncStatus, 'muted' | 'secondary' | 'success' | 'destructive
 };
 
 /** Latest sync jobs of one account; failed jobs can be retried. */
-export function SyncLog({ companyId, accountId }: { companyId: string; accountId: string }) {
+export function SyncLog({
+  companyId,
+  accountId,
+  channel,
+}: {
+  companyId: string;
+  accountId: string;
+  channel?: string;
+}) {
   const [status, setStatus] = useState<SyncStatus | 'all'>('all');
   const jobs = useSyncJobs(companyId, accountId, status);
   const retry = useRetrySyncJob(companyId, accountId);
+  const pull = usePullTrendyolProducts(companyId, accountId);
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-sm font-semibold text-brand-navy">Senkron logu</h3>
+        {channel === 'trendyol' && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={pull.isPending}
+            title="Yalnız okur; Trendyol'da hiçbir şey değişmez."
+            onClick={() =>
+              pull.mutate(undefined, {
+                onSuccess: (r) =>
+                  toast.success(
+                    r.data.duplicate
+                      ? 'Bu dakika içinde başlatılmış iş zaten var.'
+                      : 'Ürün çekme işi kuyruğa alındı.',
+                  ),
+                onError: (e) => toast.error(errorMessage(e)),
+              })
+            }
+          >
+            {"Ürünleri Trendyol'dan çek ve eşleştir"}
+          </Button>
+        )}
         <Select value={status} onValueChange={(v) => setStatus(v as SyncStatus | 'all')}>
           <SelectTrigger className="w-40" aria-label="Durum filtresi">
             <SelectValue />
@@ -88,7 +124,7 @@ export function SyncLog({ companyId, accountId }: { companyId: string; accountId
           <TableBody>
             {jobs.data.data.map((job) => (
               <TableRow key={job.id}>
-                <TableCell className="font-mono text-xs">{job.kind}</TableCell>
+                <TableCell className="text-xs">{syncKindLabel(job.kind)}</TableCell>
                 <TableCell>
                   <Badge variant={BADGE[job.status]}>{SYNC_STATUS_LABELS[job.status]}</Badge>
                 </TableCell>

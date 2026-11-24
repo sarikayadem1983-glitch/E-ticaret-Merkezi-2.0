@@ -1,4 +1,16 @@
-import { buildCredentials, statsSummary, type CredentialField } from './integrations';
+import {
+  buildCredentials,
+  statsSummary,
+  syncKindLabel,
+  type CredentialField,
+} from './integrations';
+
+describe('syncKindLabel', () => {
+  it('names known kinds in Turkish and passes unknown codes through', () => {
+    expect(syncKindLabel('trendyol.products.pull')).toContain('Trendyol ürün çekme');
+    expect(syncKindLabel('x.y')).toBe('x.y');
+  });
+});
 
 const FIELDS: CredentialField[] = [
   { key: 'supplierId', label: 'Satıcı ID', secret: false, maxLength: 20 },

@@ -85,6 +85,15 @@ export function buildCredentials(
 }
 
 /** Short summary of a job's counters, e.g. "3 işlendi · 2 yeni · 1 güncellendi". */
+const SYNC_KIND_LABELS: Record<string, string> = {
+  'trendyol.products.pull': 'Trendyol ürün çekme ve eşleştirme (atlanan = eşleşmeyen)',
+};
+
+/** Turkish name of a sync kind; unknown kinds are shown as their code. */
+export function syncKindLabel(kind: string): string {
+  return SYNC_KIND_LABELS[kind] ?? kind;
+}
+
 export function statsSummary(stats: Record<string, number>): string {
   const parts: [string, string][] = [
     ['processed', 'işlendi'],

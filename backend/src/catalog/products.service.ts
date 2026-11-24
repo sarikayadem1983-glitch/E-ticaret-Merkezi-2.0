@@ -238,6 +238,33 @@ export class ProductsService {
   }
 
   /**
+   * For channel product matching (INT-TY-01a): active variants of one company
+   * whose barcode (exact) or SKU (case-insensitive) is in the given lists.
+   * Read-only; the caller decides which identifier wins (barcode first).
+   */
+  async matchVariantsForChannel(
+    companyId: string,
+    barcodes: string[],
+    skus: string[],
+  ): Promise<{ id: string; sku: string; barcode: string | null }[]> {
+    if (barcodes.length === 0 && skus.length === 0) return [];
+    return this.repository.prisma.productVariant.findMany({
+      where: {
+        companyId,
+        deletedAt: null,
+        product: { deletedAt: null },
+        OR: [
+          ...(barcodes.length ? [{ barcode: { in: barcodes } }] : []),
+          ...(skus.length
+            ? [{ sku: { in: skus, mode: 'insensitive' as const } }]
+            : []),
+        ],
+      },
+      select: { id: true, sku: true, barcode: true },
+    });
+  }
+
+  /**
    * For exports (IMP-04): one row per active variant of active products in the given
    * companies (all when undefined), with its list price. Caller checks products:read.
    */

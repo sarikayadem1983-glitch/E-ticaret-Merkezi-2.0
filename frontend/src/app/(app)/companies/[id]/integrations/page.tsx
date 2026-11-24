@@ -184,7 +184,7 @@ export default function IntegrationsPage() {
                       <AlertDescription>{result.message}</AlertDescription>
                     </Alert>
                   )}
-                  <SyncLog companyId={companyId} accountId={account.id} />
+                  <SyncLog companyId={companyId} accountId={account.id} channel={account.channel} />
                 </div>
               </section>
             );
