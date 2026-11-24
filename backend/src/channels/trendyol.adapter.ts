@@ -115,6 +115,23 @@ export interface TrendyolProduct {
   lastUpdateDate: Date | null;
   /** KDV percent as given by Trendyol (e.g. 20); null when absent. */
   vatRate: number | null;
+  /** Stock on Trendyol (non-negative integer); null when absent/invalid. */
+  quantity: number | null;
+  /** VAT-inclusive sale price as a 2-digit decimal string ("199.90"); null when absent/invalid. */
+  salePrice: string | null;
+}
+
+/** Number → "123.45" (≥ 0, ≤ NUMERIC(12,2)); anything else null. */
+export function priceString(v: unknown): string | null {
+  if (
+    typeof v !== 'number' ||
+    !Number.isFinite(v) ||
+    v < 0 ||
+    v > 9_999_999_999.99
+  ) {
+    return null;
+  }
+  return (Math.round(v * 100) / 100).toFixed(2);
 }
 
 export interface TrendyolProductPage {
@@ -149,6 +166,14 @@ export function parseProductPage(body: unknown): TrendyolProductPage {
         typeof raw.vatRate === 'number' && Number.isFinite(raw.vatRate)
           ? raw.vatRate
           : null,
+      quantity:
+        typeof raw.quantity === 'number' &&
+        Number.isInteger(raw.quantity) &&
+        raw.quantity >= 0 &&
+        raw.quantity <= 1_000_000_000
+          ? raw.quantity
+          : null,
+      salePrice: priceString(raw.salePrice),
     });
   }
   const tp = Number(b.totalPages);

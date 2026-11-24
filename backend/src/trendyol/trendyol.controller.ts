@@ -18,6 +18,7 @@ import {
   TRENDYOL_PRODUCTS_IMPORT,
   TRENDYOL_PRODUCTS_PULL,
 } from './trendyol-products.sync.js';
+import { TRENDYOL_STOCK_PRICE_PULL } from './trendyol-stock-price.sync.js';
 
 const uuid = new ParseUUIDPipe({ errorHttpStatusCode: HttpStatus.NOT_FOUND });
 
@@ -75,6 +76,39 @@ export class TrendyolController {
       kind: TRENDYOL_PRODUCTS_IMPORT,
       payload: { actorUserId: user.sub },
       idempotencyKey: pullKey().replace('products-pull', 'products-import'),
+    });
+    return { data: job };
+  }
+
+  /**
+   * INT-TY-02a: reads Trendyol stock + sale price into linked local variants
+   * (read-only towards Trendyol). Writes prices and opening stock: needs
+   * products:write and inventory:write as well.
+   */
+  @Post('stock-price-pull')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @RequirePermissions(MANAGE)
+  async stockPrice(
+    @CurrentUser() user: AuthUser,
+    @Param('companyId', uuid) companyId: string,
+    @Param('accountId', uuid) accountId: string,
+  ) {
+    await this.access.assertCompanyPermission(
+      user,
+      companyId,
+      'products:write',
+    );
+    await this.access.assertCompanyPermission(
+      user,
+      companyId,
+      'inventory:write',
+    );
+    const job = await this.sync.start(user, {
+      companyId,
+      channelAccountId: accountId,
+      kind: TRENDYOL_STOCK_PRICE_PULL,
+      payload: { actorUserId: user.sub },
+      idempotencyKey: pullKey().replace('products-pull', 'stock-price-pull'),
     });
     return { data: job };
   }

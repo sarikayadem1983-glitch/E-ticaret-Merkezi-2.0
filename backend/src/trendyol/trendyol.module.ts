@@ -11,10 +11,12 @@ import {
   TrendyolProductsSync,
 } from './trendyol-products.sync.js';
 import { TrendyolController } from './trendyol.controller.js';
+import { InventoryModule } from '../inventory/inventory.module.js';
+import { TrendyolStockPriceSync } from './trendyol-stock-price.sync.js';
 
 /** Trendyol sync kinds (INT-TY-*). Registers them with the INT-02 engine. */
 @Module({
-  imports: [SyncModule, CatalogModule, AccessModule],
+  imports: [SyncModule, CatalogModule, AccessModule, InventoryModule],
   controllers: [TrendyolController],
   providers: [
     {
@@ -23,6 +25,7 @@ import { TrendyolController } from './trendyol.controller.js';
         new TrendyolAdapter(trendyolBaseUrl(process.env.TRENDYOL_API_BASE)),
     },
     TrendyolProductsSync,
+    TrendyolStockPriceSync,
   ],
 })
 export class TrendyolModule {}

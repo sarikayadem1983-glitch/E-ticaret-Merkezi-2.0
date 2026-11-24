@@ -17,6 +17,12 @@ export interface SyncStats {
   unchanged: number;
   stale: number;
   skipped: number;
+  /** INT-TY-02a: channel prices created or changed locally. */
+  pricesSet?: number;
+  /** INT-TY-02a: variants whose stock was seeded once from the channel. */
+  stockSeeded?: number;
+  /** INT-TY-02a: variants that already had local stock history (kept, not overwritten). */
+  stockKept?: number;
 }
 
 export const emptyStats = (): SyncStats => ({

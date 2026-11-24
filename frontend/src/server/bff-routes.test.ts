@@ -144,6 +144,7 @@ describe('matchBffRoute', () => {
       ['POST', `${acc}/${ID}/sync-jobs/${ID}/retry`, ''],
       ['POST', `${acc}/${ID}/trendyol/products-pull`, ''],
       ['POST', `${acc}/${ID}/trendyol/products-import`, ''],
+      ['POST', `${acc}/${ID}/trendyol/stock-price-pull`, ''],
     ];
     for (const [method, path, query] of allowed) {
       expect(match(method, path, query).ok).toBe(true);
