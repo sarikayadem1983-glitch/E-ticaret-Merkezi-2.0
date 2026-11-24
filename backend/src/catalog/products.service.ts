@@ -265,6 +265,65 @@ export class ProductsService {
   }
 
   /**
+   * For channel imports (INT-TY-01a): creates a draft product with plain variants
+   * (SKU + barcode, no attributes, no prices) in one company. No user check here:
+   * the caller (a sync job started by a user with channels:manage and
+   * products:write) is responsible. Audited with `actorUserId`.
+   */
+  async createFromChannel(
+    companyId: string,
+    input: {
+      name: string;
+      vatRate: string | null;
+      variants: { sku: string; barcode: string }[];
+    },
+    actorUserId: string | null,
+  ): Promise<{
+    id: string;
+    variants: { id: string; barcode: string | null }[];
+  }> {
+    return catalogWrite(this.repository.prisma, async (tx) => {
+      await this.assertCompanyActive(companyId, tx);
+      const created = await this.repository.createProduct(
+        tx,
+        { companyId, name: input.name, vatRate: input.vatRate },
+        input.variants,
+      );
+      await this.audit.record(
+        {
+          action: 'CREATE',
+          module: MODULE,
+          entityType: PRODUCT,
+          entityId: created.id,
+          after: auditProduct(created),
+          actorUserId,
+        },
+        tx,
+      );
+      for (const v of created.variants) {
+        await this.audit.record(
+          {
+            action: 'CREATE',
+            module: MODULE,
+            entityType: VARIANT,
+            entityId: v.id,
+            after: toVariant(v, created.vatRate),
+            actorUserId,
+          },
+          tx,
+        );
+      }
+      return {
+        id: created.id,
+        variants: created.variants.map((v) => ({
+          id: v.id,
+          barcode: v.barcode,
+        })),
+      };
+    });
+  }
+
+  /**
    * For exports (IMP-04): one row per active variant of active products in the given
    * companies (all when undefined), with its list price. Caller checks products:read.
    */

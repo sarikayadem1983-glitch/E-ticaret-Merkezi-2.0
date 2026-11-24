@@ -22,7 +22,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { usePullTrendyolProducts, useRetrySyncJob, useSyncJobs } from '@/hooks/queries';
+import {
+  useImportTrendyolProducts,
+  usePullTrendyolProducts,
+  useRetrySyncJob,
+  useSyncJobs,
+} from '@/hooks/queries';
 import { errorMessage } from '@/lib/api';
 import {
   statsSummary,
@@ -57,6 +62,7 @@ export function SyncLog({
   const jobs = useSyncJobs(companyId, accountId, status);
   const retry = useRetrySyncJob(companyId, accountId);
   const pull = usePullTrendyolProducts(companyId, accountId);
+  const importAll = useImportTrendyolProducts(companyId, accountId);
 
   return (
     <div className="space-y-3">
@@ -82,6 +88,28 @@ export function SyncLog({
             }
           >
             {"Ürünleri Trendyol'dan çek ve eşleştir"}
+          </Button>
+        )}
+        {channel === 'trendyol' && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={importAll.isPending}
+            title="Eşleşmeyen Trendyol ürünleri uygulamada taslak ürün olarak açılır. Trendyol'da hiçbir şey değişmez."
+            onClick={() =>
+              importAll.mutate(undefined, {
+                onSuccess: (r) =>
+                  toast.success(
+                    r.data.duplicate
+                      ? 'Bu dakika içinde başlatılmış iş zaten var.'
+                      : 'İçe aktarma işi kuyruğa alındı.',
+                  ),
+                onError: (e) => toast.error(errorMessage(e)),
+              })
+            }
+          >
+            Eşleşmeyenleri taslak ürün olarak içe aktar
           </Button>
         )}
         <Select value={status} onValueChange={(v) => setStatus(v as SyncStatus | 'all')}>

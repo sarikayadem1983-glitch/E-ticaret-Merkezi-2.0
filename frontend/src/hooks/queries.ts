@@ -311,6 +311,19 @@ export function usePullTrendyolProducts(companyId: string, accountId: string) {
   });
 }
 
+/** INT-TY-01a: pull + match, then create draft products for unmatched Trendyol products. */
+export function useImportTrendyolProducts(companyId: string, accountId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      bff<{ data: { syncJobId: string; duplicate: boolean } }>(
+        `companies/${companyId}/channel-accounts/${accountId}/trendyol/products-import`,
+        { method: 'POST' },
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['sync-jobs', companyId, accountId] }),
+  });
+}
+
 export function useRetrySyncJob(companyId: string, accountId: string) {
   const qc = useQueryClient();
   return useMutation({

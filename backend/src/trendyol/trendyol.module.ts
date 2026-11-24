@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AccessModule } from '../access/access.module.js';
 import { CatalogModule } from '../catalog/catalog.module.js';
 import {
   TrendyolAdapter,
@@ -13,7 +14,7 @@ import { TrendyolController } from './trendyol.controller.js';
 
 /** Trendyol sync kinds (INT-TY-*). Registers them with the INT-02 engine. */
 @Module({
-  imports: [SyncModule, CatalogModule],
+  imports: [SyncModule, CatalogModule, AccessModule],
   controllers: [TrendyolController],
   providers: [
     {

@@ -13,7 +13,11 @@ import {
 } from '../auth/decorators.js';
 import { MANAGE } from '../channels/channels.service.js';
 import { SyncService } from '../sync/sync.service.js';
-import { TRENDYOL_PRODUCTS_PULL } from './trendyol-products.sync.js';
+import { AccessService } from '../access/access.service.js';
+import {
+  TRENDYOL_PRODUCTS_IMPORT,
+  TRENDYOL_PRODUCTS_PULL,
+} from './trendyol-products.sync.js';
 
 const uuid = new ParseUUIDPipe({ errorHttpStatusCode: HttpStatus.NOT_FOUND });
 
@@ -25,7 +29,10 @@ export function pullKey(now: Date = new Date()): string {
 /** INT-TY-01a: starts the read-only Trendyol product pull + match. */
 @Controller('companies/:companyId/channel-accounts/:accountId/trendyol')
 export class TrendyolController {
-  constructor(private readonly sync: SyncService) {}
+  constructor(
+    private readonly sync: SyncService,
+    private readonly access: AccessService,
+  ) {}
 
   @Post('products-pull')
   @HttpCode(HttpStatus.ACCEPTED)
@@ -41,6 +48,33 @@ export class TrendyolController {
       kind: TRENDYOL_PRODUCTS_PULL,
       payload: {},
       idempotencyKey: pullKey(),
+    });
+    return { data: job };
+  }
+
+  /**
+   * Pull + match, then creates draft local products for unmatched Trendyol
+   * products (read-only towards Trendyol). Needs products:write as well.
+   */
+  @Post('products-import')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @RequirePermissions(MANAGE)
+  async import(
+    @CurrentUser() user: AuthUser,
+    @Param('companyId', uuid) companyId: string,
+    @Param('accountId', uuid) accountId: string,
+  ) {
+    await this.access.assertCompanyPermission(
+      user,
+      companyId,
+      'products:write',
+    );
+    const job = await this.sync.start(user, {
+      companyId,
+      channelAccountId: accountId,
+      kind: TRENDYOL_PRODUCTS_IMPORT,
+      payload: { actorUserId: user.sub },
+      idempotencyKey: pullKey().replace('products-pull', 'products-import'),
     });
     return { data: job };
   }

@@ -87,6 +87,8 @@ export function buildCredentials(
 /** Short summary of a job's counters, e.g. "3 işlendi · 2 yeni · 1 güncellendi". */
 const SYNC_KIND_LABELS: Record<string, string> = {
   'trendyol.products.pull': 'Trendyol ürün çekme ve eşleştirme (atlanan = eşleşmeyen)',
+  'trendyol.products.import':
+    'Trendyol ürünlerini içe aktarma (güncellenen = yeni oluşturulan, atlanan = eşleşmeyen)',
 };
 
 /** Turkish name of a sync kind; unknown kinds are shown as their code. */
