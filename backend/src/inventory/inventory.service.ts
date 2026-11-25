@@ -27,7 +27,7 @@ import type {
   SetThresholdDto,
   TransferDto,
 } from './inventory.dto.js';
-import { mapStockError } from './inventory.repository.js';
+import { lockChannelOpening, mapStockError } from './inventory.repository.js';
 
 export const READ = 'inventory:read';
 export const WRITE = 'inventory:write';
@@ -227,7 +227,7 @@ export class InventoryService {
     if (!Number.isInteger(quantity) || quantity <= 0) return 'zero';
     return this.prisma.$transaction(async (tx) => {
       // One opening per variant even with concurrent jobs.
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`opening:${variantId}`}))`;
+      await lockChannelOpening(tx, TenantContext.requireTenantId(), variantId);
       const [variant] = await this.products.variantsForOrder(
         companyId,
         [variantId],

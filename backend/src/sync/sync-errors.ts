@@ -114,3 +114,49 @@ export function classifyFailure(error: unknown): SyncError {
   }
   return new SyncError('SYNC_UNEXPECTED_ERROR', 'transient');
 }
+
+const SECRETISH = [
+  // URLs (may carry user:pass@ or signed query strings)
+  /\b[a-z][a-z0-9+.-]*:\/\/\S+/gi,
+  // credential keyword up to end of line (covers "Authorization: Bearer x", "password is x")
+  /\b(api[_-]?key|api[_-]?secret|secret|token|password|passwd|authorization|bearer|cookie)\b.*$/gim,
+  // e-mail addresses
+  /[^\s@]+@[^\s@]+/g,
+  // long opaque strings (keys, hashes, base64)
+  /[A-Za-z0-9+/_-]{24,}={0,2}/g,
+  // values quoted in driver messages, e.g. Key (name)=(Ali Veli) or "Ali Veli"
+  /\([^()]*\)=\([^()]*\)/g,
+  /"[^"]*"|'[^']*'/g,
+];
+
+/**
+ * A log-safe description of an error that classifyFailure reduced to
+ * SYNC_UNEXPECTED_ERROR: class name, driver code (e.g. Prisma P2002) and a
+ * masked, truncated first message line. Prisma errors log no message at all
+ * (they can embed query arguments, i.e. row values): only code, model and
+ * target. Never stored in the DB; only for server logs.
+ */
+export function describeUnexpected(error: unknown): string {
+  if (!(error instanceof Error)) return `non-error ${typeof error}`;
+  const ident = (v: unknown, max = 60) =>
+    typeof v === 'string' && new RegExp(`^[A-Za-z0-9_.]{1,${max}}$`).test(v)
+      ? v
+      : undefined;
+  const name = ident(error.name) ?? 'Error';
+  const code = ident((error as { code?: unknown }).code, 40);
+  const head = `${name}${code ? ` code=${code}` : ''}`;
+  if (name.startsWith('PrismaClient')) {
+    const meta = (error as { meta?: Record<string, unknown> }).meta ?? {};
+    const model = ident(meta.modelName);
+    const target = Array.isArray(meta.target)
+      ? meta.target
+          .map((t) => ident(t))
+          .filter(Boolean)
+          .join(',')
+      : ident(meta.target);
+    return `${head}${model ? ` model=${model}` : ''}${target ? ` target=${target}` : ''}`;
+  }
+  let message = (error.message ?? '').split('\n')[0];
+  for (const re of SECRETISH) message = message.replace(re, '***');
+  return `${head}: ${message.trim().slice(0, 200)}`;
+}

@@ -184,3 +184,20 @@ export class ReservationsRepository {
     return new Set(rows.map((r) => r.orderItemId));
   }
 }
+
+/**
+ * INT-TY-02a: serialises the one-time stock opening of a variant from a channel
+ * read (transaction-scoped advisory lock, released at commit/rollback). Raw SQL
+ * is allowed only in system context; the lock reads/writes no table and its key
+ * is scoped to tenant + variant, so tenants never contend on each other's keys.
+ */
+export async function lockChannelOpening(
+  tx: PrismaTx,
+  tenantId: string,
+  variantId: string,
+): Promise<void> {
+  const key = `opening:${tenantId}:${variantId}`;
+  await TenantContext.runAsSystem(
+    () => tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`,
+  );
+}
