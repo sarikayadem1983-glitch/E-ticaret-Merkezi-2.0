@@ -260,9 +260,11 @@ export function parseBatchResult(body: unknown): TrendyolBatchResult {
   }
   const status = typeof b.status === 'string' ? b.status.toUpperCase() : '';
   return {
+    // An empty item list is never "done": the caller also checks that every
+    // sent barcode came back.
     completed:
-      status === 'COMPLETED' ||
-      (items.length > 0 && items.every((i) => i.status !== 'PENDING')),
+      items.length > 0 &&
+      (status === 'COMPLETED' || items.every((i) => i.status !== 'PENDING')),
     items,
   };
 }

@@ -7,6 +7,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import {
   type AuthUser,
@@ -26,7 +27,6 @@ import {
   TRENDYOL_STOCK_PRICE_PUSH,
 } from './trendyol-stock-price-push.sync.js';
 import { SyncError } from '../sync/sync-errors.js';
-import { UnprocessableEntityException } from '@nestjs/common';
 
 const uuid = new ParseUUIDPipe({ errorHttpStatusCode: HttpStatus.NOT_FOUND });
 
@@ -123,8 +123,8 @@ export class TrendyolController {
 
   /**
    * INT-TY-02b: WRITES local stock and the Trendyol price of the given
-   * variants (1–50) to Trendyol. Manual only. Needs products:read and
-   * inventory:read for the company. The same selection within a minute
+   * variants (1–50) to Trendyol. Manual only. Needs products:write and
+   * inventory:write for the company. The same selection within a minute
    * returns the same job.
    */
   @Post('stock-price-push')
@@ -150,11 +150,16 @@ export class TrendyolController {
         errors: [{ field: 'variantIds', message: '1–50 benzersiz varyant id' }],
       });
     }
-    await this.access.assertCompanyPermission(user, companyId, 'products:read');
+    // Writes to the live store: needs write rights on both sides.
     await this.access.assertCompanyPermission(
       user,
       companyId,
-      'inventory:read',
+      'products:write',
+    );
+    await this.access.assertCompanyPermission(
+      user,
+      companyId,
+      'inventory:write',
     );
     const selection = createHash('sha256')
       .update([...payload.variantIds].sort().join(','))
@@ -165,7 +170,7 @@ export class TrendyolController {
       channelAccountId: accountId,
       kind: TRENDYOL_STOCK_PRICE_PUSH,
       payload: { ...payload },
-      idempotencyKey: `${pullKey().replace('products-pull', 'stock-price-push')}:${selection}`,
+      idempotencyKey: `stock-price-push:${new Date().toISOString().slice(0, 16)}:${selection}`,
     });
     return { data: job };
   }

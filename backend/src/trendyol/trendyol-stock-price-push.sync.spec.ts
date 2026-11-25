@@ -141,6 +141,9 @@ describe('parseBatchResult', () => {
         items: [{ requestItem: { barcode: 'B1' }, status: '' }],
       }).completed,
     ).toBe(false);
+    expect(parseBatchResult({ status: 'COMPLETED', items: [] }).completed).toBe(
+      false,
+    );
   });
 });
 
@@ -225,5 +228,53 @@ describe('TrendyolStockPricePush', () => {
     await handler.run(ctx, [V3]);
     expect(adapter.updatePriceAndInventory).not.toHaveBeenCalled();
     expect(ctx.stats).toMatchObject({ processed: 1, skipped: 1 });
+  });
+
+  it('never sends a variant without stock rows as 0', async () => {
+    const { handler, ctx, adapter } = setup({ available: new Map([[V2, 3]]) });
+    await handler.run(ctx, [V1]);
+    expect(adapter.findByBarcode).not.toHaveBeenCalled();
+    expect(adapter.updatePriceAndInventory).not.toHaveBeenCalled();
+    expect(ctx.stats).toMatchObject({ processed: 1, skipped: 1 });
+  });
+
+  it.each(['0.00', '500.00', '40.00'])(
+    'guards an implausible local price (%s vs Trendyol 100)',
+    async (local) => {
+      const { handler, ctx, adapter } = setup({});
+      (
+        handler as unknown as { products: { channelPrices: unknown } }
+      ).products.channelPrices = vi.fn(() =>
+        Promise.resolve(new Map([[V1, local]])),
+      );
+      await handler.run(ctx, [V1]);
+      expect(adapter.updatePriceAndInventory).not.toHaveBeenCalled();
+      expect(ctx.stats).toMatchObject({ priceGuard: 1, skipped: 1 });
+    },
+  );
+
+  it('keeps items pending when the result is partial or polling fails', async () => {
+    vi.useFakeTimers();
+    const partial = setup({
+      batch: Array.from({ length: 6 }, () => ({
+        completed: true,
+        items: [{ barcode: 'B1', status: 'SUCCESS' as const }],
+      })),
+    });
+    const run = partial.handler.run(partial.ctx, [V1, V2]);
+    await vi.runAllTimersAsync();
+    await run;
+    expect(partial.ctx.stats).toMatchObject({ pushSent: 2, pushPending: 2 });
+    expect(partial.ctx.stats.pushSucceeded).toBeUndefined();
+
+    const broken = setup({});
+    broken.adapter.getBatchResult.mockImplementation(() =>
+      Promise.reject(new Error('CHANNEL_TIMEOUT')),
+    );
+    const run2 = broken.handler.run(broken.ctx, [V1]);
+    await vi.runAllTimersAsync();
+    await expect(run2).resolves.toBeUndefined();
+    expect(broken.ctx.stats).toMatchObject({ pushSent: 1, pushPending: 1 });
+    expect(broken.adapter.updatePriceAndInventory).toHaveBeenCalledTimes(1);
   });
 });

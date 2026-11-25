@@ -30,6 +30,8 @@ export interface SyncStats {
   pushFailed?: number;
   /** INT-TY-02b: sent, but the batch result did not finish while polling. */
   pushPending?: number;
+  /** INT-TY-02b: not sent, local price implausible against Trendyol's (≤ 0 or > 2× off). */
+  priceGuard?: number;
 }
 
 export const emptyStats = (): SyncStats => ({

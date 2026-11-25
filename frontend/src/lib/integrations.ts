@@ -113,6 +113,7 @@ export function statsSummary(stats: Record<string, number>): string {
     ['pushSucceeded', 'Trendyol onayladı'],
     ['pushFailed', 'Trendyol reddetti'],
     ['pushPending', 'sonucu bekleniyor'],
+    ['priceGuard', 'fiyat şüpheli, gönderilmedi'],
   ];
   return parts
     .filter(([key]) => (stats[key] ?? 0) > 0)

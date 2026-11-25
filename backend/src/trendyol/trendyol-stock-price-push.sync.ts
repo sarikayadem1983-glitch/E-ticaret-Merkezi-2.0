@@ -43,6 +43,12 @@ export function parsePushPayload(raw: unknown): PushPayload {
   return { actorUserId: r.actorUserId, variantIds: r.variantIds as string[] };
 }
 
+/**
+ * A local price further than this factor from Trendyol's current sale price
+ * is not sent (likely a wrong unit/typo); the variant is counted in priceGuard.
+ */
+export const MAX_PRICE_FACTOR = 2;
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const cents = (s: string) => Math.round(Number(s) * 100);
 
@@ -52,13 +58,15 @@ const cents = (s: string) => Math.round(Number(s) * 100);
  * - Only variants linked to a Trendyol barcode (INT-TY-01a) are sent; others
  *   are skipped.
  * - quantity = sellable local stock (on hand − reserved, all warehouses).
- *   A company without warehouses keeps no stock: nothing is sent.
+ *   A company without warehouses keeps no stock: nothing is sent. A variant
+ *   without any stock row is skipped (never sent as 0).
  * - salePrice = the variant's local `trendyol` price, else Trendyol's current
  *   sale price (stock-only update). listPrice = Trendyol's current list price,
  *   raised to salePrice when lower (Trendyol rejects listPrice < salePrice).
  * - The current Trendyol values are read right before the write; a barcode
  *   Trendyol does not know is skipped.
- * Values are absolute, so a retry re-sends the same state. Outcome per item
+ * Runs once (no automatic retry); polling errors after the write leave the
+ * items pending. Outcome per item
  * comes from the batch result; marketplace failure texts are never stored.
  */
 @Injectable()
@@ -75,7 +83,8 @@ export class TrendyolStockPricePush implements OnModuleInit {
     this.sync.registerKind<PushPayload>(
       TRENDYOL_STOCK_PRICE_PUSH,
       (payload, ctx) => this.run(ctx, payload.variantIds),
-      { parse: parsePushPayload, usesLiveApi: true, attempts: 2 },
+      // One run only: a retry after the write would send the batch again.
+      { parse: parsePushPayload, usesLiveApi: true, attempts: 1 },
     );
   }
 
@@ -109,7 +118,9 @@ export class TrendyolStockPricePush implements OnModuleInit {
     for (const variantId of variantIds) {
       stats.processed += 1;
       const barcode = barcodes.get(variantId);
-      if (!barcode) {
+      const quantity = available.get(variantId);
+      // Unknown local stock is never sent as 0 (it would empty the live listing).
+      if (!barcode || quantity === undefined) {
         stats.skipped += 1;
         continue;
       }
@@ -124,13 +135,27 @@ export class TrendyolStockPricePush implements OnModuleInit {
         continue;
       }
       const saleCents = cents(sale);
+      const currentCents =
+        current.salePrice !== null ? cents(current.salePrice) : null;
+      if (
+        !Number.isFinite(saleCents) ||
+        saleCents <= 0 ||
+        (currentCents !== null &&
+          currentCents > 0 &&
+          (saleCents > currentCents * MAX_PRICE_FACTOR ||
+            saleCents * MAX_PRICE_FACTOR < currentCents))
+      ) {
+        stats.priceGuard = (stats.priceGuard ?? 0) + 1;
+        stats.skipped += 1;
+        continue;
+      }
       const listCents = Math.max(
         current.listPrice !== null ? cents(current.listPrice) : 0,
         saleCents,
       );
       items.push({
         barcode,
-        quantity: available.get(variantId) ?? 0,
+        quantity,
         salePrice: saleCents / 100,
         listPrice: listCents / 100,
       });
@@ -144,21 +169,26 @@ export class TrendyolStockPricePush implements OnModuleInit {
     );
     stats.pushSent = items.length;
 
+    // After the write nothing may fail the job (no retry, no second send):
+    // polling problems leave the items as pending.
+    const sent = new Set(items.map((it) => it.barcode));
     for (let i = 0; i < BATCH_POLLS; i += 1) {
       await sleep(BATCH_POLL_MS);
-      await ctx.takeRate();
-      const result = await this.adapter.getBatchResult(
-        ctx.credentials,
-        batchId,
-      );
-      if (!result.completed) continue;
-      const sent = new Set(items.map((it) => it.barcode));
+      let result;
+      try {
+        await ctx.takeRate();
+        result = await this.adapter.getBatchResult(ctx.credentials, batchId);
+      } catch {
+        break;
+      }
       const mine = result.items.filter((r) => sent.has(r.barcode));
-      stats.pushSucceeded = mine.filter((r) => r.status === 'SUCCESS').length;
-      stats.pushFailed = mine.filter((r) => r.status === 'FAILED').length;
+      const done = mine.filter((r) => r.status !== 'PENDING');
+      if (!result.completed || done.length < sent.size) continue;
+      stats.pushSucceeded = done.filter((r) => r.status === 'SUCCESS').length;
+      stats.pushFailed = done.filter((r) => r.status === 'FAILED').length;
       return;
     }
-    // Written but not confirmed in time: the job succeeds, counts stay unknown.
+    // Written but not confirmed: the job succeeds, the outcome stays unknown.
     stats.pushPending = items.length;
   }
 }

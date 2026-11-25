@@ -46,7 +46,7 @@ export function TrendyolPushButton({
           <DialogHeader>
             <DialogTitle>{"Stok ve fiyat Trendyol'a gönderilsin mi?"}</DialogTitle>
             <DialogDescription>
-              {`${ids.length} varyantın satılabilir stoğu (tüm depolar, rezerve hariç) ve Trendyol fiyatı "${account.name}" hesabına yazılır. Trendyol'da eşleşmemiş varyantlar atlanır. Sonuç Entegrasyonlar > Senkron logu'nda görünür.`}
+              {`${ids.length} varyantın satılabilir stoğu (tüm depolar, rezerve hariç) ve Trendyol fiyatı "${account.name}" hesabına yazılır. Trendyol'da eşleşmemiş, stok kaydı olmayan veya fiyatı Trendyol'dakinden 2 kattan fazla farklı varyantlar gönderilmez. Sonuç Entegrasyonlar > Senkron logu'nda görünür.`}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

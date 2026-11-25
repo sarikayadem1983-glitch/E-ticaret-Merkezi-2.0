@@ -211,9 +211,11 @@ export class InventoryService {
   }
 
   /**
-   * INT-TY-02b: sellable stock per variant across all warehouses of the
-   * company (on hand − reserved, never below 0). Variants without stock rows
-   * are 0. Returns null when the company keeps no stock. No user check.
+   * INT-TY-02b: sellable stock per variant across the company's warehouses,
+   * clamped per warehouse (max(0, on hand − reserved)) before summing, so a
+   * negative row never hides stock elsewhere. Variants WITHOUT any stock row
+   * are absent (unknown stock is never reported as 0). Returns null when the
+   * company keeps no stock. No user check.
    */
   async availableTotals(
     companyId: string,
@@ -222,16 +224,15 @@ export class InventoryService {
     if ((await this.prisma.warehouse.count({ where: { companyId } })) === 0) {
       return null;
     }
-    const rows = await this.prisma.stockLevel.groupBy({
-      by: ['variantId'],
+    const rows = await this.prisma.stockLevel.findMany({
       where: { companyId, variantId: { in: variantIds } },
-      _sum: { onHand: true, reserved: true },
+      select: { variantId: true, onHand: true, reserved: true },
     });
-    const out = new Map(variantIds.map((id) => [id, 0]));
+    const out = new Map<string, number>();
     for (const r of rows) {
       out.set(
         r.variantId,
-        Math.max(0, (r._sum.onHand ?? 0) - (r._sum.reserved ?? 0)),
+        (out.get(r.variantId) ?? 0) + Math.max(0, r.onHand - r.reserved),
       );
     }
     return out;
