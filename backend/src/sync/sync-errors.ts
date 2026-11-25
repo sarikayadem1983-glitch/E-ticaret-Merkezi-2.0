@@ -114,3 +114,31 @@ export function classifyFailure(error: unknown): SyncError {
   }
   return new SyncError('SYNC_UNEXPECTED_ERROR', 'transient');
 }
+
+const SECRETISH = [
+  // key=value / key: value pairs whose key looks like a credential
+  /\b(api[_-]?key|api[_-]?secret|secret|token|password|passwd|authorization|bearer)\b\s*[:=]?\s*\S+/gi,
+  // e-mail addresses
+  /[^\s@]+@[^\s@]+\.[^\s@]+/g,
+  // long opaque strings (keys, hashes, base64)
+  /[A-Za-z0-9+/_-]{24,}={0,2}/g,
+];
+
+/**
+ * A log-safe description of an error that classifyFailure reduced to
+ * SYNC_UNEXPECTED_ERROR: class name, driver code (e.g. Prisma P2002) and a
+ * masked, truncated message. Never stored in the DB; only for server logs.
+ */
+export function describeUnexpected(error: unknown): string {
+  if (!(error instanceof Error)) return `non-error ${typeof error}`;
+  const code = (error as { code?: unknown }).code;
+  const safeCode =
+    typeof code === 'string' && /^[A-Za-z0-9_]{1,40}$/.test(code)
+      ? ` code=${code}`
+      : '';
+  let message = error.message ?? '';
+  for (const re of SECRETISH) message = message.replace(re, '***');
+  message = message.replace(/\s+/g, ' ').trim().slice(0, 300);
+  const name = /^[A-Za-z0-9_]{1,60}$/.test(error.name) ? error.name : 'Error';
+  return `${name}${safeCode}: ${message}`;
+}

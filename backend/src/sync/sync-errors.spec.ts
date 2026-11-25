@@ -1,6 +1,7 @@
 import { ratePolicies } from './channel-rate-limiter.js';
 import {
   classifyFailure,
+  describeUnexpected,
   DEFAULT_RETRY_AFTER_MS,
   httpFailure,
   MAX_RETRY_AFTER_MS,
@@ -96,5 +97,31 @@ describe('syncErrorMessage', () => {
     expect(syncErrorMessage('CHANNEL_HTTP_502')).toMatch(/geçici/);
     expect(syncErrorMessage('CHANNEL_REJECTED_400')).toMatch(/reddetti/);
     expect(syncErrorMessage('XYZ')).toBe('Senkron işi başarısız oldu.');
+  });
+});
+
+describe('describeUnexpected', () => {
+  it('keeps name, driver code and a masked message', () => {
+    const e = Object.assign(new Error('Unique constraint failed on stock'), {
+      code: 'P2002',
+    });
+    e.name = 'PrismaClientKnownRequestError';
+    expect(describeUnexpected(e)).toBe(
+      'PrismaClientKnownRequestError code=P2002: Unique constraint failed on stock',
+    );
+  });
+  it('masks credentials, e-mails and long opaque strings', () => {
+    const out = describeUnexpected(
+      new Error(
+        'apiSecret=abc token: xyz user a@b.com key ABCDEFGHIJKLMNOPQRSTUVWXYZ012345',
+      ),
+    );
+    expect(out).not.toMatch(/abc|xyz|a@b\.com|ABCDEFGHIJ/);
+  });
+  it('handles non-errors and truncates', () => {
+    expect(describeUnexpected('x')).toBe('non-error string');
+    expect(describeUnexpected(new Error('a '.repeat(500))).length).toBeLessThan(
+      320,
+    );
   });
 });

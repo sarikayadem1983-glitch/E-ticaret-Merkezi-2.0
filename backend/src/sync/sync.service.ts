@@ -26,7 +26,11 @@ import {
 import { TenantContext } from '../tenancy/tenant-context.js';
 import { ChannelRateLimiter } from './channel-rate-limiter.js';
 import { ExternalRefsRepository } from './external-refs.repository.js';
-import { classifyFailure, SyncError } from './sync-errors.js';
+import {
+  classifyFailure,
+  describeUnexpected,
+  SyncError,
+} from './sync-errors.js';
 import {
   emptyStats,
   MAX_PAYLOAD_CHARS,
@@ -523,6 +527,11 @@ export class SyncService {
     } catch (error) {
       if (error instanceof UnrecoverableError) throw error;
       const failure = classifyFailure(error);
+      if (failure.code === 'SYNC_UNEXPECTED_ERROR') {
+        this.logger.error(
+          `Sync job ${job.id} (${kind}) unexpected: ${describeUnexpected(error)}`,
+        );
+      }
       if (failure.kind === 'auth' || failure.kind === 'permanent') {
         return fail(failure.code);
       }
