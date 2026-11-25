@@ -9,6 +9,7 @@ import { ProductStatusBadge } from '@/components/catalog/common';
 import { ProductImages } from '@/components/catalog/product-images';
 import { ProductForm } from '@/components/catalog/product-form';
 import { VariantEditor } from '@/components/catalog/variant-editor';
+import { TrendyolPushButton } from '@/components/integrations/trendyol-push-button';
 import { PageHeader } from '@/components/page-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -36,6 +37,7 @@ export default function ProductPage() {
   // The backend decides per company; this only hides controls a viewer cannot use.
   const perms = session.data?.user.permissions ?? [];
   const readOnly = !perms.includes('*') && !perms.includes('products:write');
+  const canPush = perms.includes('*') || perms.includes('channels:manage');
 
   if (product.isLoading) {
     return (
@@ -65,10 +67,15 @@ export default function ProductPage() {
         description={<ProductStatusBadge status={p.status} />}
         actions={
           !readOnly && (
-            <Button variant="outline" className="h-10 text-destructive" onClick={() => setConfirming(true)}>
-              <Trash2 className="size-4" aria-hidden />
-              Ürünü sil
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              {canPush && (
+                <TrendyolPushButton companyId={p.companyId} variantIds={p.variants.map((v) => v.id)} />
+              )}
+              <Button variant="outline" className="h-10 text-destructive" onClick={() => setConfirming(true)}>
+                <Trash2 className="size-4" aria-hidden />
+                Ürünü sil
+              </Button>
+            </div>
           )
         }
       />

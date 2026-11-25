@@ -337,6 +337,19 @@ export function usePullTrendyolStockPrice(companyId: string, accountId: string) 
   });
 }
 
+/** INT-TY-02b: WRITES local stock + price of the given variants to Trendyol. */
+export function usePushTrendyolStockPrice(companyId: string, accountId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (variantIds: string[]) =>
+      bff<{ data: { syncJobId: string; duplicate: boolean } }>(
+        `companies/${companyId}/channel-accounts/${accountId}/trendyol/stock-price-push`,
+        { method: 'POST', body: { variantIds } },
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['sync-jobs', companyId, accountId] }),
+  });
+}
+
 export function useRetrySyncJob(companyId: string, accountId: string) {
   const qc = useQueryClient();
   return useMutation({

@@ -13,6 +13,7 @@ import {
 import { TrendyolController } from './trendyol.controller.js';
 import { InventoryModule } from '../inventory/inventory.module.js';
 import { TrendyolStockPriceSync } from './trendyol-stock-price.sync.js';
+import { TrendyolStockPricePush } from './trendyol-stock-price-push.sync.js';
 
 /** Trendyol sync kinds (INT-TY-*). Registers them with the INT-02 engine. */
 @Module({
@@ -26,6 +27,7 @@ import { TrendyolStockPriceSync } from './trendyol-stock-price.sync.js';
     },
     TrendyolProductsSync,
     TrendyolStockPriceSync,
+    TrendyolStockPricePush,
   ],
 })
 export class TrendyolModule {}

@@ -13,7 +13,7 @@ export const TRENDYOL_PRODUCTS_PULL = 'trendyol.products.pull';
 /** Pull + match, then create draft local products for what is still unmatched. */
 export const TRENDYOL_PRODUCTS_IMPORT = 'trendyol.products.import';
 
-const UUID_RE =
+export const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const VAT_RATES = new Set(['0', '1', '10', '20']);
 

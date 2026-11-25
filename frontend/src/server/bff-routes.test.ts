@@ -145,7 +145,12 @@ describe('matchBffRoute', () => {
       ['POST', `${acc}/${ID}/trendyol/products-pull`, ''],
       ['POST', `${acc}/${ID}/trendyol/products-import`, ''],
       ['POST', `${acc}/${ID}/trendyol/stock-price-pull`, ''],
+      ['POST', `${acc}/${ID}/trendyol/stock-price-push`, ''],
     ];
+    expect(match('POST', `${acc}/${ID}/trendyol/stock-price-push`)).toMatchObject({
+      ok: true,
+      body: true,
+    });
     for (const [method, path, query] of allowed) {
       expect(match(method, path, query).ok).toBe(true);
     }

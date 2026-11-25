@@ -392,6 +392,29 @@ export class ProductsService {
   }
 
   /**
+   * INT-TY-02b: the active channel price of each variant of the company
+   * (variant id → "123.45"); variants without one are absent. No user check.
+   */
+  async channelPrices(
+    companyId: string,
+    variantIds: string[],
+    channel: string,
+  ): Promise<Map<string, string>> {
+    if (variantIds.length === 0) return new Map();
+    const rows = await this.repository.prisma.variantPrice.findMany({
+      where: {
+        variantId: { in: variantIds },
+        channel,
+        currency: 'TRY',
+        deletedAt: null,
+        variant: { companyId, deletedAt: null, product: { deletedAt: null } },
+      },
+      select: { variantId: true, amount: true },
+    });
+    return new Map(rows.map((r) => [r.variantId, money(r.amount)]));
+  }
+
+  /**
    * For exports (IMP-04): one row per active variant of active products in the given
    * companies (all when undefined), with its list price. Caller checks products:read.
    */
