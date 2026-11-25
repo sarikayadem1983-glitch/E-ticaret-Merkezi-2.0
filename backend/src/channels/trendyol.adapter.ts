@@ -104,6 +104,169 @@ export class TrendyolAdapter implements ChannelAdapter {
     }
     return parseProductPage(body);
   }
+
+  /** INT-TY-02b: the seller's product with this barcode (read-only), or null. */
+  async findByBarcode(
+    credentials: Readonly<Record<string, string>>,
+    barcode: string,
+  ): Promise<TrendyolProduct | null> {
+    const page = await this.getJson(
+      credentials,
+      (id) =>
+        `/integration/product/sellers/${id}/products?page=0&size=1&barcode=${encodeURIComponent(barcode)}`,
+    );
+    const item = parseProductPage(page).items.find(
+      (i) => i.barcode === barcode,
+    );
+    return item ?? null;
+  }
+
+  /**
+   * INT-TY-02b: WRITES stock and price to Trendyol (updatePriceAndInventory,
+   * at most 1000 items). Returns Trendyol's batch request id; the outcome per
+   * item comes from getBatchResult. Values are absolute, so a retry is safe.
+   */
+  async updatePriceAndInventory(
+    credentials: Readonly<Record<string, string>>,
+    items: readonly TrendyolStockPriceItem[],
+  ): Promise<string> {
+    if (items.length === 0 || items.length > 1000) {
+      throw new SyncError('SYNC_INVALID_PAYLOAD', 'permanent');
+    }
+    const body = await this.request(
+      credentials,
+      (id) =>
+        `/integration/inventory/sellers/${id}/products/price-and-inventory`,
+      'POST',
+      { items },
+    );
+    const batchId = str(
+      (body as { batchRequestId?: unknown })?.batchRequestId,
+      100,
+    );
+    if (!batchId || !/^[A-Za-z0-9-]{1,100}$/.test(batchId)) {
+      throw new SyncError('CHANNEL_BAD_RESPONSE', 'transient');
+    }
+    return batchId;
+  }
+
+  /** INT-TY-02b: per-item outcome of a batch request (read-only). */
+  async getBatchResult(
+    credentials: Readonly<Record<string, string>>,
+    batchRequestId: string,
+  ): Promise<TrendyolBatchResult> {
+    if (!/^[A-Za-z0-9-]{1,100}$/.test(batchRequestId)) {
+      throw new SyncError('SYNC_INVALID_PAYLOAD', 'permanent');
+    }
+    const body = await this.getJson(
+      credentials,
+      (id) =>
+        `/integration/product/sellers/${id}/products/batch-requests/${batchRequestId}`,
+    );
+    return parseBatchResult(body);
+  }
+
+  private getJson(
+    credentials: Readonly<Record<string, string>>,
+    path: (supplierId: string) => string,
+  ): Promise<unknown> {
+    return this.request(credentials, path, 'GET');
+  }
+
+  private async request(
+    credentials: Readonly<Record<string, string>>,
+    path: (supplierId: string) => string,
+    method: 'GET' | 'POST',
+    payload?: unknown,
+  ): Promise<unknown> {
+    const { supplierId, apiKey, apiSecret } = credentials;
+    if (
+      !supplierId ||
+      !apiKey ||
+      !apiSecret ||
+      !/^\d{1,20}$/.test(supplierId)
+    ) {
+      throw new SyncError('CHANNEL_AUTH_FAILED', 'auth');
+    }
+    let res: Response;
+    try {
+      res = await this.fetchImpl(`${this.baseUrl}${path(supplierId)}`, {
+        method,
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${apiKey}:${apiSecret}`).toString('base64')}`,
+          'User-Agent': `${supplierId} - SelfIntegration`,
+          Accept: 'application/json',
+          ...(payload !== undefined
+            ? { 'Content-Type': 'application/json' }
+            : {}),
+        },
+        body: payload !== undefined ? JSON.stringify(payload) : undefined,
+        redirect: 'error',
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
+    } catch {
+      throw new SyncError('CHANNEL_TIMEOUT', 'transient');
+    }
+    if (res.status < 200 || res.status >= 300) {
+      await res.body?.cancel();
+      throw httpFailure(res.status, res.headers.get('retry-after'));
+    }
+    try {
+      return await res.json();
+    } catch {
+      throw new SyncError('CHANNEL_BAD_RESPONSE', 'transient');
+    }
+  }
+}
+
+export interface TrendyolStockPriceItem {
+  barcode: string;
+  quantity: number;
+  /** VAT-inclusive, 2 decimals. */
+  salePrice: number;
+  /** Must not be lower than salePrice. */
+  listPrice: number;
+}
+
+export type BatchItemStatus = 'SUCCESS' | 'FAILED' | 'PENDING';
+
+export interface TrendyolBatchResult {
+  /** True when Trendyol finished processing every item. */
+  completed: boolean;
+  /** Per barcode; failure reasons are marketplace text and are dropped. */
+  items: { barcode: string; status: BatchItemStatus }[];
+}
+
+/** Exported for tests. */
+export function parseBatchResult(body: unknown): TrendyolBatchResult {
+  const b = body as { status?: unknown; items?: unknown } | null;
+  if (!b || typeof b !== 'object') {
+    throw new SyncError('CHANNEL_BAD_RESPONSE', 'transient');
+  }
+  const items: TrendyolBatchResult['items'] = [];
+  for (const raw of Array.isArray(b.items)
+    ? (b.items as (Record<string, unknown> | null)[])
+    : []) {
+    if (!raw || typeof raw !== 'object') continue;
+    const req = raw.requestItem as Record<string, unknown> | undefined;
+    const barcode = str(req?.barcode ?? raw.barcode, 50);
+    if (!barcode) continue;
+    const st = typeof raw.status === 'string' ? raw.status.toUpperCase() : '';
+    items.push({
+      barcode,
+      status:
+        st === 'SUCCESS' ? 'SUCCESS' : st === 'FAILED' ? 'FAILED' : 'PENDING',
+    });
+  }
+  const status = typeof b.status === 'string' ? b.status.toUpperCase() : '';
+  return {
+    // An empty item list is never "done": the caller also checks that every
+    // sent barcode came back.
+    completed:
+      items.length > 0 &&
+      (status === 'COMPLETED' || items.every((i) => i.status !== 'PENDING')),
+    items,
+  };
 }
 
 export interface TrendyolProduct {
@@ -119,6 +282,8 @@ export interface TrendyolProduct {
   quantity: number | null;
   /** VAT-inclusive sale price as a 2-digit decimal string ("199.90"); null when absent/invalid. */
   salePrice: string | null;
+  /** VAT-inclusive list (strike-through) price, same format; null when absent/invalid. */
+  listPrice: string | null;
 }
 
 /** Number → "123.45" (≥ 0, ≤ NUMERIC(12,2)); anything else null. */
@@ -174,6 +339,7 @@ export function parseProductPage(body: unknown): TrendyolProductPage {
           ? raw.quantity
           : null,
       salePrice: priceString(raw.salePrice),
+      listPrice: priceString(raw.listPrice),
     });
   }
   const tp = Number(b.totalPages);

@@ -211,6 +211,34 @@ export class InventoryService {
   }
 
   /**
+   * INT-TY-02b: sellable stock per variant across the company's warehouses,
+   * clamped per warehouse (max(0, on hand − reserved)) before summing, so a
+   * negative row never hides stock elsewhere. Variants WITHOUT any stock row
+   * are absent (unknown stock is never reported as 0). Returns null when the
+   * company keeps no stock. No user check.
+   */
+  async availableTotals(
+    companyId: string,
+    variantIds: string[],
+  ): Promise<Map<string, number> | null> {
+    if ((await this.prisma.warehouse.count({ where: { companyId } })) === 0) {
+      return null;
+    }
+    const rows = await this.prisma.stockLevel.findMany({
+      where: { companyId, variantId: { in: variantIds } },
+      select: { variantId: true, onHand: true, reserved: true },
+    });
+    const out = new Map<string, number>();
+    for (const r of rows) {
+      out.set(
+        r.variantId,
+        (out.get(r.variantId) ?? 0) + Math.max(0, r.onHand - r.reserved),
+      );
+    }
+    return out;
+  }
+
+  /**
    * For channel reads (INT-TY-02a): seeds a variant's stock from the
    * marketplace ONCE. Writes an `opening` movement in the company's default
    * warehouse only when the variant has no stock movement at all; afterwards

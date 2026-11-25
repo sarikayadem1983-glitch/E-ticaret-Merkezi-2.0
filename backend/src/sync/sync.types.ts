@@ -23,6 +23,15 @@ export interface SyncStats {
   stockSeeded?: number;
   /** INT-TY-02a: variants that already had local stock history (kept, not overwritten). */
   stockKept?: number;
+  /** INT-TY-02b: items written to the channel in one batch request. */
+  pushSent?: number;
+  /** INT-TY-02b: items the channel confirmed / rejected in the batch result. */
+  pushSucceeded?: number;
+  pushFailed?: number;
+  /** INT-TY-02b: sent, but the batch result did not finish while polling. */
+  pushPending?: number;
+  /** INT-TY-02b: not sent, local price implausible against Trendyol's (≤ 0 or > 2× off). */
+  priceGuard?: number;
 }
 
 export const emptyStats = (): SyncStats => ({

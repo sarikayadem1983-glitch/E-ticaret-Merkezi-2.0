@@ -21,6 +21,7 @@ const item = (barcode: string, stockCode: string | null = null) => ({
   vatRate: null as number | null,
   quantity: null,
   salePrice: null,
+  listPrice: null,
 });
 
 describe('parseProductPage', () => {
@@ -50,6 +51,7 @@ describe('parseProductPage', () => {
         vatRate: null,
         quantity: null,
         salePrice: null,
+        listPrice: null,
       },
     ]);
   });

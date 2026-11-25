@@ -106,6 +106,8 @@ const ROUTES: readonly BffRoute[] = [
   { method: 'POST', path: new RegExp(`^${ACCOUNT}/trendyol/products-import$`) },
   // INT-TY-02a: Trendyol stock + price into the app (read-only towards Trendyol).
   { method: 'POST', path: new RegExp(`^${ACCOUNT}/trendyol/stock-price-pull$`) },
+  // INT-TY-02b: WRITES local stock + price of selected variants to Trendyol (manual).
+  { method: 'POST', path: new RegExp(`^${ACCOUNT}/trendyol/stock-price-push$`), body: true },
   // Orders (ORD-03). Status changes of marketplace orders are refused by the backend.
   {
     method: 'GET',

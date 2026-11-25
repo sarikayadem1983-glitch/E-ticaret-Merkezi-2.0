@@ -41,6 +41,6 @@ import { SyncService } from './sync.service.js';
     ExternalRefsRepository,
     SyncService,
   ],
-  exports: [SyncService],
+  exports: [SyncService, ExternalRefsRepository],
 })
 export class SyncModule {}
