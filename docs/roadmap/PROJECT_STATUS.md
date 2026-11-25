@@ -11,7 +11,7 @@ Son güncelleme: 2026-11-22 (dev deploy `ceee47e`) · Kaynak görev durumları T
 | BLOCKED | 1 — USR-18 (T16 + Aşama 2 migration onayı) |
 | Sürüm A (Trendyol-only MVP) ilerleme | 54 / 59 görev dev'de. Kalan 5: OPS-03 (prod altyapısı), INT-TY-01…03 ve SHP-02 (BLK-01) |
 | Sürüm B / C | 62 / 21 görev. B: 11 DONE-MERGED, 1 BLOCKED (USR-18), kalan PLANNED; C: 21 PLANNED |
-| Açık PR | Yalnızca bu doküman PR'ı |
+| Açık PR | #102 (INT-TY-02b Trendyol'a elle gönderme, CRITICAL, merge onayı bekliyor) |
 | `origin/main` | `d07c1fe` (2026-11-22, #88–#90). #90 son commit `da0a3d6` CI ✓ (backend, frontend, integration) |
 | USR-T11 doğrulama (geçmiş, 2026-11-16) | Kod 3f42e76, CI [43843739033](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/actions/runs/43843739033): unit 571/571, e2e 471 geçti + 1 Mailpit skip, frontend 206/206; build/lint yeşil. Yerel typecheck/lint çıkış 0. CRITICAL bağımsız inceleme temiz |
 | USR-T9 testleri (geçmiş, 2026-11-15) | Kod `df54a82`, CI [43745748422](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/actions/runs/43745748422): backend unit 572/572, e2e 467 geçti + 1 Mailpit skip, frontend 198/198; build/lint yeşil. Yerel: mail/davet 30/30, tam unit 572/572, typecheck ve lint çıkış 0. Dev DB kullanılmadı |
@@ -391,6 +391,7 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 
 | Tarih | Değişiklik | PR | Test | Deploy |
 |---|---|---|---|---|
+| 2026-11-25 | INT-TY-02b (Trendyol'a stok+fiyat elle gönderme, kullanıcı kararı A) → DONE-PR; mod CRITICAL'e yükseltildi, bağımsız inceleme 2 tur (1 BLOCKER + 3 HIGH düzeltildi, sonra engelleyici yok) | [#102](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/102) | CI `d7acbf1`: unit 651/651, e2e 492/499 (7 skip), frontend 216/216, MinIO 17/17, Playwright 23/23 | yok |
 | 2026-11-25 | #99 → DONE-MERGED, dev deploy; INT-TY-02a canlı okuma tekrarı başarılı (iş `a5fc2425…`: 207 işlendi, 205 fiyat, 139 stok açılışı / 2459 adet, 1 atlandı), SYNC_LIVE_CALLS=false | #99 (merge `4570e31`), #100 (merge `89fb2c1`) | PR CI ✓; dev health ok | dev `4570e31` |
 | 2026-11-24 | INT-TY-01a ek: eşleşmeyen Trendyol ürünlerini taslak ürün olarak içe aktarma → DONE-MERGED (dev deploy, canlı içe aktarma 203 taslak ürün) | #97 (merge `b96aa2d`) | PR CI ✓ | dev `b96aa2d` |
 | 2026-11-24 | INT-TY-02a stok+fiyat okuma → DONE-MERGED; canlı okuma `SYNC_UNEXPECTED_ERROR` | #98 (merge `3f0c6dc`) | PR CI ✓ | dev `3f0c6dc` |
