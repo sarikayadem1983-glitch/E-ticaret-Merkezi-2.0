@@ -105,4 +105,31 @@ describe('Stock opening from a channel read (e2e, INT-TY-02a)', () => {
     expect(await open(variants[1], 0, userId)).toBe('zero');
     expect(await open(variants[1], 3, null)).toBe('created');
   });
+
+  it('seeds exactly once under concurrent reads', async () => {
+    const v = (
+      await http()
+        .post('/api/v1/products')
+        .set(bearer(token))
+        .send({
+          companyId,
+          name: `Silgi ${run}`,
+          variants: [{ sku: `O3-${run}` }],
+        })
+        .expect(201)
+    ).body.data.variants[0].id as string;
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () => open(v, 5, userId)),
+    );
+    expect(results.filter((r) => r === 'created')).toHaveLength(1);
+    expect(results.filter((r) => r === 'exists')).toHaveLength(4);
+    const rows = (
+      await http()
+        .get(`/api/v1/stock-levels?variant_id=${v}`)
+        .set(bearer(token))
+        .expect(200)
+    ).body.data as { variantId: string; onHand: number }[];
+    const row = rows.find((r) => r.variantId === v);
+    expect(row?.onHand).toBe(5);
+  });
 });

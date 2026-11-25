@@ -101,27 +101,47 @@ describe('syncErrorMessage', () => {
 });
 
 describe('describeUnexpected', () => {
-  it('keeps name, driver code and a masked message', () => {
-    const e = Object.assign(new Error('Unique constraint failed on stock'), {
-      code: 'P2002',
-    });
+  it('logs only code, model and target for Prisma errors', () => {
+    const e = Object.assign(
+      new Error('Unique constraint failed: data { name: "Ali Veli" }'),
+      {
+        code: 'P2002',
+        meta: { modelName: 'StockMovement', target: ['variant_id'] },
+      },
+    );
     e.name = 'PrismaClientKnownRequestError';
     expect(describeUnexpected(e)).toBe(
-      'PrismaClientKnownRequestError code=P2002: Unique constraint failed on stock',
+      'PrismaClientKnownRequestError code=P2002 model=StockMovement target=variant_id',
     );
   });
-  it('masks credentials, e-mails and long opaque strings', () => {
-    const out = describeUnexpected(
-      new Error(
-        'apiSecret=abc token: xyz user a@b.com key ABCDEFGHIJKLMNOPQRSTUVWXYZ012345',
-      ),
+  it('keeps the first line of other errors, masked', () => {
+    const e = Object.assign(
+      new Error('Tenant ihlali: ham SQL yasak\nsecond line'),
+      {
+        code: 'TENANT_VIOLATION',
+      },
     );
-    expect(out).not.toMatch(/abc|xyz|a@b\.com|ABCDEFGHIJ/);
+    expect(describeUnexpected(e)).toBe(
+      'Error code=TENANT_VIOLATION: Tenant ihlali: ham SQL yasak',
+    );
+  });
+  it.each([
+    'Authorization: Bearer abc123',
+    'password is hunter2',
+    'fetch http://u:hunter2@localhost/x?sig=abc failed',
+    'user a@b.com',
+    'key ABCDEFGHIJKLMNOPQRSTUVWXYZ012345',
+    'Key (name)=(hunter2) already exists',
+    'value "hunter2" rejected',
+  ])('masks secrets and personal data: %s', (text) => {
+    expect(describeUnexpected(new Error(text))).not.toMatch(
+      /abc123|hunter2|a@b\.com|ABCDEFGHIJ|sig=/,
+    );
   });
   it('handles non-errors and truncates', () => {
     expect(describeUnexpected('x')).toBe('non-error string');
     expect(describeUnexpected(new Error('a '.repeat(500))).length).toBeLessThan(
-      320,
+      220,
     );
   });
 });
