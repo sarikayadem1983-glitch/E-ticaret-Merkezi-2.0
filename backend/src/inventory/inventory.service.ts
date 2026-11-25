@@ -27,7 +27,7 @@ import type {
   SetThresholdDto,
   TransferDto,
 } from './inventory.dto.js';
-import { mapStockError } from './inventory.repository.js';
+import { lockChannelOpening, mapStockError } from './inventory.repository.js';
 
 export const READ = 'inventory:read';
 export const WRITE = 'inventory:write';
@@ -226,14 +226,8 @@ export class InventoryService {
   ): Promise<'created' | 'exists' | 'zero' | 'no_warehouse' | 'missing'> {
     if (!Number.isInteger(quantity) || quantity <= 0) return 'zero';
     return this.prisma.$transaction(async (tx) => {
-      // One opening per variant even with concurrent jobs. Advisory locks need
-      // raw SQL, which the tenant extension allows only in system context; the
-      // lock touches no table, and its key is scoped to tenant + variant.
-      const lockKey = `opening:${TenantContext.requireTenantId()}:${variantId}`;
-      await TenantContext.runAsSystem(
-        () =>
-          tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`,
-      );
+      // One opening per variant even with concurrent jobs.
+      await lockChannelOpening(tx, TenantContext.requireTenantId(), variantId);
       const [variant] = await this.products.variantsForOrder(
         companyId,
         [variantId],
