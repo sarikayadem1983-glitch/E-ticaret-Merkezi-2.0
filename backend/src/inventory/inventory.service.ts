@@ -226,8 +226,14 @@ export class InventoryService {
   ): Promise<'created' | 'exists' | 'zero' | 'no_warehouse' | 'missing'> {
     if (!Number.isInteger(quantity) || quantity <= 0) return 'zero';
     return this.prisma.$transaction(async (tx) => {
-      // One opening per variant even with concurrent jobs.
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`opening:${variantId}`}))`;
+      // One opening per variant even with concurrent jobs. Advisory locks need
+      // raw SQL, which the tenant extension allows only in system context; the
+      // lock touches no table, and its key is scoped to tenant + variant.
+      const lockKey = `opening:${TenantContext.requireTenantId()}:${variantId}`;
+      await TenantContext.runAsSystem(
+        () =>
+          tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`,
+      );
       const [variant] = await this.products.variantsForOrder(
         companyId,
         [variantId],
