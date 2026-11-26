@@ -434,6 +434,10 @@ model ProductVariant {
   productId String    @map("product_id") @db.Uuid
   sku       String    @db.VarChar(100)
   barcode   String?   @db.VarChar(50)
+  /// Manually entered current VAT-exclusive unit purchase cost; not historical COGS.
+  purchaseCost Decimal? @map("purchase_cost") @db.Decimal(12, 2)
+  costCurrency String? @map("cost_currency") @db.Char(3)
+  purchaseCostUpdatedAt DateTime? @map("purchase_cost_updated_at") @db.Timestamptz
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz

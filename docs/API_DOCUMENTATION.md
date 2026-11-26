@@ -336,6 +336,16 @@ Tutarlar ondalık **metin** olarak gönderilir ve döner (`"199.90"`); en çok 2
 
 `POST /products` ve `PATCH /products/:id` isteğine `"vatRate"?: "0" | "1" | "10" | "20" | null` eklenir (başka değer `422`). `POST /products` içindeki her varyant ve `POST /products/:id/variants` isteği `"prices"?: [ { "channel", "amount", "currency" } ]` (en çok 20, kanal başına bir) alabilir.
 
+### GET /api/v1/products/:id/variants/:variantId/cost
+
+`products:write` ve firmada güncel yetki gerekir. `{ data: { amount: "12.50", currency: "TRY", updatedAt: "..." } }`; maliyet yoksa `data: null`. Genel ürün/varyant yanıtları maliyet alanlarını içermez. Elle girilen güncel KDV hariç birim alış maliyetidir; FIFO/tarihsel maliyet değildir.
+
+### PUT /api/v1/products/:id/variants/:variantId/cost
+
+Aynı yetki. `{ "amount": "12.50", "currency": "TRY" | "USD" | "EUR" }`. Amount ondalık string; 0–9999999999.99, en çok 2 ondalık. Hatalı veya ek alan 422. Pasif firma 409; erişilemeyen kaynak 404; firma rolünde yazma izni yoksa 403. Audit ve maliyet tek transaction, satış fiyatları değişmez. 200 → GET biçimi.
+
+Audit maliyet tutarını/para birimini içermez; yalnızca işlemi yapan, zaman, varyant, kaydın varlığı ve değişen alan adlarını kaydeder. Tarihsel maliyet defteri değildir.
+
 ### PUT /api/v1/products/:id/variants/:variantId/prices/:channel
 Açıklama: Varyantın o kanaldaki fiyatını yazar (yoksa oluşturur). `channel`: `list` (liste fiyatı) veya kanal kodu (`^[a-z0-9]+(-[a-z0-9]+)*$`, en çok 50). Audit: `entityType: "VariantPrice"`, `CREATE` veya `UPDATE` (`before`/`after` tutar ve para birimi).
 Yetki: Bearer token + `products:write` + firmada `products:write`

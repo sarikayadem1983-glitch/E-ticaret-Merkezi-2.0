@@ -13,6 +13,8 @@ Ticaret Merkezi 2.0, ayrı backend (API) ve frontend (yönetim paneli) uygulamal
 
 ## Teknoloji Yığını
 
+RPT-02 ön koşulu: varyantın elle girilen güncel KDV hariç birim alış maliyeti katalog modülüne aittir. Özel maliyet API'si `products:write` ve firma yetkisi ister; genel ürün/varyant yanıtları maliyet içermez. Decimal maliyet, para birimi ve güncelleme zamanı birlikte saklanır; audit aynı transaction'dadır. Bu kayıt FIFO/ağırlıklı ortalama değildir. Tasarım: `superpowers/specs/2026-11-26-purchase-cost-design.md`.
+
 | Katman | Teknoloji | Durum |
 |---|---|---|
 | Frontend | Next.js (App Router), TypeScript | Kabul |

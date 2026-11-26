@@ -1,5 +1,9 @@
 # Veritabanı
 
+## RPT-02 alış maliyeti ön koşulu (2026-11-26)
+
+`product_variants`: `purchase_cost NUMERIC(12,2) NULL`, `cost_currency CHAR(3) NULL`, `purchase_cost_updated_at TIMESTAMPTZ NULL`. Üçü birlikte null veya birlikte dolu; tutar >= 0, para birimi TRY/USD/EUR. Eski satırlar null kalır. Güncel KDV hariç birim alış maliyeti elle girilir, geçmiş muhasebe değeri değildir. Down migration maliyet varsa durur; dev'e uygulanmaz.
+
 > Veritabanı motoru: PostgreSQL. ORM: Prisma. Bu doküman taslak şemadır; migration yazılmadan önce kesinleştirilecek.
 
 ## Multi-tenant

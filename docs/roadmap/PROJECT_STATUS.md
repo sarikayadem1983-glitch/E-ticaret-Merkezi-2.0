@@ -10,7 +10,7 @@ Son güncelleme: 2026-11-22 (dev deploy `ceee47e`) · Kaynak görev durumları T
 | Tamamlanan | 65 (%45,8) — `DONE-MERGED` |
 | BLOCKED | 1 — USR-18 (T16 + Aşama 2 migration onayı) |
 | Sürüm A (Trendyol-only MVP) ilerleme | 54 / 59 görev dev'de. Kalan 5: OPS-03 (prod altyapısı), INT-TY-01…03 ve SHP-02 (BLK-01) |
-| Sürüm B / C | 62 / 21 görev. B: 11 DONE-MERGED, 1 BLOCKED (USR-18), kalan PLANNED; C: 21 PLANNED |
+| Sürüm B / C | 62 / 21 görev. B: 11 DONE-MERGED, 1 IN-PROGRESS (RPT-02 alış maliyeti ön koşulu, Codex 2026-11-26), 1 BLOCKED (USR-18), 49 PLANNED; C: 21 PLANNED |
 | Açık PR | #102 (INT-TY-02b Trendyol'a elle gönderme, CRITICAL, merge onayı bekliyor) |
 | `origin/main` | `d07c1fe` (2026-11-22, #88–#90). #90 son commit `da0a3d6` CI ✓ (backend, frontend, integration) |
 | USR-T11 doğrulama (geçmiş, 2026-11-16) | Kod 3f42e76, CI [43843739033](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/actions/runs/43843739033): unit 571/571, e2e 471 geçti + 1 Mailpit skip, frontend 206/206; build/lint yeşil. Yerel typecheck/lint çıkış 0. CRITICAL bağımsız inceleme temiz |
