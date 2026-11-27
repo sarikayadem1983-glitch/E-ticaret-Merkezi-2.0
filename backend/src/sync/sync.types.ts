@@ -32,6 +32,14 @@ export interface SyncStats {
   pushPending?: number;
   /** INT-TY-02b: not sent, local price implausible against Trendyol's (≤ 0 or > 2× off). */
   priceGuard?: number;
+  /** INT-TY-03: local orders moved to the channel's newer status. */
+  statusChanged?: number;
+  /** INT-TY-03: status change refused (invalid transition, stock shortage); retried next run. */
+  statusRefused?: number;
+  /** INT-TY-03: new pre-shipping orders that could not be reserved (no warehouse, shortage). */
+  unreserved?: number;
+  /** INT-TY-03: lines of new orders not matched to a local variant. */
+  linesUnmatched?: number;
 }
 
 export const emptyStats = (): SyncStats => ({

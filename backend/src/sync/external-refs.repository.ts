@@ -163,4 +163,29 @@ export class ExternalRefsRepository {
         .map((r) => [r.localId, r.externalId]),
     );
   }
+
+  /** INT-TY-03: local ids of linked records (external id → local id). */
+  async localIdsByExternal(
+    channelAccountId: string,
+    entityType: ExternalEntityType,
+    externalIds: string[],
+  ): Promise<Map<string, string>> {
+    if (externalIds.length === 0) return new Map();
+    const rows = await this.prisma.channelExternalRef.findMany({
+      where: {
+        channelAccountId,
+        entityType,
+        externalId: { in: externalIds },
+        localId: { not: null },
+      },
+      select: { localId: true, externalId: true },
+    });
+    return new Map(
+      rows
+        .filter(
+          (r): r is { localId: string; externalId: string } => !!r.localId,
+        )
+        .map((r) => [r.externalId, r.localId]),
+    );
+  }
 }

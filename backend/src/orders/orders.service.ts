@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  HttpException,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
@@ -516,4 +517,214 @@ export class OrdersService {
       tx,
     );
   }
+
+  /**
+   * INT-TY-03: imports or updates one marketplace package as a local order. `claim` and
+   * `link` are the sync engine's external-ref calls; they run in the SAME transaction, so a
+   * failed import or a refused status change leaves the ref untouched and the next run
+   * retries it. Lines are matched to variants by `variantIdsByBarcode` (the channel's
+   * variant refs). Status changes go through `transition` (stock follows the status).
+   *
+   * Stock: an order first seen BEFORE shipping is reserved in the default warehouse
+   * afterwards, in its own transaction (a shortage only leaves it unreserved). An order
+   * first seen already shipped or later does not touch stock: the channel's stock read
+   * (INT-TY-02a) already reflects it.
+   */
+  async applyChannelPackage(
+    pkg: ChannelPackage,
+    deps: {
+      claim: (tx: PrismaTx) => Promise<{
+        decision: string;
+        refId: string;
+        localId: string | null;
+        needsImport: boolean;
+      }>;
+      link: (refId: string, localId: string, tx: PrismaTx) => Promise<void>;
+      variantIdsByBarcode: Map<string, string>;
+      syncJobId: string;
+    },
+  ): Promise<ChannelApplyResult> {
+    let reserveId: string | null = null;
+    let result: ChannelApplyResult;
+    try {
+      result = await this.prisma.$transaction(async (tx) => {
+        const claim = await deps.claim(tx);
+        if (claim.needsImport) {
+          const id = await this.createChannelOrder(tx, pkg, deps);
+          await deps.link(claim.refId, id, tx);
+          if (RESERVABLE.has(pkg.status)) reserveId = id;
+          return 'created';
+        }
+        if (claim.decision !== 'updated' || claim.localId === null) {
+          return 'unchanged';
+        }
+        const order = await tx.order.findFirst({
+          where: { id: claim.localId },
+          select: { id: true, status: true, companyId: true },
+        });
+        if (!order) return 'unchanged';
+        if (order.status === pkg.status) return 'updated';
+        if (!canTransition(order.status as OrderStatus, pkg.status)) {
+          throw new ChannelTransitionRefused('invalid');
+        }
+        try {
+          await this.transition(tx, order, pkg.status, {
+            source: 'channel',
+            syncJobId: deps.syncJobId,
+          });
+        } catch (error) {
+          if (error instanceof ConflictException) {
+            throw new ChannelTransitionRefused('conflict');
+          }
+          throw error;
+        }
+        return 'status_changed';
+      });
+    } catch (error) {
+      if (error instanceof ChannelTransitionRefused) return 'status_refused';
+      throw error;
+    }
+    if (reserveId) {
+      const ok = await this.reserveForChannel(reserveId);
+      if (!ok) return 'created_unreserved';
+    }
+    return result;
+  }
+
+  /** Reserves matched lines in the default warehouse; false when it could not (no warehouse, shortage). */
+  private async reserveForChannel(orderId: string): Promise<boolean> {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const order = await tx.order.findFirst({
+          where: { id: orderId },
+          select: { id: true, status: true, companyId: true },
+        });
+        if (!order || !RESERVABLE.has(order.status as OrderStatus)) {
+          return true;
+        }
+        if (!(await this.inventory.usesStock(order.companyId, tx))) return true;
+        const target = await this.inventory.defaultWarehouse(
+          order.companyId,
+          tx,
+        );
+        if (!target) return false;
+        await this.lockStatus(tx, order);
+        const items = await this.matchedLines(tx, order.id);
+        const covered = await this.reservations.coveredLines(
+          tx,
+          items.map((i) => i.id),
+        );
+        for (const item of items) {
+          if (covered.has(item.id)) continue;
+          await this.reservations.reserve(tx, item.id, target, item.quantity);
+        }
+        return true;
+      });
+    } catch (error) {
+      if (error instanceof HttpException) return false;
+      throw error;
+    }
+  }
+
+  private async createChannelOrder(
+    tx: PrismaTx,
+    pkg: ChannelPackage,
+    deps: { variantIdsByBarcode: Map<string, string>; syncJobId: string },
+  ): Promise<string> {
+    const order = await tx.order.create({
+      data: {
+        tenantId: TenantContext.requireTenantId(),
+        companyId: pkg.companyId,
+        channel: pkg.channel,
+        channelAccountId: pkg.channelAccountId,
+        externalOrderNo: pkg.externalOrderNo,
+        status: pkg.status,
+        currency: pkg.currency,
+        subtotal: D(pkg.subtotal),
+        discountTotal: D(pkg.discountTotal),
+        channelDiscountTotal: D(pkg.channelDiscountTotal),
+        shippingTotal: D('0'),
+        total: D(pkg.total),
+        orderedAt: pkg.orderedAt,
+        items: {
+          create: pkg.lines.map((l) => ({
+            variantId: l.barcode
+              ? (deps.variantIdsByBarcode.get(l.barcode) ?? null)
+              : null,
+            externalLineId: l.externalLineId,
+            sku: l.sku,
+            name: l.name,
+            quantity: l.quantity,
+            unitPrice: D(l.unitPrice),
+            discount: D(l.discount),
+            vatRate: l.vatRate === null ? null : D(l.vatRate),
+            lineTotal: D(l.lineTotal),
+          })),
+        },
+        statusHistory: {
+          create: {
+            toStatus: pkg.status,
+            source: 'channel',
+            syncJobId: deps.syncJobId,
+          },
+        },
+      },
+      select: { id: true },
+    });
+    const created = await tx.order.findFirstOrThrow({
+      where: { id: order.id },
+      select: DETAIL_FIELDS,
+    });
+    await this.audit.record(
+      {
+        action: 'CREATE',
+        module: MODULE,
+        entityType: ENTITY,
+        entityId: order.id,
+        after: detail(created),
+      },
+      tx,
+    );
+    return order.id;
+  }
+}
+
+class ChannelTransitionRefused extends Error {
+  constructor(readonly reason: 'invalid' | 'conflict') {
+    super(reason);
+  }
+}
+
+export type ChannelApplyResult =
+  | 'created'
+  | 'created_unreserved'
+  | 'updated'
+  | 'status_changed'
+  | 'status_refused'
+  | 'unchanged';
+
+/** One marketplace package, already validated by the channel adapter. Amounts are 2-digit strings. */
+export interface ChannelPackage {
+  companyId: string;
+  channel: string;
+  channelAccountId: string;
+  externalOrderNo: string;
+  status: OrderStatus;
+  currency: string;
+  subtotal: string;
+  discountTotal: string;
+  channelDiscountTotal: string;
+  total: string;
+  orderedAt: Date;
+  lines: {
+    externalLineId: string;
+    barcode: string | null;
+    sku: string;
+    name: string;
+    quantity: number;
+    unitPrice: string;
+    discount: string;
+    vatRate: string | null;
+    lineTotal: string;
+  }[];
 }
