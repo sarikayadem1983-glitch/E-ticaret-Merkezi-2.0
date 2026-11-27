@@ -221,6 +221,8 @@ describe('matchBffRoute', () => {
     expect(match('POST', 'reports/sales')).toEqual({ ok: false, status: 404 });
     expect(match('GET', 'reports/sales', 'tenant=x')).toEqual({ ok: false, status: 400 });
     expect(match('GET', 'reports')).toEqual({ ok: false, status: 404 });
+    expect(match('GET', 'reports/stock', 'days=30&company_id=x')).toMatchObject({ ok: true });
+    expect(match('GET', 'reports/stock', 'from=2026-11-01')).toEqual({ ok: false, status: 400 });
   });
 
   it('allows the order routes and nothing around them (ORD-03)', () => {

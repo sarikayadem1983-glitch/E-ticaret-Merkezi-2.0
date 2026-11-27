@@ -145,6 +145,8 @@ const ROUTES: readonly BffRoute[] = [
     path: /^reports\/sales$/,
     query: ['from', 'to', 'group_by', 'company_id', 'channel'],
   },
+  // RPT-02: stock value/turnover/out-of-stock (costs only where products:write).
+  { method: 'GET', path: /^reports\/stock$/, query: ['days', 'company_id'] },
 ];
 
 const SEGMENT = /^[a-z0-9-]{1,64}$/;
