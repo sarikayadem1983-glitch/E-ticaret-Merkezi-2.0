@@ -391,6 +391,7 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 
 | Tarih | Değişiklik | PR | Test | Deploy |
 |---|---|---|---|---|
+| 2026-11-27 | RPT-02 → DONE-PR: varyant alış maliyeti arayüzü + `GET /reports/stock` (değer, devir, stoksuz) ve `/reports/stock` sayfası; maliyet yalnız `products:write` firmalarında; bağımsız CRITICAL inceleme → ONAY (yalnız P3 notlar); #103 üstüne kurulu | [#105](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/105) | CI `61fd6a2`: unit 666/666, e2e 507/514 (7 skip), frontend 218/218, MinIO 17/17 | yok |
 | 2026-11-25 | INT-TY-02b (Trendyol'a stok+fiyat elle gönderme, kullanıcı kararı A) → DONE-PR; mod CRITICAL'e yükseltildi, bağımsız inceleme 2 tur (1 BLOCKER + 3 HIGH düzeltildi, sonra engelleyici yok) | [#102](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/102) | CI `d7acbf1`: unit 651/651, e2e 492/499 (7 skip), frontend 216/216, MinIO 17/17, Playwright 23/23 | yok |
 | 2026-11-25 | #99 → DONE-MERGED, dev deploy; INT-TY-02a canlı okuma tekrarı başarılı (iş `a5fc2425…`: 207 işlendi, 205 fiyat, 139 stok açılışı / 2459 adet, 1 atlandı), SYNC_LIVE_CALLS=false | #99 (merge `4570e31`), #100 (merge `89fb2c1`) | PR CI ✓; dev health ok | dev `4570e31` |
 | 2026-11-24 | INT-TY-01a ek: eşleşmeyen Trendyol ürünlerini taslak ürün olarak içe aktarma → DONE-MERGED (dev deploy, canlı içe aktarma 203 taslak ürün) | #97 (merge `b96aa2d`) | PR CI ✓ | dev `b96aa2d` |
