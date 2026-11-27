@@ -11,7 +11,7 @@ Son güncelleme: 2026-11-22 (dev deploy `ceee47e`) · Kaynak görev durumları T
 | BLOCKED | 1 — USR-18 (T16 + Aşama 2 migration onayı) |
 | Sürüm A (Trendyol-only MVP) ilerleme | 54 / 59 görev dev'de. Kalan 5: OPS-03 (prod altyapısı), INT-TY-01…03 ve SHP-02 (BLK-01) |
 | Sürüm B / C | 62 / 21 görev. B: 12 DONE-MERGED (RPT-02 dahil), 1 BLOCKED (USR-18), 49 PLANNED; C: 21 PLANNED |
-| Açık PR | Bu doküman PR'ı (RPT-02 dev deploy kaydı) |
+| Açık PR | [#108](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/108) INT-TY-03a sipariş çekme + durum senkronu |
 | `origin/main` | `e87ae50` (2026-11-27, PR #106 merge) |
 | USR-T11 doğrulama (geçmiş, 2026-11-16) | Kod 3f42e76, CI [43843739033](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/actions/runs/43843739033): unit 571/571, e2e 471 geçti + 1 Mailpit skip, frontend 206/206; build/lint yeşil. Yerel typecheck/lint çıkış 0. CRITICAL bağımsız inceleme temiz |
 | USR-T9 testleri (geçmiş, 2026-11-15) | Kod `df54a82`, CI [43745748422](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/actions/runs/43745748422): backend unit 572/572, e2e 467 geçti + 1 Mailpit skip, frontend 198/198; build/lint yeşil. Yerel: mail/davet 30/30, tam unit 572/572, typecheck ve lint çıkış 0. Dev DB kullanılmadı |
@@ -394,6 +394,7 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 
 | Tarih | Değişiklik | PR | Test | Deploy |
 |---|---|---|---|---|
+| 2026-11-27 | INT-TY-03a → DONE-PR: Trendyol sipariş çekme (salt okuma, `POST .../trendyol/orders-pull`), paket başına idempotent sipariş, kanal durumu ORD-02 tablosundan (iptal rezervasyonu bırakır, kargo stok düşer), kargo öncesi siparişte rezervasyon; migration yok. 03b claim, 03c kanala yazma PLANNED | [#108](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/108) | yerel: backend unit 676/676, yeni e2e 6/6, lint/tsc temiz; tam e2e CI'da | yok |
 | 2026-11-27 | RPT-02 → DONE-MERGED; #106 merge `e87ae50`; dev deploy + variant_purchase_cost migration (kullanıcı onayıyla) | #103–#106 | smoke 46/46, verify.sql 2/2, `/health` ok | dev `e87ae50` |
 | 2026-11-27 | #104, #103, #105 kullanıcı onayıyla merge edildi → RPT-02 DONE-NOT-DEPLOYED | #104 `91a2b5b`, #103 `3e85af3`, #105 `b6f2f2f` | main CI ✓ `b6f2f2f` | yok; migration uygulanmadı |
 | 2026-11-27 | RPT-02 → DONE-PR: varyant alış maliyeti arayüzü + `GET /reports/stock` (değer, devir, stoksuz) ve `/reports/stock` sayfası; maliyet yalnız `products:write` firmalarında; bağımsız CRITICAL inceleme → ONAY (yalnız P3 notlar); #103 üstüne kurulu | [#105](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/105) | CI `61fd6a2`: unit 666/666, e2e 507/514 (7 skip), frontend 218/218, MinIO 17/17 | yok |
