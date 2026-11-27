@@ -90,7 +90,7 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
         </div>
       </nav>
       <p className="px-5 py-4 text-xs text-sidebar-foreground/50">
-        © {new Date().getFullYear()} E-Ticaret Merkezi 2.0
+        © {new Date().getFullYear()} E-Ticaret Merkezi V2.0
       </p>
     </div>
   );
