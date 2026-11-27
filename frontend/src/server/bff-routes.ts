@@ -73,6 +73,9 @@ const ROUTES: readonly BffRoute[] = [
     body: true,
   },
   { method: 'DELETE', path: new RegExp(`^${VARIANT}/prices/${CHANNEL}$`) },
+  // RPT-02: private purchase cost (products:write only; never in general product responses).
+  { method: 'GET', path: new RegExp(`^${VARIANT}/cost$`) },
+  { method: 'PUT', path: new RegExp(`^${VARIANT}/cost$`), body: true },
   // Images (IMG-01). The upload forwards raw bytes; everything else is JSON.
   { method: 'GET', path: new RegExp(`^${PRODUCT}/images$`) },
   {
@@ -142,6 +145,8 @@ const ROUTES: readonly BffRoute[] = [
     path: /^reports\/sales$/,
     query: ['from', 'to', 'group_by', 'company_id', 'channel'],
   },
+  // RPT-02: stock value/turnover/out-of-stock (costs only where products:write).
+  { method: 'GET', path: /^reports\/stock$/, query: ['days', 'company_id'] },
 ];
 
 const SEGMENT = /^[a-z0-9-]{1,64}$/;

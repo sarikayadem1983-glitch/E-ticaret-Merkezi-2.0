@@ -1,8 +1,11 @@
 import { Injectable, UnprocessableEntityException } from '@nestjs/common';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsIn,
+  IsInt,
   IsOptional,
+  Max,
+  Min,
   IsString,
   IsUUID,
   Matches,
@@ -14,6 +17,7 @@ import {
   InjectPrisma,
   type TenantPrismaClient,
 } from '../database/prisma.service.js';
+import { buildStockReport, SALE_REASONS } from './stock-report.js';
 import {
   buildSalesReport,
   EXCLUDED_STATUSES,
@@ -49,6 +53,25 @@ export class SalesReportQuery {
   @Matches(/^[a-z0-9]+(-[a-z0-9]+)*$/)
   @MaxLength(50)
   channel?: string;
+}
+
+export const STOCK_READ = 'inventory:read';
+/** Costs are private: only members who may edit products see them (as in the cost API). */
+export const COST_READ = 'products:write';
+/** Upper bound of variants in one stock report; larger catalogs must filter by company. */
+export const MAX_VARIANTS = 20000;
+
+export class StockReportQuery {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(MAX_DAYS)
+  days: number = 30;
+
+  @IsOptional()
+  @IsUUID()
+  company_id?: string;
 }
 
 /** Start of a calendar day in Europe/Istanbul (UTC+3, no DST since 2016). */
@@ -138,6 +161,90 @@ export class ReportsService {
         totals: report.totals,
         excludedStatuses: EXCLUDED_STATUSES,
       },
+    };
+  }
+
+  /**
+   * Stock report (RPT-02): value at current purchase cost, turnover and out-of-stock
+   * per variant of the companies the member may read stock of. Sales are the net
+   * order movements of the last `days` days. Cost and value only for companies where
+   * the member may edit products; otherwise they are null.
+   */
+  async stock(user: AuthUser, q: StockReportQuery) {
+    const [scope, costScope] = await Promise.all([
+      this.access.companyScope(user, STOCK_READ),
+      this.access.companyScope(user, COST_READ),
+    ]);
+    let companyIds: string[] | undefined;
+    if (scope === null) companyIds = q.company_id ? [q.company_id] : undefined;
+    else
+      companyIds = q.company_id
+        ? scope.filter((id) => id === q.company_id)
+        : scope;
+    const inCompanies = companyIds ? { companyId: { in: companyIds } } : {};
+
+    const variants = await this.prisma.productVariant.findMany({
+      where: { ...inCompanies, deletedAt: null, product: { deletedAt: null } },
+      select: {
+        id: true,
+        companyId: true,
+        sku: true,
+        purchaseCost: true,
+        costCurrency: true,
+        product: { select: { name: true } },
+      },
+      orderBy: { sku: 'asc' },
+      take: MAX_VARIANTS + 1,
+    });
+    if (variants.length > MAX_VARIANTS) {
+      throw new UnprocessableEntityException({
+        code: 'REPORT_TOO_LARGE',
+        message: `${MAX_VARIANTS}'den fazla varyant var; firma seçin`,
+      });
+    }
+    const since = new Date(Date.now() - q.days * 86_400_000);
+    const [levels, movements] = await Promise.all([
+      this.prisma.stockLevel.groupBy({
+        by: ['variantId'],
+        where: inCompanies,
+        _sum: { onHand: true, reserved: true },
+      }),
+      this.prisma.stockMovement.groupBy({
+        by: ['variantId', 'reason'],
+        where: {
+          ...inCompanies,
+          reason: { in: [...SALE_REASONS] },
+          createdAt: { gte: since },
+        },
+        _sum: { quantity: true },
+      }),
+    ]);
+    const costCompanies = costScope === null ? null : new Set(costScope);
+    const report = buildStockReport(
+      variants.map((v) => ({
+        id: v.id,
+        companyId: v.companyId,
+        sku: v.sku,
+        name: v.product.name,
+        purchaseCost: v.purchaseCost,
+        costCurrency: v.costCurrency,
+      })),
+      levels.map((l) => ({
+        variantId: l.variantId,
+        onHand: l._sum.onHand ?? 0,
+        reserved: l._sum.reserved ?? 0,
+      })),
+      movements.map((m) => ({
+        variantId: m.variantId,
+        reason: m.reason,
+        quantity: m._sum.quantity ?? 0,
+      })),
+      q.days,
+      (companyId) => costCompanies === null || costCompanies.has(companyId),
+    );
+    return {
+      data: report.rows,
+      meta: { days: q.days, totals: report.totals },
     };
   }
 

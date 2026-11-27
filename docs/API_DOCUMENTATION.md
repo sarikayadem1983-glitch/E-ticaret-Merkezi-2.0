@@ -552,6 +552,17 @@ Yanıt `{ data: [{ key, label, currency, orders, quantity, revenue, returned }],
 - Gün, siparişin İstanbul saatine göre tarihidir.
 - Dönemde 20 000'den fazla sipariş varsa 422 `REPORT_TOO_LARGE`; geçersiz aralık 422 `VALIDATION_ERROR`.
 
+#### GET /api/v1/reports/stock (RPT-02)
+
+Yetki: `inventory:read`; yalnızca üyenin stok okuma rolü olan firmaları. Sorgu: `days?` (1–366, varsayılan 30; satış dönemi), `company_id?`.
+
+Yanıt `{ data: [{ variantId, companyId, sku, name, onHand, available, soldUnits, turnover, daysOfCover, outOfStock, unitCost, value, currency }], meta: { days, totals: { variants, outOfStock, onHand, soldUnits, value: [{ currency, amount }], missingCost } } }`. Silinmiş varyant/ürün yoktur; stoksuz satırlar önce, sonra SKU sırası.
+
+- `onHand` depolar toplamı; `available = max(0, onHand − reserved)`; `outOfStock` = `available` 0.
+- `soldUnits`: son `days` gündeki `order` hareketleri eksi `order_cancel` ve `return` (negatifse 0). `turnover = soldUnits / onHand` (stok yoksa null); `daysOfCover = ⌊onHand × days / soldUnits⌋` (satış yoksa null).
+- `unitCost`/`value`/`currency`: güncel KDV hariç alış maliyeti × `onHand`; FIFO veya ağırlıklı ortalama değildir. **Yalnızca üyenin `products:write` yetkisi olan firmalarda** doldurulur, diğerlerinde null ve `missingCost`'a sayılmaz. Maliyeti girilmemiş varyant `missingCost`'ta sayılır; 0 geçerli maliyettir. Değer toplamları para birimi başınadır.
+- 20 000'den fazla varyant varsa 422 `REPORT_TOO_LARGE`; geçersiz parametre 422.
+
 ### Toplu ürün içe aktarma (IMP-01)
 
 Yetki: `products:write` ve firmada ürün yazma rolü. Senkron, satır sınırlı (asenkron iş: IMP-02).

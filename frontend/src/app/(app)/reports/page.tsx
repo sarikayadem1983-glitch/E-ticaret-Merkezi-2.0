@@ -1,11 +1,13 @@
 'use client';
 
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { BarChart3 } from 'lucide-react';
+import { BarChart3, Boxes } from 'lucide-react';
+import Link from 'next/link';
 import { useState } from 'react';
 import { NativeSelect } from '@/components/catalog/common';
 import { PageHeader } from '@/components/page-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -92,6 +94,14 @@ export default function ReportsPage() {
       <PageHeader
         title="Raporlar"
         description="Satışlar (iptal ve tedarik edilemeyen siparişler hariç; iadeler ayrı sayılır)"
+        actions={
+          <Button asChild variant="outline" className="h-10">
+            <Link href="/reports/stock">
+              <Boxes className="size-4" aria-hidden />
+              Stok raporu
+            </Link>
+          </Button>
+        }
       />
 
       <div className="rounded-xl border bg-card shadow-xs">

@@ -346,7 +346,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | ID | Görev | Öncelik | Bağımlılık | Tahmin | Mod | Sürüm | Durum | Kabul kriteri | Test | Güvenlik riski | Kaynak |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | RPT-01 | Satış raporları (dönem, kanal, ürün) | P1 | ORD-02 | 3 | STANDARD | A | DONE-MERGED (PR #53, merge `633f250`; dev `633f250`, 2026-11-14) | Firma rolüne göre filtreli | E | Düşük | Öneri (onay bekliyor) |
-| RPT-02 | Stok raporları (değer, devir, stoksuz kalma) | P1 | INV-02 | 2 | CRITICAL | B | IN-PROGRESS (Codex: alış maliyeti ön koşulu; 2026-11-26) | — | E | Düşük | Öneri (onay bekliyor) |
+| RPT-02 | Stok raporları (değer, devir, stoksuz kalma) | P1 | INV-02 | 2 | CRITICAL | B | DONE-PR (PR #103 maliyet API + PR #105 arayüz ve stok raporu; 2026-11-27) | — | E | Düşük | Öneri (onay bekliyor) |
 | RPT-03 | Excel/PDF dışa aktarma ve zamanlanmış e-posta raporu | P2 | RPT-01, INF-09, USR-T9 | 3 | STANDARD | B | PLANNED | Rapor yalnızca yetkili alıcıya | E | Düşük | Öneri (onay bekliyor) |
 | RPT-04 | Gelişmiş analitik (kanal karşılaştırma, kohort, trend) | P3 | RPT-01, PRF-02 | 5 | STANDARD | C | PLANNED | Ağır sorgular okuma replikasında/ön-hesaplı | E, L | Düşük | Öneri (onay bekliyor) |
 
@@ -515,7 +515,7 @@ Her pazaryeri ayrı EPIC'tir ve ortak çerçeveyi (`INT-E0`) kullanır. Her paza
 | STL-01 | Hakediş/finans verisi çekme (Trendyol, Hepsiburada finans API'leri) | PLANNED | 5 | STANDARD | Öneri (onay bekliyor) |
 | STL-02 | Mutabakat motoru: beklenen (sipariş − komisyon − kesinti) vs ödenen | PLANNED | 4 | STANDARD | Öneri (onay bekliyor) |
 | STL-03 | Fark raporu ve UI | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
-| RPT-02 | Stok raporları (değer, devir, stoksuz kalma) | IN-PROGRESS (alış maliyeti ön koşulu; 2026-11-26) | 2 | CRITICAL | Öneri (onay bekliyor) |
+| RPT-02 | Stok raporları (değer, devir, stoksuz kalma) | DONE-PR (PR #103 + #105; 2026-11-27) | 2 | CRITICAL | Öneri (onay bekliyor) |
 | RPT-03 | Excel/PDF dışa aktarma ve zamanlanmış e-posta raporu | PLANNED | 3 | STANDARD | Öneri (onay bekliyor) |
 | SUB-01 | Plan/paket ve limit modeli (kanal sayısı, ürün, kullanıcı) | PLANNED | 2 | CRITICAL | Öneri (onay bekliyor) |
 | SUB-02 | Ödeme sağlayıcı entegrasyonu (ör. iyzico/PayTR; kart saklama sağlayıcıda, tokenization) | PLANNED | 5 | CRITICAL | Öneri (onay bekliyor) |

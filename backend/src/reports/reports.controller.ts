@@ -4,7 +4,13 @@ import {
   CurrentUser,
   RequirePermissions,
 } from '../auth/decorators.js';
-import { READ, ReportsService, SalesReportQuery } from './reports.service.js';
+import {
+  READ,
+  ReportsService,
+  SalesReportQuery,
+  STOCK_READ,
+  StockReportQuery,
+} from './reports.service.js';
 
 @Controller('reports')
 export class ReportsController {
@@ -14,5 +20,11 @@ export class ReportsController {
   @RequirePermissions(READ)
   sales(@CurrentUser() user: AuthUser, @Query() q: SalesReportQuery) {
     return this.reports.sales(user, q);
+  }
+
+  @Get('stock')
+  @RequirePermissions(STOCK_READ)
+  stock(@CurrentUser() user: AuthUser, @Query() q: StockReportQuery) {
+    return this.reports.stock(user, q);
   }
 }
