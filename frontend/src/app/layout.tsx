@@ -9,7 +9,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: { default: 'E-Ticaret Merkezi 2.0', template: '%s · E-Ticaret Merkezi 2.0' },
+  title: { default: 'E-Ticaret Merkezi V2.0', template: '%s · E-Ticaret Merkezi V2.0' },
   description: 'E-ticaret yönetim platformu',
 };
 

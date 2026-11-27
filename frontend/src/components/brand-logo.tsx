@@ -23,7 +23,7 @@ export function BrandLogo({
             inverted ? 'text-white' : 'text-brand-navy',
           )}
         >
-          E-Ticaret Merkezi 2.0
+          E-Ticaret Merkezi V2.0
         </span>
         <span
           className={cn(
