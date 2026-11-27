@@ -14,10 +14,18 @@ import { TrendyolController } from './trendyol.controller.js';
 import { InventoryModule } from '../inventory/inventory.module.js';
 import { TrendyolStockPriceSync } from './trendyol-stock-price.sync.js';
 import { TrendyolStockPricePush } from './trendyol-stock-price-push.sync.js';
+import { OrdersModule } from '../orders/orders.module.js';
+import { TrendyolOrdersSync } from './trendyol-orders.sync.js';
 
 /** Trendyol sync kinds (INT-TY-*). Registers them with the INT-02 engine. */
 @Module({
-  imports: [SyncModule, CatalogModule, AccessModule, InventoryModule],
+  imports: [
+    SyncModule,
+    CatalogModule,
+    AccessModule,
+    InventoryModule,
+    OrdersModule,
+  ],
   controllers: [TrendyolController],
   providers: [
     {
@@ -28,6 +36,7 @@ import { TrendyolStockPricePush } from './trendyol-stock-price-push.sync.js';
     TrendyolProductsSync,
     TrendyolStockPriceSync,
     TrendyolStockPricePush,
+    TrendyolOrdersSync,
   ],
 })
 export class TrendyolModule {}

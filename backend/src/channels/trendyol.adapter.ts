@@ -1,6 +1,7 @@
 import type { ChannelAdapter, ConnectionResult } from './channel-adapter.js';
 import { channelDefinition } from './channel-adapter.js';
 import { SyncError, httpFailure } from '../sync/sync-errors.js';
+import type { OrderStatus } from '../orders/order-status.js';
 
 const DEFAULT_BASE = 'https://apigw.trendyol.com';
 const TIMEOUT_MS = 10_000;
@@ -164,6 +165,25 @@ export class TrendyolAdapter implements ChannelAdapter {
         `/integration/product/sellers/${id}/products/batch-requests/${batchRequestId}`,
     );
     return parseBatchResult(body);
+  }
+
+  /**
+   * INT-TY-03: one page of shipment packages modified in [start, end] (read-only,
+   * getShipmentPackages; Trendyol allows at most 2 weeks per query).
+   */
+  async listShipmentPackages(
+    credentials: Readonly<Record<string, string>>,
+    start: Date,
+    end: Date,
+    page: number,
+    size: number,
+  ): Promise<TrendyolPackagePage> {
+    const body = await this.getJson(
+      credentials,
+      (id) =>
+        `/integration/order/sellers/${id}/orders?startDate=${start.getTime()}&endDate=${end.getTime()}&page=${page}&size=${size}&orderByField=PackageLastModifiedDate&orderByDirection=ASC`,
+    );
+    return parsePackagePage(body);
   }
 
   private getJson(
@@ -358,4 +378,155 @@ export function trendyolBaseUrl(value: string | undefined): string {
     throw new Error('TRENDYOL_API_BASE https olmalı');
   }
   return value.replace(/\/+$/, '');
+}
+
+/** Trendyol shipment package status → local order status (ORD-01 names). */
+const PACKAGE_STATUS: Readonly<Record<string, OrderStatus>> = {
+  awaiting: 'awaiting',
+  created: 'created',
+  picking: 'picking',
+  invoiced: 'invoiced',
+  unpacked: 'unpacked',
+  repack: 'repack',
+  shipped: 'shipped',
+  atcollectionpoint: 'at_collection_point',
+  delivered: 'delivered',
+  undelivered: 'undelivered',
+  cancelled: 'cancelled',
+  unsupplied: 'unsupplied',
+  returned: 'returned',
+};
+
+export interface TrendyolPackageLine {
+  externalLineId: string;
+  barcode: string | null;
+  sku: string;
+  name: string;
+  quantity: number;
+  unitPrice: string;
+  discount: string;
+  vatRate: string | null;
+  lineTotal: string;
+}
+
+export interface TrendyolPackage {
+  /** shipmentPackageId: one local order per package (an order may be split). */
+  packageId: string;
+  orderNumber: string;
+  status: OrderStatus;
+  currency: string;
+  subtotal: string;
+  discountTotal: string;
+  channelDiscountTotal: string;
+  total: string;
+  orderedAt: Date;
+  lastModifiedAt: Date | null;
+  lines: TrendyolPackageLine[];
+}
+
+export interface TrendyolPackagePage {
+  items: TrendyolPackage[];
+  totalPages: number;
+  /** Packages dropped as invalid (unknown status, no lines, bad amounts). */
+  invalid: number;
+}
+
+const idStr = (v: unknown): string | null =>
+  typeof v === 'number' && Number.isSafeInteger(v) && v > 0
+    ? String(v)
+    : typeof v === 'string' && /^[A-Za-z0-9-]{1,40}$/.test(v)
+      ? v
+      : null;
+
+function parsePackage(raw: Record<string, unknown>): TrendyolPackage | null {
+  const packageId = idStr(raw.id ?? raw.shipmentPackageId);
+  const orderNumber = idStr(raw.orderNumber);
+  const st = str(raw.shipmentPackageStatus ?? raw.status, 40);
+  const status = st ? PACKAGE_STATUS[st.toLowerCase()] : undefined;
+  const od = raw.orderDate;
+  if (!packageId || !orderNumber || !status) return null;
+  if (typeof od !== 'number' || !Number.isFinite(od)) return null;
+  const currency = str(raw.currencyCode, 3)?.toUpperCase() ?? 'TRY';
+  if (!/^[A-Z]{3}$/.test(currency)) return null;
+  const subtotal = priceString(raw.grossAmount);
+  const total = priceString(raw.totalPrice);
+  if (subtotal === null || total === null) return null;
+  const lines: TrendyolPackageLine[] = [];
+  for (const l of Array.isArray(raw.lines)
+    ? (raw.lines as (Record<string, unknown> | null)[])
+    : []) {
+    if (!l || typeof l !== 'object') return null;
+    const lineId = idStr(l.id);
+    const q = l.quantity;
+    const unitPrice = priceString(l.amount);
+    const discount = priceString(l.discount ?? 0);
+    const net = typeof l.price === 'number' ? l.price : null;
+    if (
+      !lineId ||
+      typeof q !== 'number' ||
+      !Number.isInteger(q) ||
+      q < 1 ||
+      q > 100_000 ||
+      unitPrice === null ||
+      discount === null ||
+      net === null
+    ) {
+      return null;
+    }
+    const lineTotal = priceString(net * q);
+    if (lineTotal === null) return null;
+    const barcode = str(l.barcode, 50);
+    const vat = l.vatBaseAmount;
+    lines.push({
+      externalLineId: lineId,
+      barcode,
+      sku: str(l.merchantSku, 100) ?? barcode ?? lineId,
+      name: str(l.productName, 300) ?? barcode ?? lineId,
+      quantity: q,
+      unitPrice,
+      discount,
+      vatRate:
+        typeof vat === 'number' && Number.isFinite(vat) && vat >= 0 && vat < 100
+          ? vat.toFixed(2)
+          : null,
+      lineTotal,
+    });
+  }
+  if (lines.length === 0) return null;
+  const lm = raw.lastModifiedDate;
+  return {
+    packageId,
+    orderNumber,
+    status,
+    currency,
+    subtotal,
+    discountTotal: priceString(raw.totalDiscount ?? 0) ?? '0.00',
+    channelDiscountTotal: priceString(raw.totalTyDiscount ?? 0) ?? '0.00',
+    total,
+    orderedAt: new Date(od),
+    lastModifiedAt:
+      typeof lm === 'number' && Number.isFinite(lm) ? new Date(lm) : null,
+    lines,
+  };
+}
+
+/** Exported for tests. Rejects a body without a content array; counts invalid packages. */
+export function parsePackagePage(body: unknown): TrendyolPackagePage {
+  const b = body as { content?: unknown; totalPages?: unknown } | null;
+  if (!b || !Array.isArray(b.content)) {
+    throw new SyncError('CHANNEL_BAD_RESPONSE', 'transient');
+  }
+  const items: TrendyolPackage[] = [];
+  let invalid = 0;
+  for (const raw of b.content as (Record<string, unknown> | null)[]) {
+    const p = raw && typeof raw === 'object' ? parsePackage(raw) : null;
+    if (p) items.push(p);
+    else invalid += 1;
+  }
+  const tp = Number(b.totalPages);
+  return {
+    items,
+    totalPages: Number.isInteger(tp) && tp >= 0 ? Math.min(tp, 10_000) : 0,
+    invalid,
+  };
 }

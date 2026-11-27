@@ -27,6 +27,11 @@ import {
   TRENDYOL_STOCK_PRICE_PUSH,
 } from './trendyol-stock-price-push.sync.js';
 import { SyncError } from '../sync/sync-errors.js';
+import {
+  MAX_DAYS,
+  parseOrdersPayload,
+  TRENDYOL_ORDERS_PULL,
+} from './trendyol-orders.sync.js';
 
 const uuid = new ParseUUIDPipe({ errorHttpStatusCode: HttpStatus.NOT_FOUND });
 
@@ -171,6 +176,48 @@ export class TrendyolController {
       kind: TRENDYOL_STOCK_PRICE_PUSH,
       payload: { ...payload },
       idempotencyKey: `stock-price-push:${new Date().toISOString().slice(0, 16)}:${selection}`,
+    });
+    return { data: job };
+  }
+
+  /**
+   * INT-TY-03a: reads Trendyol shipment packages of the last `days` (1–14,
+   * default 3) into local orders (read-only towards Trendyol). Reserves or
+   * releases local stock as statuses change: needs orders:write and
+   * inventory:write as well.
+   */
+  @Post('orders-pull')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @RequirePermissions(MANAGE)
+  async ordersPull(
+    @CurrentUser() user: AuthUser,
+    @Param('companyId', uuid) companyId: string,
+    @Param('accountId', uuid) accountId: string,
+    @Body() body: { days?: unknown },
+  ) {
+    let payload;
+    try {
+      payload = parseOrdersPayload({ days: body?.days ?? 3 });
+    } catch (e) {
+      if (!(e instanceof SyncError)) throw e;
+      throw new UnprocessableEntityException({
+        code: 'VALIDATION_ERROR',
+        message: 'Geçersiz istek',
+        errors: [{ field: 'days', message: `1–${MAX_DAYS} arası tam sayı` }],
+      });
+    }
+    await this.access.assertCompanyPermission(user, companyId, 'orders:write');
+    await this.access.assertCompanyPermission(
+      user,
+      companyId,
+      'inventory:write',
+    );
+    const job = await this.sync.start(user, {
+      companyId,
+      channelAccountId: accountId,
+      kind: TRENDYOL_ORDERS_PULL,
+      payload: { ...payload },
+      idempotencyKey: `${pullKey().replace('products-pull', 'orders-pull')}:${payload.days}`,
     });
     return { data: job };
   }
