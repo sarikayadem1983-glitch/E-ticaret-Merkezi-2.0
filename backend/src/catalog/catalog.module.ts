@@ -19,6 +19,8 @@ import { ChannelMappingService } from './channel-mapping.service.js';
 import { ImagesController } from './images.controller.js';
 import { ImagesService } from './images.service.js';
 import { ProductsService } from './products.service.js';
+import { VariantCostsService } from './variant-costs.service.js';
+import { VariantCostsController } from './variant-costs.controller.js';
 
 /** Categories, brands, products and variants (CAT-02), variant attributes (CAT-03). Companies are read through CompaniesService. */
 @Module({
@@ -30,6 +32,7 @@ import { ProductsService } from './products.service.js';
     ProductsController,
     ImagesController,
     ChannelMappingController,
+    VariantCostsController,
   ],
   providers: [
     CatalogRepository,
@@ -40,6 +43,7 @@ import { ProductsService } from './products.service.js';
     ProductsService,
     ImagesService,
     ChannelMappingService,
+    VariantCostsService,
   ],
   exports: [ProductsService],
 })
