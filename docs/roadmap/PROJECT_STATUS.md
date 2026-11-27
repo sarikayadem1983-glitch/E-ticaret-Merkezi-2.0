@@ -10,13 +10,13 @@ Son güncelleme: 2026-11-22 (dev deploy `ceee47e`) · Kaynak görev durumları T
 | Tamamlanan | 65 (%45,8) — `DONE-MERGED` |
 | BLOCKED | 1 — USR-18 (T16 + Aşama 2 migration onayı) |
 | Sürüm A (Trendyol-only MVP) ilerleme | 54 / 59 görev dev'de. Kalan 5: OPS-03 (prod altyapısı), INT-TY-01…03 ve SHP-02 (BLK-01) |
-| Sürüm B / C | 62 / 21 görev. B: 11 DONE-MERGED, 1 IN-PROGRESS (RPT-02 alış maliyeti ön koşulu, Codex 2026-11-26), 1 BLOCKED (USR-18), 49 PLANNED; C: 21 PLANNED |
-| Açık PR | #103 (RPT-02 ön koşulu: alış maliyeti kaydı; Codex, CRITICAL; merge/deploy edilmedi) |
-| `origin/main` | `885345b` (2026-11-25, PR #102 merge; 2026-11-26 GitHub ile doğrulandı). RPT-02 çalışması ayrı feature dalında |
+| Sürüm B / C | 62 / 21 görev. B: 12 DONE-MERGED (RPT-02 dahil), 1 BLOCKED (USR-18), 49 PLANNED; C: 21 PLANNED |
+| Açık PR | Bu doküman PR'ı (RPT-02 dev deploy kaydı) |
+| `origin/main` | `e87ae50` (2026-11-27, PR #106 merge) |
 | USR-T11 doğrulama (geçmiş, 2026-11-16) | Kod 3f42e76, CI [43843739033](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/actions/runs/43843739033): unit 571/571, e2e 471 geçti + 1 Mailpit skip, frontend 206/206; build/lint yeşil. Yerel typecheck/lint çıkış 0. CRITICAL bağımsız inceleme temiz |
 | USR-T9 testleri (geçmiş, 2026-11-15) | Kod `df54a82`, CI [43745748422](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/actions/runs/43745748422): backend unit 572/572, e2e 467 geçti + 1 Mailpit skip, frontend 198/198; build/lint yeşil. Yerel: mail/davet 30/30, tam unit 572/572, typecheck ve lint çıkış 0. Dev DB kullanılmadı |
-| Dev ortamı | `4570e31` (2026-11-25, kullanıcı onayıyla; #99 düzeltmesi, migration yok; #100 yalnız doküman). Önceki `3f0c6dc` (2026-11-24, kullanıcı onayıyla; #95 `1a855ad`, #97 `b96aa2d`, #98 `3f0c6dc` sırayla deploy edildi, migration yok). Önceki `ceee47e` (2026-11-22, kullanıcı onayıyla, bkz. §3v); #88–#90 uygulama kodu içermez (CI, test, betik, doküman), yeniden deploy gerekmedi. Smoke: `tm-backups/smoke-ceee47e.log`. Önceki `804886c` (2026-11-22, kullanıcı onayı 2026-11-19, bkz. §3u). Önceki `cb07e60` (2026-11-14, kullanıcı onayıyla, bkz. §3t). Önceki `dc64348` (bkz. §3s). Önceki `70bae17` (2026-11-13, bkz. §3d). Backend `node dist/main` (WMI ile ayrık). Smoke: `tm-backups/smoke-804886c.log`. Önceki: `736cb40` (bkz. §3c) |
-| Dev DB şeması | Tüm migration'lar (18) uygulandı; son `20261122170000_product_images` (IMG-01, 2026-11-22, kullanıcı onayıyla; yedek `deploy-ceee47e/ticaret_merkezi-20261122-150035.dump`, izole prova 13/13). Önceki `20261114190000_stock_thresholds`. Önceki `20261113120000_sync_engine` (INT-02, 2026-11-13, kullanıcı onayıyla; yedek `ticaret_merkezi-20261113-210949.dump`, izole prova ok). Önceki `20261112210000_user_tokens` (USR-19, kullanıcı onayıyla; yedek `ticaret_merkezi-20261112-210146.dump`; `migrate status` 2026-11-13: güncel). Önceki `20261112190000_channel_mapping` (CAT-06, 2026-11-12, kullanıcı onayıyla; yedek `ticaret_merkezi-20261112-184613.dump` + izole prova 10/10). Aşama 2 (`migrations-pending/`) uygulanmadı |
+| Dev ortamı | `e87ae50` (2026-11-27, kullanıcı onayıyla; #103, #104, #105, #106; migration `20261126200000_variant_purchase_cost` uygulandı, verify.sql 2/2; yedek `tm-backups/deploy-e87ae50/ticaret_merkezi-20261127-152413.dump` (42 tablo eşit); smoke 46/46 `tm-backups/smoke-e87ae50.log`; geri alma: `git checkout 4570e31` + build + yeniden başlatma, şema için `down.sql`). Önceki `4570e31` (2026-11-25, kullanıcı onayıyla; #99 düzeltmesi, migration yok; #100 yalnız doküman). Önceki `3f0c6dc` (2026-11-24, kullanıcı onayıyla; #95 `1a855ad`, #97 `b96aa2d`, #98 `3f0c6dc` sırayla deploy edildi, migration yok). Önceki `ceee47e` (2026-11-22, kullanıcı onayıyla, bkz. §3v); #88–#90 uygulama kodu içermez (CI, test, betik, doküman), yeniden deploy gerekmedi. Smoke: `tm-backups/smoke-ceee47e.log`. Önceki `804886c` (2026-11-22, kullanıcı onayı 2026-11-19, bkz. §3u). Önceki `cb07e60` (2026-11-14, kullanıcı onayıyla, bkz. §3t). Önceki `dc64348` (bkz. §3s). Önceki `70bae17` (2026-11-13, bkz. §3d). Backend `node dist/main` (WMI ile ayrık). Smoke: `tm-backups/smoke-804886c.log`. Önceki: `736cb40` (bkz. §3c) |
+| Dev DB şeması | Tüm migration'lar (19) uygulandı; son `20261126200000_variant_purchase_cost` (RPT-02, 2026-11-27, kullanıcı onayıyla). Önceki `20261122170000_product_images` (IMG-01, 2026-11-22, kullanıcı onayıyla; yedek `deploy-ceee47e/ticaret_merkezi-20261122-150035.dump`, izole prova 13/13). Önceki `20261114190000_stock_thresholds`. Önceki `20261113120000_sync_engine` (INT-02, 2026-11-13, kullanıcı onayıyla; yedek `ticaret_merkezi-20261113-210949.dump`, izole prova ok). Önceki `20261112210000_user_tokens` (USR-19, kullanıcı onayıyla; yedek `ticaret_merkezi-20261112-210146.dump`; `migrate status` 2026-11-13: güncel). Önceki `20261112190000_channel_mapping` (CAT-06, 2026-11-12, kullanıcı onayıyla; yedek `ticaret_merkezi-20261112-184613.dump` + izole prova 10/10). Aşama 2 (`migrations-pending/`) uygulanmadı |
 | Son testler (`ceee47e`, yerel, 2026-11-22) | backend unit 600/600, e2e 496 geçti + 1 skip (Mailpit); frontend unit 215/215; Playwright 23/23 (çalışan dev), ayrıca eski süre sınırlarıyla izole DB'de 23/23 ×2; smoke 46/46. Önceki (`804886c`, 2026-11-18): unit 591/591, e2e 479 + 1 skip, frontend 208/208 |
 
 ### Modül bazında tamamlanma (görev sayısına göre)
@@ -49,11 +49,8 @@ Son güncelleme: 2026-11-22 (dev deploy `ceee47e`) · Kaynak görev durumları T
 
 | PR | Konu | Merge | Not |
 |---|---|---|---|
-| #104 | Uygulama adı "E-Ticaret Merkezi V2.0" | `91a2b5b` | yalnız metin |
-| #103 | RPT-02 varyant alış maliyeti API | `3e85af3` | migration `variant_costs` dev DB'ye uygulanmadı; uygulama ve deploy için kullanıcı onayı bekleniyor |
-| #105 | RPT-02 maliyet arayüzü + stok raporu | `b6f2f2f` | main CI ✓ (`b6f2f2f`) |
 
-Önceki: dev `4570e31`. #25–#30 (`5ac1401`) 2026-11-12'de dev'e deploy edildi. #6–#16 (`f010233`), #19 (`8fc7ae3`), #22 ve #23 (`0437c16`) 2026-10-30'da dev'e deploy edildi ve bu tablodan çıkarıldı; ayrıntı §3 ve §6.
+Önceki: #103–#106 2026-11-27'de dev `e87ae50`'ye deploy edildi. #25–#30 (`5ac1401`) 2026-11-12'de dev'e deploy edildi. #6–#16 (`f010233`), #19 (`8fc7ae3`), #22 ve #23 (`0437c16`) 2026-10-30'da dev'e deploy edildi ve bu tablodan çıkarıldı; ayrıntı §3 ve §6.
 
 Aşama 2 SQL'i (`migrations-pending/`) uygulanmadı (USR-18).
 
@@ -397,6 +394,7 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 
 | Tarih | Değişiklik | PR | Test | Deploy |
 |---|---|---|---|---|
+| 2026-11-27 | RPT-02 → DONE-MERGED; #106 merge `e87ae50`; dev deploy + variant_purchase_cost migration (kullanıcı onayıyla) | #103–#106 | smoke 46/46, verify.sql 2/2, `/health` ok | dev `e87ae50` |
 | 2026-11-27 | #104, #103, #105 kullanıcı onayıyla merge edildi → RPT-02 DONE-NOT-DEPLOYED | #104 `91a2b5b`, #103 `3e85af3`, #105 `b6f2f2f` | main CI ✓ `b6f2f2f` | yok; migration uygulanmadı |
 | 2026-11-27 | RPT-02 → DONE-PR: varyant alış maliyeti arayüzü + `GET /reports/stock` (değer, devir, stoksuz) ve `/reports/stock` sayfası; maliyet yalnız `products:write` firmalarında; bağımsız CRITICAL inceleme → ONAY (yalnız P3 notlar); #103 üstüne kurulu | [#105](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/105) | CI `61fd6a2`: unit 666/666, e2e 507/514 (7 skip), frontend 218/218, MinIO 17/17 | yok |
 | 2026-11-25 | INT-TY-02b (Trendyol'a stok+fiyat elle gönderme, kullanıcı kararı A) → DONE-PR; mod CRITICAL'e yükseltildi, bağımsız inceleme 2 tur (1 BLOCKER + 3 HIGH düzeltildi, sonra engelleyici yok) | [#102](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/102) | CI `d7acbf1`: unit 651/651, e2e 492/499 (7 skip), frontend 216/216, MinIO 17/17, Playwright 23/23 | yok |
