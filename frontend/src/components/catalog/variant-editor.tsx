@@ -25,6 +25,7 @@ import {
   useSetPrice,
   useUpdateVariant,
 } from '@/hooks/catalog';
+import { useSetVariantCost, useVariantCost } from '@/hooks/variant-cost';
 import { errorMessage } from '@/lib/api';
 import {
   combinationCount,
@@ -144,6 +145,7 @@ function VariantRow({
         )}
       </div>
       <PriceList product={product} variant={variant} readOnly={readOnly} />
+      {!readOnly && <CostField productId={product.id} variantId={variant.id} />}
       {editing && (
         <EditVariantDialog product={product} variant={variant} onClose={() => setEditing(false)} />
       )}
@@ -178,6 +180,84 @@ function VariantRow({
         </DialogContent>
       </Dialog>
     </li>
+  );
+}
+
+/** Private purchase cost (RPT-02): current, VAT excluded; shown only to product editors. */
+function CostField({ productId, variantId }: { productId: string; variantId: string }) {
+  const cost = useVariantCost(productId, variantId);
+  const save = useSetVariantCost(productId, variantId);
+  const [editing, setEditing] = useState(false);
+  const [amount, setAmount] = useState('');
+  const [currency, setCurrency] = useState<string>('TRY');
+  const [error, setError] = useState<string | null>(null);
+
+  const start = () => {
+    setAmount(cost.data ? cost.data.amount.replace('.', ',') : '');
+    setCurrency(cost.data?.currency ?? 'TRY');
+    setError(null);
+    setEditing(true);
+  };
+  const submit = () => {
+    const parsed = parseAmount(amount);
+    if (parsed === null) {
+      setError('Tutar en çok 2 ondalık basamaklı olmalı (ör. 120,50)');
+      return;
+    }
+    save.mutate(
+      { amount: parsed, currency },
+      {
+        onSuccess: () => {
+          setEditing(false);
+          toast.success('Alış maliyeti kaydedildi');
+        },
+        onError: (e) => setError(errorMessage(e)),
+      },
+    );
+  };
+
+  if (cost.isError) {
+    return <p className="text-sm text-destructive">Alış maliyeti alınamadı: {errorMessage(cost.error)}</p>;
+  }
+  if (!editing) {
+    return (
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-muted-foreground">Alış maliyeti (KDV hariç):</span>
+        <span className="font-medium" data-testid="variant-cost">
+          {cost.isLoading ? '…' : cost.data ? formatAmount(cost.data.amount, cost.data.currency) : 'Girilmedi'}
+        </span>
+        <Button variant="outline" className="h-10" disabled={cost.isLoading} onClick={start}>
+          <Pencil className="size-4" aria-hidden />
+          {cost.data ? 'Değiştir' : 'Gir'}
+        </Button>
+      </div>
+    );
+  }
+  const id = `cost-${variantId}`;
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="space-y-1">
+          <Label htmlFor={id}>Alış maliyeti (KDV hariç)</Label>
+          <Input id={id} inputMode="decimal" className="h-10 w-36" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        </div>
+        <NativeSelect aria-label="Maliyet para birimi" className="h-10 w-24" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+          {CURRENCIES.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </NativeSelect>
+        <Button variant="brand" className="h-10" disabled={save.isPending} onClick={submit}>
+          {save.isPending && <Loader2 className="size-4 animate-spin" aria-hidden />}
+          Kaydet
+        </Button>
+        <Button variant="outline" className="h-10" aria-label="Vazgeç" onClick={() => setEditing(false)}>
+          <X className="size-4" />
+        </Button>
+      </div>
+      {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
+    </div>
   );
 }
 

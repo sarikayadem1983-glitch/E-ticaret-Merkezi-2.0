@@ -73,6 +73,9 @@ const ROUTES: readonly BffRoute[] = [
     body: true,
   },
   { method: 'DELETE', path: new RegExp(`^${VARIANT}/prices/${CHANNEL}$`) },
+  // RPT-02: private purchase cost (products:write only; never in general product responses).
+  { method: 'GET', path: new RegExp(`^${VARIANT}/cost$`) },
+  { method: 'PUT', path: new RegExp(`^${VARIANT}/cost$`), body: true },
   // Images (IMG-01). The upload forwards raw bytes; everything else is JSON.
   { method: 'GET', path: new RegExp(`^${PRODUCT}/images$`) },
   {

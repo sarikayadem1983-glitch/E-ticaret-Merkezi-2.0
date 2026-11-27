@@ -38,6 +38,8 @@ describe('matchBffRoute', () => {
     ['PUT', `products/${ID}/variants/${ID}/prices/list`, ''],
     ['PUT', `products/${ID}/variants/${ID}/prices/hepsi-burada`, ''],
     ['DELETE', `products/${ID}/variants/${ID}/prices/trendyol`, ''],
+    ['GET', `products/${ID}/variants/${ID}/cost`, ''],
+    ['PUT', `products/${ID}/variants/${ID}/cost`, ''],
     ['GET', `products/${ID}/images`, ''],
     ['POST', `products/${ID}/images`, `variant_id=${ID}`],
     ['PUT', `products/${ID}/images/order`, ''],
