@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
@@ -36,6 +36,7 @@ function vkn(prefix: string): string {
 let seq = 0;
 const uniqueVkn = () =>
   vkn(String((Date.now() + seq++) % 1e9).padStart(9, '0'));
+const KEK = randomBytes(32).toString('base64');
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 
 describe('Trendyol order import (e2e, INT-TY-03a)', () => {
@@ -134,7 +135,14 @@ describe('Trendyol order import (e2e, INT-TY-03a)', () => {
     (await http().get(`/api/v1/orders/${id}`).set(bearer(token)).expect(200))
       .body.data;
 
+  const saved: Record<string, string | undefined> = {};
+
   beforeAll(async () => {
+    for (const key of ['CHANNEL_KEKS', 'CHANNEL_KEK_ACTIVE']) {
+      saved[key] = process.env[key];
+    }
+    process.env.CHANNEL_KEKS = `e2eo:${KEK}`;
+    process.env.CHANNEL_KEK_ACTIVE = 'e2eo';
     app = await createTestApp();
     orders = app.get(OrdersService);
     refs = app.get(ExternalRefsRepository);
@@ -220,6 +228,10 @@ describe('Trendyol order import (e2e, INT-TY-03a)', () => {
   afterAll(async () => {
     await app?.close();
     await purgeTenants(slugs);
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
   });
 
   it('imports a package once, matched and reserved', async () => {
