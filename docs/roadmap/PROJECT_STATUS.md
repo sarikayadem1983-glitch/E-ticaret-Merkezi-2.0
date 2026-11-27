@@ -47,7 +47,13 @@ Son güncelleme: 2026-11-22 (dev deploy `ceee47e`) · Kaynak görev durumları T
 
 ## 2. Merge edilen, deploy edilmemiş PR'lar
 
-Yok (dev `4570e31`; sonrasında `main`'e yalnız doküman PR'ları girdi). #25–#30 (`5ac1401`) 2026-11-12'de dev'e deploy edildi. #6–#16 (`f010233`), #19 (`8fc7ae3`), #22 ve #23 (`0437c16`) 2026-10-30'da dev'e deploy edildi ve bu tablodan çıkarıldı; ayrıntı §3 ve §6.
+| PR | Konu | Merge | Not |
+|---|---|---|---|
+| #104 | Uygulama adı "E-Ticaret Merkezi V2.0" | `91a2b5b` | yalnız metin |
+| #103 | RPT-02 varyant alış maliyeti API | `3e85af3` | migration `variant_costs` dev DB'ye uygulanmadı; uygulama ve deploy için kullanıcı onayı bekleniyor |
+| #105 | RPT-02 maliyet arayüzü + stok raporu | `b6f2f2f` | main CI ✓ (`b6f2f2f`) |
+
+Önceki: dev `4570e31`. #25–#30 (`5ac1401`) 2026-11-12'de dev'e deploy edildi. #6–#16 (`f010233`), #19 (`8fc7ae3`), #22 ve #23 (`0437c16`) 2026-10-30'da dev'e deploy edildi ve bu tablodan çıkarıldı; ayrıntı §3 ve §6.
 
 Aşama 2 SQL'i (`migrations-pending/`) uygulanmadı (USR-18).
 
@@ -391,6 +397,7 @@ Ciddiyet: **Kritik** (veri kaybı, tenant sızıntısı, ödeme) · **Yüksek** 
 
 | Tarih | Değişiklik | PR | Test | Deploy |
 |---|---|---|---|---|
+| 2026-11-27 | #104, #103, #105 kullanıcı onayıyla merge edildi → RPT-02 DONE-NOT-DEPLOYED | #104 `91a2b5b`, #103 `3e85af3`, #105 `b6f2f2f` | main CI ✓ `b6f2f2f` | yok; migration uygulanmadı |
 | 2026-11-27 | RPT-02 → DONE-PR: varyant alış maliyeti arayüzü + `GET /reports/stock` (değer, devir, stoksuz) ve `/reports/stock` sayfası; maliyet yalnız `products:write` firmalarında; bağımsız CRITICAL inceleme → ONAY (yalnız P3 notlar); #103 üstüne kurulu | [#105](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/105) | CI `61fd6a2`: unit 666/666, e2e 507/514 (7 skip), frontend 218/218, MinIO 17/17 | yok |
 | 2026-11-25 | INT-TY-02b (Trendyol'a stok+fiyat elle gönderme, kullanıcı kararı A) → DONE-PR; mod CRITICAL'e yükseltildi, bağımsız inceleme 2 tur (1 BLOCKER + 3 HIGH düzeltildi, sonra engelleyici yok) | [#102](https://github.com/sarikayadem1983-glitch/E-ticaret-Merkezi-2.0/pull/102) | CI `d7acbf1`: unit 651/651, e2e 492/499 (7 skip), frontend 216/216, MinIO 17/17, Playwright 23/23 | yok |
 | 2026-11-25 | #99 → DONE-MERGED, dev deploy; INT-TY-02a canlı okuma tekrarı başarılı (iş `a5fc2425…`: 207 işlendi, 205 fiyat, 139 stok açılışı / 2459 adet, 1 atlandı), SYNC_LIVE_CALLS=false | #99 (merge `4570e31`), #100 (merge `89fb2c1`) | PR CI ✓; dev health ok | dev `4570e31` |
